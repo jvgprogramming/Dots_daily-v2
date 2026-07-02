@@ -27,8 +27,13 @@ class UserFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
+            'phone' => fake()->optional()->phoneNumber(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => 'patient',
+            'profile_photo_path' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'last_login_at' => fake()->optional()->dateTimeThisMonth(),
             'remember_token' => Str::random(10),
         ];
     }
@@ -40,6 +45,29 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Indicate that the user is an admin.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => 'Admin',
+            'email' => 'admin@dotsdaily.com',
+            'role' => 'admin',
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    /**
+     * Mark the user as inactive.
+     */
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_active' => false,
         ]);
     }
 }
