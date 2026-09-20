@@ -88,14 +88,22 @@ export function Sidebar() {
       <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border-light bg-bg-sidebar">
         {/* Logo */}
         <div className="flex h-16 items-center gap-3 border-b border-border-light px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary-500 text-sm font-bold text-white">
-            D
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] bg-primary-700 ring-1 ring-black/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/imports/image-2.png"
+              alt="CEH logo"
+              className="h-8 w-8 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-[15px] font-semibold leading-tight text-text-primary">
               DOTS Daily
             </span>
-            <span className="text-[11px] text-text-tertiary">Admin Portal</span>
+            <span className="text-[11px] text-text-tertiary">TB DOTS Center</span>
           </div>
         </div>
 
@@ -120,7 +128,7 @@ export function Sidebar() {
                         className={cn(
                           "group relative flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium transition-all duration-150",
                           isActive
-                            ? "text-primary-600"
+                            ? "bg-primary-50 text-primary-700"
                             : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
                         )}
                       >
@@ -131,7 +139,7 @@ export function Sidebar() {
                         <Icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            isActive ? "text-primary-500" : "text-text-tertiary group-hover:text-text-secondary"
+                            isActive ? "text-primary-600" : "text-text-tertiary group-hover:text-text-secondary"
                           )}
                         />
                         <span>{item.label}</span>
