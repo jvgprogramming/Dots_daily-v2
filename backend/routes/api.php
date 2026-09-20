@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\Auth\AuthController;
 use App\Http\Controllers\API\Auth\EmailVerificationController;
 use App\Http\Controllers\API\Auth\ForgotPasswordController;
+use App\Http\Controllers\API\Auth\MobileAuthController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\PatientController;
 use Illuminate\Support\Facades\Route;
@@ -59,6 +60,23 @@ Route::prefix('v1')->group(function () {
             Route::get('{patient}', [PatientController::class, 'show']);
             Route::put('{patient}', [PatientController::class, 'update']);
             Route::delete('{patient}', [PatientController::class, 'destroy']);
+        });
+
+    });
+
+    // ──────────────────────────────────────────────
+    // 3. Mobile Routes (No admin restriction)
+    // ──────────────────────────────────────────────
+
+    Route::prefix('mobile')->group(function () {
+
+        // Public
+        Route::post('/login', [MobileAuthController::class, 'login']);
+
+        // Protected
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/profile', [MobileAuthController::class, 'profile']);
+            Route::post('/logout', [MobileAuthController::class, 'logout']);
         });
 
     });

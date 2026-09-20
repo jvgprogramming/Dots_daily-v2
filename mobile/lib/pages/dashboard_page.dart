@@ -494,7 +494,7 @@ class DashboardPage extends StatelessWidget {
             crossAxisCount: isWide ? 4 : 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: isWide ? 2.2 : 1.6,
+            childAspectRatio: isWide ? 2.2 : 1.2,
           ),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -894,7 +894,7 @@ class _StatCard extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,

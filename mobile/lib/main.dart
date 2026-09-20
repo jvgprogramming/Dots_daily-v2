@@ -10,6 +10,7 @@ import 'pages/medications_page.dart';
 import 'pages/chatbot_page.dart';
 import 'pages/symptoms_page.dart';
 import 'pages/test_alarm_page.dart';
+import 'pages/profile_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -118,6 +119,8 @@ class _MainShellState extends State<MainShell> {
         return TestAlarmPage(
           onViewChange: _onViewChange,
         );
+      case 'profile':
+        return const ProfilePage();
       default:
         return DashboardPage(
           onViewChange: _onViewChange,
@@ -136,8 +139,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController(text: 'john@example.com');
-  final _passwordController = TextEditingController(text: 'password');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _loading = false;
 
   @override
@@ -151,8 +154,21 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = true);
     final auth = context.read<AuthProvider>();
     await auth.login(_emailController.text, _passwordController.text);
-    if (mounted) {
-      setState(() => _loading = false);
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    // Show error if login failed
+    if (!auth.isLoggedIn && auth.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.error!),
+          backgroundColor: AppColors.destructive,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
     }
   }
 
