@@ -22,30 +22,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </div>
     }>
       <GuestGuard>
-        <div className="relative flex min-h-screen flex-col items-center justify-center bg-bg-main px-4">
-        {/* Logo */}
-        <Link
-          href="/"
-          className="relative mb-10 flex items-center gap-2.5 transition-opacity hover:opacity-80"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-primary-500 text-sm font-bold text-white">
-            D
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[16px] font-semibold leading-tight text-text-primary">
-              DOTS Daily
-            </span>
-            <span className="text-[11px] text-text-tertiary">Admin Portal</span>
-          </div>
-        </Link>
-
-        {/* Auth card */}
-        <div className="relative w-full max-w-sm">{children}</div>
-
-        {/* Footer */}
-        <p className="relative mt-10 text-xs text-text-tertiary">
-          &copy; {new Date().getFullYear()} DOTS Daily v2.0 &mdash; Thesis Project
-        </p>
+        <div className="login-bg relative min-h-screen flex items-center justify-center overflow-hidden">
+          <div className="w-full flex items-center justify-center">{children}</div>
         </div>
       </GuestGuard>
     </Suspense>

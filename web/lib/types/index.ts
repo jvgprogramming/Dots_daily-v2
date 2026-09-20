@@ -39,14 +39,6 @@ export interface LoginPayload {
   password: string;
 }
 
-export interface RegisterPayload {
-  name: string;
-  email: string;
-  phone?: string;
-  password: string;
-  password_confirmation: string;
-}
-
 export interface AuthResponse {
   user: AuthUser;
   token: string;
