@@ -12,7 +12,13 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  /// Channel id for medication reminders. Versioned because Android freezes a
+  /// channel's sound once it has been created, so bumping the id is the only
+  /// reliable way to make the alarm sound apply on already-installed devices.
+  static const String alarmChannelId = 'medication_alarms_v2';
+
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
   /// Set by main.dart so notification taps can route into the app
@@ -33,7 +39,9 @@ class NotificationService {
     // Initialize timezone database (needed for zoned scheduling)
     tz_data.initializeTimeZones();
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
 
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -52,20 +60,24 @@ class NotificationService {
     );
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       // High-priority alarm channel: sound + vibration + lights.
       const alarmChannel = AndroidNotificationChannel(
-        'medication_alarms',
-        'Medication Alarms',
-        description: 'Full-screen alarms for scheduled medication doses',
+        alarmChannelId,
+        'Medication Reminders',
+        description: 'Daily reminder to take TB medication before breakfast',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
         enableLights: true,
-        // Loop alarm sound; keep vibrating until the user responds.
+        // Plays res/raw/alarm_sound.wav on the alarm stream (audible even when
+        // the phone is on silent/DND).
         sound: RawResourceAndroidNotificationSound('alarm_sound'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       );
       await androidPlugin?.createNotificationChannel(alarmChannel);
 
@@ -81,9 +93,10 @@ class NotificationService {
   /// Android notification details tuned for a real alarm experience.
   AndroidNotificationDetails _alarmAndroidDetails() {
     return const AndroidNotificationDetails(
-      'medication_alarms',
-      'Medication Alarms',
-      channelDescription: 'Full-screen alarms for scheduled medication doses',
+      alarmChannelId,
+      'Medication Reminders',
+      channelDescription:
+          'Daily reminder to take TB medication before breakfast',
       importance: Importance.max,
       priority: Priority.max,
       category: AndroidNotificationCategory.alarm,
@@ -91,17 +104,19 @@ class NotificationService {
       playSound: true,
       enableVibration: true,
       enableLights: true,
-      ledColor: Color(0xFF14B8BE),
+      ledColor: Color(0xFF16A34A),
       ledOnMs: 500,
       ledOffMs: 500,
       sound: RawResourceAndroidNotificationSound('alarm_sound'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       ongoing: false,
       autoCancel: true,
       icon: '@mipmap/ic_launcher',
     );
   }
 
-  DarwinNotificationDetails get _alarmIosDetails => const DarwinNotificationDetails(
+  DarwinNotificationDetails get _alarmIosDetails =>
+      const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -109,9 +124,9 @@ class NotificationService {
       );
 
   NotificationDetails get _alarmDetails => NotificationDetails(
-        android: _alarmAndroidDetails(),
-        iOS: _alarmIosDetails,
-      );
+    android: _alarmAndroidDetails(),
+    iOS: _alarmIosDetails,
+  );
 
   /// Show an instant notification (used for demos / tests).
   Future<void> showNotification({
@@ -159,7 +174,14 @@ class NotificationService {
   }) async {
     await _ensureInitialized();
     final now = tz.TZDateTime.now(tz.local);
-    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    var when = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (!when.isAfter(now)) {
       when = when.add(const Duration(days: 1));
     }
@@ -218,7 +240,12 @@ class NotificationService {
       if (weekday == null) continue;
 
       var when = tz.TZDateTime(
-        tz.local, base.year, base.month, base.day, hour, minute,
+        tz.local,
+        base.year,
+        base.month,
+        base.day,
+        hour,
+        minute,
       );
       // Advance to the next occurrence of the target weekday.
       while (when.weekday != weekday || !when.isAfter(base)) {
@@ -258,7 +285,9 @@ class NotificationService {
       );
     } catch (e) {
       if ('$e'.contains('exact_alarms_not_permitted')) {
-        debugPrint('Exact alarms not permitted — falling back to inexact scheduling');
+        debugPrint(
+          'Exact alarms not permitted — falling back to inexact scheduling',
+        );
         await _plugin.zonedSchedule(
           id: id,
           title: title,

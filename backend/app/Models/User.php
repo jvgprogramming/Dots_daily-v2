@@ -22,6 +22,23 @@ class User extends Authenticatable implements MustVerifyEmail
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes, MustVerifyEmailTrait;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'phone',
+        'password',
+        'role',
+        'profile_photo_path',
+        'is_active',
+        'email_verified_at',
+        'last_login_at',
+    ];
+
     public function patient(): HasOne
     {
         return $this->hasOne(Patient::class);

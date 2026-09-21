@@ -20,9 +20,13 @@ class NavigationHeader extends StatelessWidget {
 
     final navItems = [
       ('dashboard', 'Home', Icons.home_outlined, Icons.home),
-      ('medications', 'Medications', Icons.medication_outlined, Icons.medication),
       ('chatbot', 'AI Chat', Icons.chat_outlined, Icons.chat),
-      ('symptoms', 'Symptoms', Icons.monitor_heart_outlined, Icons.monitor_heart),
+      (
+        'symptoms',
+        'Symptoms',
+        Icons.monitor_heart_outlined,
+        Icons.monitor_heart,
+      ),
     ];
 
     return Container(
@@ -38,7 +42,7 @@ class NavigationHeader extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Color(0x3314B8BE),
+            color: Color(0x3316A34A),
             blurRadius: 16,
             offset: Offset(0, 4),
           ),
@@ -202,7 +206,9 @@ class NavigationHeader extends StatelessWidget {
                               horizontal: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.white : Colors.transparent,
+                              color: isActive
+                                  ? Colors.white
+                                  : Colors.transparent,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(

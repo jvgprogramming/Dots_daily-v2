@@ -1,36 +1,35 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary palette from the web app
-  static const Color primary = Color(0xFF14B8BE);
-  static const Color primaryDark = Color(0xFF0E7490);
-  static const Color cyan = Color(0xFF06B6D4);
-  static const Color teal = Color(0xFF14B8BE);
+  // Primary palette — "Healthcare Green" from the web app (web/app/globals.css)
+  static const Color primary = Color(0xFF16A34A); // primary-600
+  static const Color primaryDark = Color(0xFF15803D); // primary-700
+  static const Color greenLight = Color(0xFF4ADE80); // primary-400
 
   // Backgrounds
-  static const Color background = Color(0xFFE8F9FA);
+  static const Color background = Color(0xFFF0FDF4); // primary-50
   static const Color surface = Colors.white;
   static const Color card = Colors.white;
 
   // Text
-  static const Color foreground = Color(0xFF0F172A);
-  static const Color mutedForeground = Color(0xFF475569);
+  static const Color foreground = Color(0xFF1A1D23);
+  static const Color mutedForeground = Color(0xFF6B7280);
 
   // Others
-  static const Color muted = Color(0xFFD1F3F5);
-  static const Color secondary = Color(0xFFC7F0F2);
-  static const Color accent = Color(0xFF9EE8EB);
-  static const Color border = Color(0x3314B8BE);
+  static const Color muted = Color(0xFFDCFCE7); // primary-100
+  static const Color secondary = Color(0xFFBBF7D0); // primary-200
+  static const Color accent = Color(0xFF86EFAC); // primary-300
+  static const Color border = Color(0x3316A34A);
   static const Color destructive = Color(0xFFEF4444);
   static const Color orange = Color(0xFFEA580C);
   static const Color amber = Color(0xFFF59E0B);
-  static const Color emerald = Color(0xFF059669);
+  static const Color emerald = Color(0xFF22C55E); // success green
 
   // Gradient used throughout the app
   static const List<Color> primaryGradient = [
-    Color(0xFF14B8BE),
-    Color(0xFF06B6D4),
-    Color(0xFF2DD4BF),
+    Color(0xFF16A34A), // primary-600
+    Color(0xFF22C55E), // primary-500
+    Color(0xFF4ADE80), // primary-400
   ];
 }
 
@@ -115,7 +114,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF0FEFF),
+        fillColor: const Color(0xFFF4FDF7),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: AppColors.border),

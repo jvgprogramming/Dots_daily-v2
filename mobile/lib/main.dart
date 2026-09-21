@@ -5,8 +5,8 @@ import 'theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/medications_provider.dart';
 import 'pages/dashboard_page.dart';
-import 'pages/medications_page.dart';
-import 'pages/alarms_page.dart';
+import 'pages/reminder_page.dart';
+import 'pages/calendar_page.dart';
 import 'pages/alarm_ringing_page.dart';
 import 'pages/chatbot_page.dart';
 import 'pages/symptoms_page.dart';
@@ -43,11 +43,15 @@ class MyApp extends StatelessWidget {
           return;
         }
       }
-      // Fallback: open alarms list.
+      // Fallback: open the reminder settings.
       final ctx = navigatorKey.currentContext;
       if (ctx != null && ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Medication reminder — open the Alarms tab for details')),
+          const SnackBar(
+            content: Text(
+              'Medication reminder — open the Reminder tab for details',
+            ),
+          ),
         );
       }
     };
@@ -93,10 +97,20 @@ class _MainShellState extends State<MainShell> {
 
   static const _tabs = [
     ('dashboard', 'Home', Icons.home_outlined, Icons.home_rounded),
-    ('alarms', 'Alarms', Icons.alarm_outlined, Icons.alarm_rounded),
-    ('medications', 'Meds', Icons.medication_outlined, Icons.medication_rounded),
+    ('reminder', 'Reminder', Icons.alarm_outlined, Icons.alarm_rounded),
+    (
+      'calendar',
+      'Calendar',
+      Icons.calendar_month_outlined,
+      Icons.calendar_month_rounded,
+    ),
     ('chatbot', 'Chat', Icons.chat_outlined, Icons.chat_rounded),
-    ('symptoms', 'Symptoms', Icons.monitor_heart_outlined, Icons.monitor_heart_rounded),
+    (
+      'symptoms',
+      'Symptoms',
+      Icons.monitor_heart_outlined,
+      Icons.monitor_heart_rounded,
+    ),
   ];
 
   void _onTabTapped(int index) {
@@ -105,9 +119,9 @@ class _MainShellState extends State<MainShell> {
 
   /// Push a full-screen page above the tab shell (with its own back button).
   Future<void> _pushPage(String route) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => _buildPushedPage(route)),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => _buildPushedPage(route)));
   }
 
   Widget _buildPushedPage(String route) {
@@ -131,30 +145,10 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      extendBody: true,
-      body: Stack(
-        children: [
-          // Tab content
-          Offstage(
-            offstage: false,
-            child: _buildTab(_tabs[_currentIndex].$1),
-          ),
-
-          // Floating profile button (top-right) — kept subtle.
-          Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16, top: 4),
-                child: _ProfileBubble(
-                  onTap: () => _pushPage('profile'),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      // Reserve space for the footer navigation bar so it never covers the
+      // last items of a page.
+      extendBody: false,
+      body: _buildTab(_tabs[_currentIndex].$1),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: _onTabTapped,
@@ -184,13 +178,15 @@ class _MainShellState extends State<MainShell> {
           },
           onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
-      case 'alarms':
-        return AlarmsPage(onViewChange: (v) {
-          final index = _tabs.indexWhere((t) => t.$1 == v);
-          if (index != -1) _onTabTapped(index);
-        });
-      case 'medications':
-        return MedicationsPage(
+      case 'reminder':
+        return ReminderPage(
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) _onTabTapped(index);
+          },
+        );
+      case 'calendar':
+        return CalendarPage(
           onViewChange: (v) {
             final index = _tabs.indexWhere((t) => t.$1 == v);
             if (index != -1) _onTabTapped(index);
@@ -223,48 +219,6 @@ class _MainShellState extends State<MainShell> {
           onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
     }
-  }
-}
-
-/// Small floating avatar button that opens the profile page.
-class _ProfileBubble extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _ProfileBubble({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: AppColors.primaryGradient),
-          borderRadius: BorderRadius.circular(21),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            user?.initials ?? '',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -318,7 +272,7 @@ class _LoginPageState extends State<LoginPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFD6F3F5), AppColors.background],
+            colors: [Color(0xFFDCFCE7), AppColors.background],
           ),
         ),
         child: SafeArea(
@@ -415,7 +369,8 @@ class _LoginPageState extends State<LoginPage> {
                                       ? Icons.visibility_outlined
                                       : Icons.visibility_off_outlined,
                                 ),
-                                onPressed: () => setState(() => _obscure = !_obscure),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
                               ),
                             ),
                             obscureText: _obscure,
