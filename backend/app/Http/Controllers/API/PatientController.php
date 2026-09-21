@@ -9,10 +9,12 @@ use App\Http\Resources\PatientResource;
 use App\Http\Resources\UserResource;
 use App\Models\Patient;
 use App\Models\User;
+use App\Services\PatientRegistrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class PatientController extends BaseApiController
 {
@@ -24,6 +26,11 @@ class PatientController extends BaseApiController
         $query = Patient::query()
             ->with(['user', 'registeredBy'])
             ->withCount(['treatmentPlans', 'medicationLogs', 'dailyMonitoring']);
+
+        // Filter by registration status (draft / registered)
+        if ($status = $request->get('status')) {
+            $query->where('status', $status);
+        }
 
         // Search by name, email, health ID, or phone
         if ($search = $request->get('search')) {
@@ -73,54 +80,165 @@ class PatientController extends BaseApiController
     }
 
     /**
-     * Store a newly created patient (user + patient record).
+     * Store a newly created patient (user + patient record + TB records).
+     * Handles both full registration and "Save as Draft".
      */
-    public function store(StorePatientRequest $request): JsonResponse
+    public function store(StorePatientRequest $request, PatientRegistrationService $service): JsonResponse
     {
         $data = $request->validated();
+        $isDraft = $request->isDraft();
 
         try {
-            DB::beginTransaction();
-
-            $user = User::create([
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'phone' => $data['phone'] ?? null,
-                'password' => Hash::make($data['password']),
-                'role' => 'patient',
-                'is_active' => true,
-            ]);
-
-            $patient = Patient::create([
-                'user_id' => $user->id,
-                'date_of_birth' => $data['date_of_birth'] ?? null,
-                'gender' => $data['gender'] ?? null,
-                'address' => $data['address'] ?? null,
-                'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
-                'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
-                'occupation' => $data['occupation'] ?? null,
-                'nationality' => $data['nationality'] ?? null,
-                'health_id_number' => $data['health_id_number'] ?? null,
-                'referred_by' => $data['referred_by'] ?? null,
-                'registered_by' => $request->user()->id,
-                'registered_at' => now(),
-            ]);
-
-            DB::commit();
+            $patient = $service->register($request, $data, $isDraft ? 'draft' : 'registered');
 
             $patient->load(['user', 'registeredBy']);
 
             return $this->created(
                 data: [
                     'patient' => new PatientResource($patient),
-                    'user' => new UserResource($user),
+                    'user' => $patient->user ? new UserResource($patient->user) : null,
                 ],
-                message: 'Patient registered successfully.',
+                message: $isDraft ? 'Patient draft saved successfully.' : 'Patient registered successfully.',
             );
         } catch (\Exception $e) {
-            DB::rollBack();
             return $this->error(
                 message: 'Failed to register patient. ' . $e->getMessage(),
+                code: 500,
+            );
+        }
+    }
+
+    /**
+     * Update a draft's saved payload (wizard "Save as Draft" during resume).
+     */
+    public function updateDraft(Request $request, Patient $patient, PatientRegistrationService $service): JsonResponse
+    {
+        if ($patient->status !== 'draft') {
+            return $this->error(message: 'Patient is not a draft.', code: 422);
+        }
+
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'last_name' => ['nullable', 'string', 'max:255'],
+            'first_name' => ['nullable', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'name_extension' => ['nullable', 'string', 'max:20'],
+            'date_of_birth' => ['nullable', 'date'],
+            'gender' => ['nullable', 'string', 'in:male,female,other'],
+            'civil_status' => ['nullable', 'string', 'max:20'],
+            'nationality' => ['nullable', 'string', 'max:100'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'contact_number' => ['nullable', 'string', 'max:20'],
+            'philhealth_number' => ['nullable', 'string', 'max:30'],
+            'notification' => ['nullable', 'array'],
+            'laboratory_tests' => ['nullable', 'array'],
+            'diagnosis' => ['nullable', 'array'],
+            'classification' => ['nullable', 'array'],
+            'treatment' => ['nullable', 'array'],
+            'close_contacts' => ['nullable', 'array'],
+        ]);
+
+        $patient = $service->updateDraft($request, $patient);
+
+        return $this->success(
+            data: ['patient' => new PatientResource($patient->fresh())],
+            message: 'Draft updated successfully.',
+        );
+    }
+
+    /**
+     * Complete a draft patient registration (creates related TB records).
+     */
+    public function completeDraft(Request $request, Patient $patient, PatientRegistrationService $service): JsonResponse
+    {
+        if ($patient->status !== 'draft') {
+            return $this->error(message: 'Patient is not a draft.', code: 422);
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($patient->user_id)],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'password' => ['nullable', 'string', 'min:8'],
+
+            'last_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'name_extension' => ['nullable', 'string', 'max:20'],
+            'date_of_birth' => ['required', 'date'],
+            'gender' => ['required', 'string', 'in:male,female,other'],
+            'civil_status' => ['nullable', 'string', 'max:20'],
+            'nationality' => ['nullable', 'string', 'max:100'],
+            'address' => ['required', 'string', 'max:500'],
+            'contact_number' => ['nullable', 'string', 'max:20'],
+            'philhealth_number' => ['nullable', 'string', 'max:30'],
+
+            'notification' => ['required', 'array'],
+            'notification.reason' => ['required', 'string', 'in:new,update,final_outcome'],
+            'notification.facility_name' => ['nullable', 'string', 'max:255'],
+            'notification.ntp_facility_code' => ['nullable', 'string', 'max:50'],
+            'notification.province_huc' => ['nullable', 'string', 'max:255'],
+            'notification.region' => ['nullable', 'string', 'max:255'],
+
+            'laboratory_tests' => ['nullable', 'array'],
+            'laboratory_tests.*.test_type' => ['required_with:laboratory_tests', 'string', 'max:50'],
+            'laboratory_tests.*.test_name' => ['nullable', 'string', 'max:255'],
+            'laboratory_tests.*.test_date' => ['nullable', 'date'],
+            'laboratory_tests.*.result' => ['nullable', 'string', 'max:255'],
+            'laboratory_tests.*.status' => ['nullable', 'string', 'in:done,not_available,not_yet_done'],
+            'laboratory_tests.*.remarks' => ['nullable', 'string', 'max:500'],
+
+            'diagnosis' => ['required', 'array'],
+            'diagnosis.diagnosis_type' => ['required', 'string', 'in:tb_disease,tb_infection'],
+            'diagnosis.diagnosis_date' => ['required', 'date'],
+            'diagnosis.notification_date' => ['nullable', 'date'],
+            'diagnosis.case_number' => ['nullable', 'string', 'max:50'],
+            'diagnosis.attending_physician' => ['nullable', 'string', 'max:255'],
+            'diagnosis.referral_name' => ['nullable', 'string', 'max:255'],
+            'diagnosis.referral_address' => ['nullable', 'string', 'max:500'],
+            'diagnosis.referral_facility_code' => ['nullable', 'string', 'max:50'],
+            'diagnosis.referral_province_huc' => ['nullable', 'string', 'max:255'],
+            'diagnosis.referral_region' => ['nullable', 'string', 'max:255'],
+
+            'classification' => ['required', 'array'],
+            'classification.bacteriological_status' => ['required', 'string', 'in:bacteriologically_confirmed,clinically_diagnosed'],
+            'classification.anatomical_site' => ['required', 'string', 'in:pulmonary,extrapulmonary'],
+            'classification.extrapulmonary_site' => ['required_if:classification.anatomical_site,extrapulmonary', 'nullable', 'string', 'max:255'],
+            'classification.drug_resistance_status' => ['required', 'string', 'in:drug_susceptible,bc_rr_tb,bc_mdr_tb,bc_xdr_tb,cd_mdr_tb,other_dr_resistant'],
+            'classification.registration_group' => ['required', 'string', 'in:new,relapse,taf,tpt,talf,unknown_history'],
+
+            'treatment' => ['required', 'array'],
+            'treatment.start_date' => ['required', 'date'],
+            'treatment.regimen_type' => ['required', 'string', 'max:50'],
+            'treatment.notes' => ['nullable', 'string', 'max:1000'],
+
+            'close_contacts' => ['nullable', 'array'],
+            'close_contacts.*.full_name' => ['required_with:close_contacts', 'string', 'max:255'],
+            'close_contacts.*.age' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'close_contacts.*.sex' => ['nullable', 'string', 'in:male,female'],
+            'close_contacts.*.relationship' => ['nullable', 'string', 'max:100'],
+            'close_contacts.*.screening_date' => ['nullable', 'date'],
+            'close_contacts.*.followup_date' => ['nullable', 'date'],
+            'close_contacts.*.remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $patient = $service->completeDraft($request, $patient, $data);
+
+            $patient->load(['user', 'registeredBy']);
+
+            return $this->success(
+                data: [
+                    'patient' => new PatientResource($patient),
+                    'user' => $patient->user ? new UserResource($patient->user) : null,
+                ],
+                message: 'Patient registration completed successfully.',
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                message: 'Failed to complete registration. ' . $e->getMessage(),
                 code: 500,
             );
         }
@@ -134,6 +252,11 @@ class PatientController extends BaseApiController
         $patient->load([
             'user',
             'registeredBy',
+            'tbNotifications',
+            'laboratoryTests',
+            'diagnoses',
+            'tbClassification',
+            'closeContacts',
             'treatmentPlans' => fn ($q) => $q->with('medications')->latest(),
             'dailyMonitoring' => fn ($q) => $q->latest()->limit(10),
             'medicationLogs' => fn ($q) => $q->latest()->limit(10),
@@ -150,7 +273,7 @@ class PatientController extends BaseApiController
         return $this->success(
             data: [
                 'patient' => new PatientResource($patient),
-                'user' => new UserResource($patient->user),
+                'user' => $patient->user ? new UserResource($patient->user) : null,
                 'stats' => [
                     'active_treatments' => (int) $patient->active_treatments_count,
                     'total_medication_logs' => (int) $patient->total_medication_logs,
@@ -177,19 +300,19 @@ class PatientController extends BaseApiController
         try {
             DB::beginTransaction();
 
-            // Update user fields
+            // Update user fields (draft patients may not have an account)
             $userData = array_filter([
                 'name' => $data['name'] ?? null,
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
             ], fn ($v) => $v !== null);
 
-            if (!empty($userData)) {
+            if (!empty($userData) && $patient->user) {
                 $patient->user->update($userData);
             }
 
             // Update password if provided
-            if (!empty($data['password'])) {
+            if (!empty($data['password']) && $patient->user) {
                 $patient->user->update([
                     'password' => Hash::make($data['password']),
                 ]);
@@ -197,14 +320,20 @@ class PatientController extends BaseApiController
 
             // Update patient fields
             $patientData = array_filter([
+                'last_name' => $data['last_name'] ?? null,
+                'first_name' => $data['first_name'] ?? null,
+                'middle_name' => $data['middle_name'] ?? null,
+                'name_extension' => $data['name_extension'] ?? null,
                 'date_of_birth' => $data['date_of_birth'] ?? null,
                 'gender' => $data['gender'] ?? null,
+                'civil_status' => $data['civil_status'] ?? null,
                 'address' => $data['address'] ?? null,
                 'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
                 'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
                 'occupation' => $data['occupation'] ?? null,
                 'nationality' => $data['nationality'] ?? null,
                 'health_id_number' => $data['health_id_number'] ?? null,
+                'philhealth_number' => $data['philhealth_number'] ?? null,
                 'referred_by' => $data['referred_by'] ?? null,
             ], fn ($v) => $v !== null);
 
@@ -219,7 +348,7 @@ class PatientController extends BaseApiController
             return $this->success(
                 data: [
                     'patient' => new PatientResource($patient),
-                    'user' => new UserResource($patient->user),
+                    'user' => $patient->user ? new UserResource($patient->user) : null,
                 ],
                 message: 'Patient updated successfully.',
             );
@@ -237,7 +366,10 @@ class PatientController extends BaseApiController
      */
     public function destroy(Patient $patient): JsonResponse
     {
-        $patient->user->delete(); // Soft delete user (cascades to patient)
+        // Draft patients may not have a linked user account
+        if ($patient->user) {
+            $patient->user->delete(); // Soft delete user (cascades to patient)
+        }
         $patient->delete();       // Soft delete patient
 
         return $this->success(message: 'Patient deleted successfully.');
@@ -282,11 +414,16 @@ class PatientController extends BaseApiController
         $query = Patient::query()->with('user');
 
         if ($search = $request->get('search')) {
-            $query->whereHas('user', fn ($q) => $q->where('name', 'like', "%{$search}%"));
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"))
+                  ->orWhere('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%");
+            });
         }
 
-        $patients = $query->join('users', 'patients.user_id', '=', 'users.id')
-            ->orderBy('users.name', 'asc')
+        // Inner join would silently drop draft patients (no user account)
+        $patients = $query->leftJoin('users', 'patients.user_id', '=', 'users.id')
+            ->orderByRaw('COALESCE(NULLIF(TRIM(CONCAT_WS(" ", patients.first_name, patients.last_name)), ""), users.name) ASC')
             ->select('patients.*')
             ->limit(50)
             ->get();
@@ -294,9 +431,10 @@ class PatientController extends BaseApiController
         return $this->success(
             data: $patients->map(fn ($p) => [
                 'id' => $p->id,
-                'name' => $p->user->name,
-                'email' => $p->user->email,
+                'name' => trim(($p->first_name ?? '') . ' ' . ($p->last_name ?? '')) ?: ($p->user?->name ?? 'Unnamed patient'),
+                'email' => $p->user?->email,
                 'health_id_number' => $p->health_id_number,
+                'status' => $p->status ?? 'registered',
             ]),
             message: 'Patient list retrieved successfully.',
         );

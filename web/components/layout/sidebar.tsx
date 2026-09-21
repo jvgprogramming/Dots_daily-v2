@@ -7,7 +7,7 @@ import {
   Users,
   Pill,
   Activity,
-  Bot,
+  ClipboardList,
   BarChart3,
   Bell,
   Settings,
@@ -31,10 +31,11 @@ const navGroups = [
     ],
   },
   {
-    title: "Management",
+    title: "Clinical Workflow",
     items: [
       { label: "Patients", href: "/patients", icon: Users },
-      { label: "Treatments", href: "/treatments", icon: Pill },
+      { label: "Treatments", href: "/treatments", icon: ClipboardList },
+      { label: "Medication", href: "/medications", icon: Pill },
       {
         label: "Monitoring",
         href: "/monitoring",
@@ -43,9 +44,8 @@ const navGroups = [
     ],
   },
   {
-    title: "Intelligence",
+    title: "Insights",
     items: [
-      { label: "AI Insights", href: "/ai", icon: Bot },
       { label: "Reports", href: "/reports", icon: BarChart3 },
     ],
   },

@@ -11,7 +11,12 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
+  Lock,
 } from "lucide-react";
+import { PatientRegistrationWizard } from "@/components/features/patients/PatientRegistrationWizard";
+import { PatientProfileModal } from "@/components/features/patients/PatientProfileModal";
+import type { PatientRegistrationPayload } from "@/lib/types";
+import { getPatient } from "@/lib/services/patients";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +28,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { motion } from "framer-motion";
 import {
   getPatients,
-  createPatient,
   updatePatient,
   deletePatient,
   type PatientListParams,
@@ -34,6 +38,18 @@ import type {
   UpdatePatientPayload,
   PaginatedResponse,
 } from "@/lib/types";
+
+// ─── Wizard state ───
+interface WizardState {
+  open: boolean;
+  draft: { patientId: number; payload: Partial<PatientRegistrationPayload> } | null;
+}
+
+// ─── Profile modal state ───
+interface ProfileState {
+  open: boolean;
+  patientId: number | null;
+}
 
 // ─── Gender options ───
 const genderOptions = [
@@ -49,14 +65,20 @@ const emptyForm: CreatePatientPayload = {
   email: "",
   phone: "",
   password: "",
+  last_name: "",
+  first_name: "",
+  middle_name: "",
+  name_extension: "",
   date_of_birth: "",
   gender: "",
+  civil_status: "",
   address: "",
   emergency_contact_name: "",
   emergency_contact_phone: "",
   occupation: "",
   nationality: "",
   health_id_number: "",
+  philhealth_number: "",
   referred_by: "",
 };
 
@@ -92,6 +114,13 @@ export default function PatientsPage() {
   const [modalMode, setModalMode] = useState<"add" | "edit" | "detail" | "delete" | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<PatientListItem | null>(null);
   const [formData, setFormData] = useState<CreatePatientPayload>({ ...emptyForm });
+
+  // Wizard state (registration) — separate from the edit modal
+  const [wizard, setWizard] = useState<WizardState>({ open: false, draft: null });
+  const [wizardKey, setWizardKey] = useState(0); // remount to reset wizard state
+
+  // Profile modal state
+  const [profile, setProfile] = useState<ProfileState>({ open: false, patientId: null });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -144,30 +173,51 @@ export default function PatientsPage() {
     setPage(1);
   };
 
-  // ── Open add modal ──
+  // ── Open registration wizard (fresh) ──
   const openAddModal = () => {
-    setFormData({ ...emptyForm });
+    setWizardKey((k) => k + 1);
+    setWizard({ open: true, draft: null });
+  };
+
+  // ── Resume a draft registration ──
+  const resumeDraft = async (patient: PatientListItem) => {
     setFormError("");
-    setFormSuccess("");
-    setModalMode("add");
+    try {
+      const res = await getPatient(patient.id);
+      const draftData = (res.data?.patient as { draft_data?: Partial<PatientRegistrationPayload> } | undefined)?.draft_data;
+      if (!draftData) {
+        setFormError("This draft has no saved form data to resume.");
+        return;
+      }
+      setWizardKey((k) => k + 1);
+      setWizard({ open: true, draft: { patientId: patient.id, payload: draftData } });
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to load draft");
+    }
   };
 
   // ── Open edit modal ──
   const openEditModal = (patient: PatientListItem) => {
     setSelectedPatient(patient);
     setFormData({
-      name: patient.user?.name || "",
+      name: patient.user?.name || [patient.first_name, patient.last_name].filter(Boolean).join(" "),
       email: patient.user?.email || "",
       phone: patient.user?.phone || "",
       password: "",
+      last_name: patient.last_name || "",
+      first_name: patient.first_name || "",
+      middle_name: patient.middle_name || "",
+      name_extension: patient.name_extension || "",
       date_of_birth: patient.date_of_birth || "",
       gender: patient.gender || "",
+      civil_status: patient.civil_status || "",
       address: patient.address || "",
       emergency_contact_name: patient.emergency_contact_name || "",
       emergency_contact_phone: patient.emergency_contact_phone || "",
       occupation: patient.occupation || "",
       nationality: patient.nationality || "",
       health_id_number: patient.health_id_number || "",
+      philhealth_number: patient.philhealth_number || "",
       referred_by: patient.referred_by || "",
     });
     setFormError("");
@@ -175,10 +225,9 @@ export default function PatientsPage() {
     setModalMode("edit");
   };
 
-  // ── Open detail modal ──
+  // ── Open profile modal (loads full registration data) ──
   const openDetailModal = (patient: PatientListItem) => {
-    setSelectedPatient(patient);
-    setModalMode("detail");
+    setProfile({ open: true, patientId: patient.id });
   };
 
   // ── Open delete modal ──
@@ -196,10 +245,7 @@ export default function PatientsPage() {
     setSubmitting(true);
 
     try {
-      if (modalMode === "add") {
-        await createPatient(formData);
-        setFormSuccess("Patient registered successfully.");
-      } else if (modalMode === "edit" && selectedPatient) {
+      if (modalMode === "edit" && selectedPatient) {
         const payload: UpdatePatientPayload = { ...formData };
         if (!payload.password) delete payload.password;
         await updatePatient(selectedPatient.id, payload);
@@ -379,11 +425,20 @@ export default function PatientsPage() {
                               {patient.user?.name?.charAt(0)?.toUpperCase() || "?"}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-text-primary truncate">
-                                {patient.user?.name || "Unknown"}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-text-primary truncate">
+                                  {patient.first_name
+                                    ? `${patient.first_name} ${patient.last_name}`
+                                    : patient.user?.name || "Unknown"}
+                                  {patient.status === "draft" && (
+                                    <Badge variant="warning" size="sm" className="ml-2">
+                                      Draft
+                                    </Badge>
+                                  )}
+                                </p>
+                              </div>
                               <p className="text-xs text-text-tertiary truncate">
-                                {patient.user?.email || "No email"}
+                                {patient.user?.email || (patient.status === "draft" ? "No account yet" : "No email")}
                               </p>
                             </div>
                           </div>
@@ -418,6 +473,15 @@ export default function PatientsPage() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {patient.status === "draft" && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); resumeDraft(patient); }}
+                                className="flex h-8 items-center justify-center rounded-[6px] px-2 text-xs font-medium text-primary-600 hover:bg-primary-50 transition-all"
+                                title="Resume draft registration"
+                              >
+                                Resume
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); openEditModal(patient); }}
                               className="flex h-8 w-8 items-center justify-center rounded-[6px] text-text-tertiary hover:bg-bg-subtle hover:text-text-primary transition-all"
@@ -471,16 +535,37 @@ export default function PatientsPage() {
         />
       )}
 
+      {/* ── REGISTRATION WIZARD ── */}
+      <Modal
+        open={wizard.open}
+        onClose={() => setWizard({ open: false, draft: null })}
+        title={wizard.draft ? "Complete Patient Registration" : "Register New Patient"}
+        description={
+          wizard.draft
+            ? "Resume the saved draft and complete the TB registration."
+            : "Complete the digital TB/DOTS registration form — the patient's baseline record."
+        }
+        size="xl"
+      >
+        <PatientRegistrationWizard
+          key={wizardKey}
+          open={wizard.open}
+          onClose={() => setWizard({ open: false, draft: null })}
+          draft={wizard.draft}
+          onSaved={(msg) => {
+            setWizard({ open: false, draft: null });
+            setFormSuccess(msg);
+            fetchPatients();
+          }}
+        />
+      </Modal>
+
       {/* ── ADD / EDIT MODAL ── */}
       <Modal
-        open={modalMode === "add" || modalMode === "edit"}
+        open={modalMode === "edit"}
         onClose={() => setModalMode(null)}
-        title={modalMode === "add" ? "Register New Patient" : "Edit Patient"}
-        description={
-          modalMode === "add"
-            ? "Create a new patient account and medical profile."
-            : "Update patient information."
-        }
+        title="Edit Patient"
+        description="Update patient information."
         size="lg"
       >
         <div className="flex flex-col" style={{ maxHeight: "calc(100vh - 220px)" }}>
@@ -489,6 +574,21 @@ export default function PatientsPage() {
 
           {/* ── Scrollable form body ── */}
           <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-4">
+            {/* Locked registration notice — clinical fields are managed via the registration record */}
+            <div className="flex items-start gap-3 rounded-[10px] bg-info-bg p-4">
+              <Lock className="h-4 w-4 text-info-text mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-info-text">
+                  Only personal and account information can be edited here.
+                </p>
+                <p className="text-xs text-info-text/80 mt-0.5">
+                  Notification, diagnosis, TB classification, laboratory results, treatment regimen and close contacts
+                  are part of the official registration record — they are locked after submission and shown on the
+                  patient profile.
+                </p>
+              </div>
+            </div>
+
             {/* Basic Info */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -499,12 +599,31 @@ export default function PatientsPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Full Name *</label>
-                  <Input
-                    placeholder="Juan Dela Cruz"
-                    value={formData.name}
-                    onChange={(e) => updateField("name", e.target.value)}
-                  />
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                    Full Name <span className="text-text-tertiary font-normal">(last name and given name required)</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Surname *"
+                      value={formData.last_name || ""}
+                      onChange={(e) => updateField("last_name", e.target.value)}
+                    />
+                    <Input
+                      placeholder="Given Name *"
+                      value={formData.first_name || ""}
+                      onChange={(e) => updateField("first_name", e.target.value)}
+                    />
+                    <Input
+                      placeholder="Middle Name"
+                      value={formData.middle_name || ""}
+                      onChange={(e) => updateField("middle_name", e.target.value)}
+                    />
+                    <Input
+                      placeholder="Extension (Jr., III)"
+                      value={formData.name_extension || ""}
+                      onChange={(e) => updateField("name_extension", e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary mb-1.5 block">Email *</label>
@@ -524,30 +643,17 @@ export default function PatientsPage() {
                     onChange={(e) => updateField("phone", e.target.value)}
                   />
                 </div>
-                {modalMode === "add" && (
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-medium text-text-secondary mb-1.5 block">Password *</label>
-                    <Input
-                      type="password"
-                      placeholder="Min. 8 characters"
-                      value={formData.password}
-                      onChange={(e) => updateField("password", e.target.value)}
-                    />
-                  </div>
-                )}
-                {modalMode === "edit" && (
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-medium text-text-secondary mb-1.5 block">
-                      New Password <span className="text-text-tertiary font-normal">(blank = keep current)</span>
-                    </label>
-                    <Input
-                      type="password"
-                      placeholder="Enter new password"
-                      value={formData.password}
-                      onChange={(e) => updateField("password", e.target.value)}
-                    />
-                  </div>
-                )}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                    New Password <span className="text-text-tertiary font-normal">(blank = keep current)</span>
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Enter new password"
+                    value={formData.password}
+                    onChange={(e) => updateField("password", e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -569,16 +675,30 @@ export default function PatientsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Gender</label>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Sex</label>
                   <select
                     className="flex h-11 w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
                     value={formData.gender || ""}
                     onChange={(e) => updateField("gender", e.target.value)}
                   >
-                    <option value="">Select gender</option>
+                    <option value="">Select sex</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Civil Status</label>
+                  <select
+                    className="flex h-11 w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
+                    value={formData.civil_status || ""}
+                    onChange={(e) => updateField("civil_status", e.target.value)}
+                  >
+                    <option value="">Select status</option>
+                    <option value="single">Single</option>
+                    <option value="married">Married</option>
+                    <option value="widowed">Widowed</option>
+                    <option value="separated">Separated</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">
@@ -611,6 +731,14 @@ export default function PatientsPage() {
                     placeholder="Government/PHIC ID"
                     value={formData.health_id_number || ""}
                     onChange={(e) => updateField("health_id_number", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">PhilHealth Number</label>
+                  <Input
+                    placeholder="e.g., 12-3456789-0"
+                    value={formData.philhealth_number || ""}
+                    onChange={(e) => updateField("philhealth_number", e.target.value)}
                   />
                 </div>
                 <div>
@@ -663,120 +791,47 @@ export default function PatientsPage() {
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {modalMode === "add" ? "Registering..." : "Saving..."}
+                  Saving...
                 </>
               ) : (
-                modalMode === "add" ? "Register Patient" : "Save Changes"
+                "Save Changes"
               )}
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* ── DETAIL MODAL ── */}
-      <Modal
-        open={modalMode === "detail"}
-        onClose={() => setModalMode(null)}
-        title={selectedPatient?.user?.name || "Patient Details"}
-        description="Patient profile and summary"
-        size="lg"
-      >
-        {selectedPatient && (
-          <div className="space-y-6">
-            {/* Quick Info */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="rounded-[10px] bg-bg-subtle p-4 text-center">
-                <p className="text-xl font-bold text-text-primary">0</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Active Treatments</p>
-              </div>
-              <div className="rounded-[10px] bg-bg-subtle p-4 text-center">
-                <p className="text-xl font-bold text-text-primary">0</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Medication Logs</p>
-              </div>
-              <div className="rounded-[10px] bg-bg-subtle p-4 text-center">
-                <p className="text-xl font-bold text-text-primary">0</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Monitoring</p>
-              </div>
-              <div className="rounded-[10px] bg-bg-subtle p-4 text-center">
-                <p className="text-xl font-bold text-text-primary">
-                  {selectedPatient.gender ? genderBadge(selectedPatient.gender).label.charAt(0) : "—"}
-                </p>
-                <p className="text-xs text-text-tertiary mt-0.5">Gender</p>
-              </div>
-            </div>
-
-            {/* Profile Details */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Email</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.user?.email || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Phone</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.user?.phone || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Date of Birth</p>
-                  <p className="text-sm text-text-primary mt-0.5">{formatDate(selectedPatient.date_of_birth)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Address</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.address || "—"}</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Health ID</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.health_id_number || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Occupation</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.occupation || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Nationality</p>
-                  <p className="text-sm text-text-primary mt-0.5">{selectedPatient.nationality || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider">Registered</p>
-                  <p className="text-sm text-text-primary mt-0.5">{formatDate(selectedPatient.registered_at)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency Contact */}
-            {(selectedPatient.emergency_contact_name || selectedPatient.emergency_contact_phone) && (
-              <div className="rounded-[10px] border border-border-light p-4">
-                <p className="text-xs text-text-tertiary font-medium uppercase tracking-wider mb-2">Emergency Contact</p>
-                <p className="text-sm text-text-primary">
-                  {selectedPatient.emergency_contact_name || "—"}
-                  {selectedPatient.emergency_contact_phone && (
-                    <span className="text-text-secondary ml-2">· {selectedPatient.emergency_contact_phone}</span>
-                  )}
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-2 border-t border-border-light">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setModalMode(null);
-                  if (selectedPatient) openEditModal(selectedPatient);
-                }}
-              >
-                <Edit3 className="h-4 w-4" />
-                Edit Patient
-              </Button>
-              <Button variant="ghost" onClick={() => setModalMode(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      {/* ── PATIENT PROFILE MODAL ── */}
+      <PatientProfileModal
+        open={profile.open}
+        patientId={profile.patientId}
+        onClose={() => setProfile({ open: false, patientId: null })}
+        onEdit={(id) => {
+          setProfile({ open: false, patientId: null });
+          const target = patients?.data.find((pt) => pt.id === id);
+          if (target) openEditModal(target);
+        }}
+        onResumeDraft={(id) => {
+          setProfile({ open: false, patientId: null });
+          const target = patients?.data.find((pt) => pt.id === id);
+          if (target) resumeDraft(target);
+          else {
+            // Not on the current page of the list — fetch directly
+            setProfile({ open: false, patientId: null });
+            getPatient(id)
+              .then((res) => {
+                const dd = (res.data?.patient as { draft_data?: Partial<PatientRegistrationPayload> } | undefined)?.draft_data;
+                if (dd) {
+                  setWizardKey((k) => k + 1);
+                  setWizard({ open: true, draft: { patientId: id, payload: dd } });
+                } else {
+                  setFormError("This draft has no saved form data to resume.");
+                }
+              })
+              .catch(() => setFormError("Failed to load draft."));
+          }
+        }}
+      />
 
       {/* ── DELETE CONFIRMATION ── */}
       <Modal
@@ -799,7 +854,10 @@ export default function PatientsPage() {
                     Are you sure you want to delete this patient?
                   </p>
                   <p className="text-xs text-danger-text/80 mt-0.5">
-                    {selectedPatient?.user?.name} ({selectedPatient?.user?.email})
+                    {selectedPatient?.first_name
+                      ? `${selectedPatient.first_name} ${selectedPatient.last_name}`
+                      : selectedPatient?.user?.name}{' '}
+                    ({selectedPatient?.user?.email || 'no account'})
                   </p>
                 </div>
               </div>

@@ -14,12 +14,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'patient_id',
     'assigned_by',
     'plan_name',
+    'regimen_type',
+    'regimen_type_end',
     'phase',
     'start_date',
     'expected_end_date',
     'actual_end_date',
     'status',
     'discontinuation_reason',
+    'outcome',
+    'outcome_date',
+    'outcome_reason',
+    'draft_reason',
     'notes',
 ])]
 class TreatmentPlan extends Model

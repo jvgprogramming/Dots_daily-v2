@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -9,15 +10,20 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Users,
   Pill,
   Activity,
   AlertTriangle,
+  Package,
   TrendingUp,
   ArrowUpRight,
   Calendar,
   HeartPulse,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -30,74 +36,28 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { getDashboardStats } from "@/lib/services/dashboard";
+import type {
+  DashboardStat,
+  DashboardStatsData,
+  DashboardRecentPatient,
+  DashboardDistributionItem,
+} from "@/lib/types";
 
-const stats = [
-  {
-    title: "Total Patients",
-    value: "0",
-    icon: Users,
-    change: "+0 this month",
-    trend: "up",
-  },
-  {
-    title: "Active Treatments",
-    value: "0",
-    icon: Pill,
-    change: "+0 this week",
-    trend: "up",
-  },
-  {
-    title: "Pending Reviews",
-    value: "0",
-    icon: Activity,
-    change: "0 require attention",
-    trend: "neutral",
-  },
-  {
-    title: "Critical Alerts",
-    value: "0",
-    icon: AlertTriangle,
-    change: "0 urgent",
-    trend: "down",
-  },
-];
-
-const adherenceData = [
-  { month: "Jan", rate: 0 },
-  { month: "Feb", rate: 0 },
-  { month: "Mar", rate: 0 },
-  { month: "Apr", rate: 0 },
-  { month: "May", rate: 0 },
-  { month: "Jun", rate: 0 },
-];
-
-const patientActivity = [
-  { day: "Mon", new: 0, followups: 0 },
-  { day: "Tue", new: 0, followups: 0 },
-  { day: "Wed", new: 0, followups: 0 },
-  { day: "Thu", new: 0, followups: 0 },
-  { day: "Fri", new: 0, followups: 0 },
-  { day: "Sat", new: 0, followups: 0 },
-  { day: "Sun", new: 0, followups: 0 },
-];
-
-const treatmentDistribution = [
-  { phase: "Intensive", count: 0, color: "bg-primary-500", percentage: 0 },
-  { phase: "Continuation", count: 0, color: "bg-warning", percentage: 0 },
-  { phase: "Completed", count: 0, color: "bg-primary-700", percentage: 0 },
-  { phase: "Interrupted", count: 0, color: "bg-danger", percentage: 0 },
-];
-
-const recentPatients = [
-  { name: "No recent registrations", id: "—", date: "—" },
-];
-
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number | string }>;
+  label?: string | number;
+}) => {
   if (active && payload && payload.length) {
     return (
       <div className="rounded-[10px] border border-border-light bg-bg-card px-4 py-3 shadow-dropdown">
         <p className="text-sm font-medium text-text-primary">{label}</p>
-        {payload.map((entry: any, i: number) => (
+        {payload.map((entry, i: number) => (
           <p key={i} className="text-sm text-text-secondary">
             {entry.name}:{" "}
             <span className="font-medium text-text-primary">{entry.value}</span>
@@ -109,55 +69,135 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// ─── Stat icon mapping (matches backend stat order) ───
+const STAT_ICONS = [Users, Pill, Activity, AlertTriangle, Package];
+
 export default function DashboardPage() {
+  const [data, setData] = useState<DashboardStatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadStats = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await getDashboardStats();
+      if (res.data) setData(res.data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  };
+
+  // ── Derived view data (fall back to empty shapes while loading) ──
+  const stats: DashboardStat[] = data?.stats ?? [];
+  const adherenceData = data?.adherence_trend ?? [];
+  const patientActivity = data?.patient_activity ?? [];
+  const treatmentDistribution: DashboardDistributionItem[] =
+    data?.treatment_distribution ?? [];
+  const recentPatients: DashboardRecentPatient[] = data?.recent_patients ?? [];
+  const overview = data?.overview;
+
+  const pct = (v: number | null | undefined) => Math.max(0, Math.min(100, v ?? 0));
+  const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v}%`);
+
   return (
     <div className="space-y-8">
       {/* ── Page Header ── */}
-      <div>
-        <h1 className="text-[36px] font-bold tracking-tight text-text-primary">
-          Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Overview of the tuberculosis treatment monitoring system.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-[36px] font-bold tracking-tight text-text-primary">
+            Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            Overview of the tuberculosis treatment monitoring system.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+        >
+          <RefreshCw
+            className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
       </div>
 
+      {error && (
+        <Alert variant="danger" title="Could not load dashboard">
+          {error}
+        </Alert>
+      )}
+
       {/* ── KPI Row (compact metric cards) ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => {
-          const Icon = stat.icon;
-          const trendColors: Record<string, string> = {
-            up: "text-primary-600",
-            down: "text-danger",
-            neutral: "text-text-tertiary",
-          };
-          return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {loading &&
+          Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
               className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card"
             >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm text-text-secondary">{stat.title}</p>
-                  <p className="text-[30px] font-bold leading-none text-text-primary">
-                    {stat.value}
-                  </p>
-                </div>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-bg-subtle">
-                  <Icon className="h-[18px] w-[18px] text-text-tertiary" />
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-1">
-                <span
-                  className={`inline-flex items-center gap-0.5 text-xs font-medium ${trendColors[stat.trend]}`}
-                >
-                  {stat.trend === "up" && <ArrowUpRight className="h-3 w-3" />}
-                  {stat.change}
-                </span>
-              </div>
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="mt-3 h-8 w-16" />
+              <Skeleton className="mt-3 h-3 w-24" />
             </div>
-          );
-        })}
+          ))}
+
+        {!loading &&
+          stats.map((stat, i) => {
+            const Icon = STAT_ICONS[i] ?? Activity;
+            const trendColors: Record<string, string> = {
+              up: "text-primary-600",
+              down: "text-danger",
+              neutral: "text-text-tertiary",
+            };
+            return (
+              <div
+                key={stat.title}
+                className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm text-text-secondary">{stat.title}</p>
+                    <p className="text-[30px] font-bold leading-none text-text-primary">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-bg-subtle">
+                    <Icon className="h-[18px] w-[18px] text-text-tertiary" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-1">
+                  <span
+                    className={`inline-flex items-center gap-0.5 text-xs font-medium ${trendColors[stat.trend]}`}
+                  >
+                    {stat.trend === "up" && <ArrowUpRight className="h-3 w-3" />}
+                    {stat.change}
+                  </span>
+                </div>
+                {stat.change_note && (
+                  <p className="mt-1 text-xs text-text-tertiary">
+                    {stat.change_note}
+                  </p>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       {/* ── Charts Row (2-up, wider left chart) ── */}
@@ -178,48 +218,53 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={adherenceData}>
-                    <defs>
-                      <linearGradient
-                        id="adherenceGradient"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop offset="0%" stopColor="#16a34a" stopOpacity={0.15} />
-                        <stop offset="100%" stopColor="#16a34a" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e8ecf0"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9ca3af", fontSize: 12 }}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9ca3af", fontSize: 12 }}
-                      domain={[0, 100]}
-                      tickFormatter={(v) => `${v}%`}
-                    />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="rate"
-                      stroke="#16a34a"
-                      strokeWidth={2}
-                      fill="url(#adherenceGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <Skeleton className="h-full w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={adherenceData}>
+                      <defs>
+                        <linearGradient
+                          id="adherenceGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop offset="0%" stopColor="#16a34a" stopOpacity={0.15} />
+                          <stop offset="100%" stopColor="#16a34a" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e8ecf0"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="month"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                        domain={[0, 100]}
+                        tickFormatter={(v) => `${v}%`}
+                      />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="rate"
+                        name="Adherence"
+                        stroke="#16a34a"
+                        strokeWidth={2}
+                        fill="url(#adherenceGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -252,7 +297,7 @@ export default function DashboardPage() {
                 </div>
               ))}
 
-              {treatmentDistribution.every((t) => t.count === 0) && (
+              {!loading && treatmentDistribution.every((t) => t.count === 0) && (
                 <p className="text-sm text-text-tertiary text-center pt-2">
                   No treatment data yet
                 </p>
@@ -273,27 +318,47 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-border-light">
-              {recentPatients.map((patient, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 px-6 py-3.5 first:pt-0 last:pb-0"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-bg-subtle">
-                    <Users className="h-4 w-4 text-text-tertiary" />
+            {loading ? (
+              <div className="space-y-3 px-6 py-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : recentPatients.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10">
+                <Users className="h-8 w-8 text-text-tertiary" />
+                <p className="text-sm text-text-tertiary">
+                  No recent registrations
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border-light">
+                {recentPatients.map((patient) => (
+                  <div
+                    key={patient.id}
+                    className="flex items-center gap-3 px-6 py-3.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-bg-subtle">
+                      <Users className="h-4 w-4 text-text-tertiary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">
+                        {patient.name}
+                      </p>
+                      <p className="text-xs text-text-tertiary">
+                        {patient.date ?? "—"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={patient.status === "draft" ? "warning" : "outline"}
+                      size="sm"
+                    >
+                      {patient.status === "draft" ? "Draft" : (patient.health_id_number ?? `#${patient.id}`)}
+                    </Badge>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">
-                      {patient.name}
-                    </p>
-                    <p className="text-xs text-text-tertiary">{patient.date}</p>
-                  </div>
-                  <Badge variant="outline" size="sm">
-                    {patient.id}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -312,25 +377,30 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={patientActivity} barGap={4}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#e8ecf0"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="day"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 12 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 12 }}
-                  />
-                  <RechartsTooltip content={<CustomTooltip />} />                    <Bar
+              {loading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={patientActivity} barGap={4}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e8ecf0"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="day"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9ca3af", fontSize: 12 }}
+                      allowDecimals={false}
+                    />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Bar
                       dataKey="new"
                       name="New Patients"
                       fill="#16a34a"
@@ -342,8 +412,9 @@ export default function DashboardPage() {
                       fill="#4ade80"
                       radius={[4, 4, 0, 0]}
                     />
-                </BarChart>
-              </ResponsiveContainer>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -358,8 +429,15 @@ export default function DashboardPage() {
               <HeartPulse className="h-4 w-4 text-success" />
             </div>
           </div>
-          <p className="text-[24px] font-bold text-text-primary">0%</p>
-          <Progress value={0} variant="default" size="sm" className="mt-3" />
+          <p className="text-[24px] font-bold text-text-primary">
+            {loading ? "—" : fmtPct(overview?.adherence_rate)}
+          </p>
+          <Progress
+            value={pct(overview?.adherence_rate)}
+            variant="default"
+            size="sm"
+            className="mt-3"
+          />
         </div>
 
         <div className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card">
@@ -369,8 +447,15 @@ export default function DashboardPage() {
               <TrendingUp className="h-4 w-4 text-primary-500" />
             </div>
           </div>
-          <p className="text-[24px] font-bold text-text-primary">0%</p>
-          <Progress value={0} variant="default" size="sm" className="mt-3" />
+          <p className="text-[24px] font-bold text-text-primary">
+            {loading ? "—" : fmtPct(overview?.treatment_success)}
+          </p>
+          <Progress
+            value={pct(overview?.treatment_success)}
+            variant="default"
+            size="sm"
+            className="mt-3"
+          />
         </div>
 
         <div className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card">
@@ -380,8 +465,15 @@ export default function DashboardPage() {
               <Activity className="h-4 w-4 text-warning" />
             </div>
           </div>
-          <p className="text-[24px] font-bold text-text-primary">0%</p>
-          <Progress value={0} variant="warning" size="sm" className="mt-3" />
+          <p className="text-[24px] font-bold text-text-primary">
+            {loading ? "—" : fmtPct(overview?.follow_up_rate)}
+          </p>
+          <Progress
+            value={pct(overview?.follow_up_rate)}
+            variant="warning"
+            size="sm"
+            className="mt-3"
+          />
         </div>
       </div>
     </div>
