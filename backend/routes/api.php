@@ -56,7 +56,11 @@ Route::prefix('v1')->group(function () {
         Route::prefix('patients')->middleware('role:admin')->group(function () {
             Route::get('/', [PatientController::class, 'index']);
             Route::get('/list', [PatientController::class, 'list']);
+            // Static segments must be registered before the {patient} wildcard route
+            Route::get('monitoring', [\App\Http\Controllers\API\MonitoringController::class, 'index']);
             Route::post('/', [PatientController::class, 'store']);
+            Route::post('{patient}/complete-draft', [PatientController::class, 'completeDraft']);
+            Route::post('{patient}/update-draft', [PatientController::class, 'updateDraft']);
             Route::get('{patient}', [PatientController::class, 'show']);
             Route::put('{patient}', [PatientController::class, 'update']);
             Route::delete('{patient}', [PatientController::class, 'destroy']);

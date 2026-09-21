@@ -24,14 +24,20 @@ class UpdatePatientRequest extends FormRequest
             'password' => ['nullable', 'string', 'min:8'],
 
             // Patient fields
+            'last_name' => ['nullable', 'string', 'max:255'],
+            'first_name' => ['nullable', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'name_extension' => ['nullable', 'string', 'max:20'],
             'date_of_birth' => ['nullable', 'date'],
             'gender' => ['nullable', 'string', 'in:male,female,other'],
+            'civil_status' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
             'emergency_contact_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
             'occupation' => ['nullable', 'string', 'max:100'],
             'nationality' => ['nullable', 'string', 'max:100'],
             'health_id_number' => ['nullable', 'string', 'max:50', Rule::unique('patients', 'health_id_number')->ignore($patientId)],
+            'philhealth_number' => ['nullable', 'string', 'max:30'],
             'referred_by' => ['nullable', 'string', 'max:255'],
         ];
     }
