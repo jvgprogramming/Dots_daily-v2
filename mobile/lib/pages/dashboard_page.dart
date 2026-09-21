@@ -4,6 +4,7 @@ import '../models/medication.dart';
 import '../providers/medications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import 'alarm_ringing_page.dart';
 
 class DashboardPage extends StatelessWidget {
   final ValueChanged<String>? onViewChange;
@@ -38,6 +39,10 @@ class DashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Next dose + alarm preview
+                _buildNextDoseCard(context, meds),
+                const SizedBox(height: 16),
+
                 // Stats cards row
                 _buildStatsRow(context, meds),
                 const SizedBox(height: 16),
@@ -478,6 +483,87 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
+  Widget _buildNextDoseCard(BuildContext context, MedicationsProvider meds) {
+    final next = meds.nextAlarm;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: AppColors.primaryGradient),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.alarm_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'NEXT DOSE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  next != null ? next.displayTime : 'No alarm set',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  next != null
+                      ? '${next.label} • ${next.medicationName}'
+                      : 'Tap Alarms to schedule one',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.mutedForeground,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.outlined(
+            onPressed: next == null
+                ? null
+                : () => AlarmRingingPage.open(context, next),
+            tooltip: 'Preview alarm',
+            icon: const Icon(Icons.play_circle_outline_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatsRow(BuildContext context, MedicationsProvider meds) {
     final stats = [
       ('Medications', '${meds.medications.length}', 'Daily TB regimen', Icons.medication, AppColors.primary),
@@ -550,7 +636,7 @@ class DashboardPage extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onViewChange?.call('dose-log'),
+                  onPressed: () => onViewChange?.call('medications'),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -612,14 +698,14 @@ class DashboardPage extends StatelessWidget {
                             ),
                           ),
                           ElevatedButton(
-                            onPressed: () => onViewChange?.call('dose-log'),
+                            onPressed: () => onViewChange?.call('alarms'),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 8),
                               minimumSize: Size.zero,
                               textStyle: const TextStyle(fontSize: 12),
                             ),
-                            child: const Text('Log dose'),
+                            child: const Text('Details'),
                           ),
                         ],
                       ),
@@ -685,8 +771,8 @@ class DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _QuickActionButton(
-              label: 'Dose log',
-              onTap: () => onViewChange?.call('dose-log'),
+              label: 'Alarms',
+              onTap: () => onViewChange?.call('alarms'),
             ),
             const SizedBox(height: 8),
             _QuickActionButton(
@@ -989,8 +1075,8 @@ class _DoseLogTile extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child:                          Row(
-                            children: [
+      child: Row(
+        children: [
                               Container(
                                 width: 36,
                                 height: 36,

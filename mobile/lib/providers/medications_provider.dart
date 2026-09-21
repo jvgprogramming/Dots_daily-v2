@@ -89,6 +89,7 @@ class MedicationsProvider extends ChangeNotifier {
           time: time,
           enabled: true,
           days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          label: 'Morning dose',
         ));
       }
     }
@@ -153,6 +154,40 @@ class MedicationsProvider extends ChangeNotifier {
 
   int get activeAlarmCount => _alarms.where((a) => a.enabled).length;
 
+  /// The enabled alarm with the soonest time-of-day from now, or null.
+  Alarm? get nextAlarm {
+    final now = DateTime.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+
+    Alarm? best;
+    int? bestDelta;
+    for (final alarm in _alarms.where((a) => a.enabled)) {
+      final (h, m) = alarm.timeParts;
+      var delta = h * 60 + m - nowMinutes;
+      if (delta <= 0) delta += 24 * 60; // next occurrence is tomorrow
+      if (bestDelta == null || delta < bestDelta) {
+        bestDelta = delta;
+        best = alarm;
+      }
+    }
+    return best;
+  }
+
+  void upsertAlarm(Alarm alarm) {
+    final index = _alarms.indexWhere((a) => a.id == alarm.id);
+    if (index != -1) {
+      _alarms[index] = alarm;
+    } else {
+      _alarms.add(alarm);
+    }
+    notifyListeners();
+  }
+
+  void deleteAlarm(String id) {
+    _alarms.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+
   String get upcomingMedicationNames {
     return _medications.take(3).map((m) => m.name).join(' • ');
   }
@@ -167,6 +202,7 @@ class MedicationsProvider extends ChangeNotifier {
         time: time,
         enabled: true,
         days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        label: 'Dose reminder',
       ));
     }
     notifyListeners();
@@ -179,7 +215,6 @@ class MedicationsProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
   void addDoseLog(DoseLog log) {
     _doseLogs.insert(0, log);
     notifyListeners();

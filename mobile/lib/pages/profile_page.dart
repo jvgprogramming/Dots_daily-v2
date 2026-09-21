@@ -12,11 +12,17 @@ class ProfilePage extends StatelessWidget {
     final user = auth.user;
     final patient = user?.patient;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Profile header
           Center(
             child: Column(
@@ -229,6 +235,7 @@ class ProfilePage extends StatelessWidget {
 
           const SizedBox(height: 32),
         ],
+        ),
       ),
     );
   }

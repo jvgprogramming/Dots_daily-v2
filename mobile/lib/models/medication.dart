@@ -56,9 +56,14 @@ class Alarm {
   final String id;
   final String medicationId;
   final String medicationName;
+
+  /// 24-hour time in `HH:mm` format.
   final String time;
   final bool enabled;
   final List<String> days;
+
+  /// Short user-facing label, e.g. "Morning dose".
+  final String label;
   final String? lastTaken;
 
   const Alarm({
@@ -67,17 +72,59 @@ class Alarm {
     required this.medicationName,
     required this.time,
     required this.enabled,
-    required this.days,
+    this.days = const [],
+    this.label = 'Medication reminder',
     this.lastTaken,
   });
 
-  Alarm copyWith({bool? enabled, String? lastTaken}) => Alarm(
-        id: id,
-        medicationId: medicationId,
-        medicationName: medicationName,
-        time: time,
+  /// Parses the [time] string into hour/minute parts. Falls back to 08:00.
+  (int, int) get timeParts {
+    final parts = time.split(':');
+    final h = int.tryParse(parts.isNotEmpty ? parts[0] : '') ?? 8;
+    final m = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    return (h.clamp(0, 23), m.clamp(0, 59));
+  }
+
+  /// `07:05 AM` style display string.
+  String get displayTime {
+    final (h, m) = timeParts;
+    final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    final amPm = h >= 12 ? 'PM' : 'AM';
+    return '${hour12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $amPm';
+  }
+
+  /// Short repeat summary: "Every day", "Weekdays", "Weekends" or "Mon, Fri".
+  String get repeatSummary {
+    if (days.length >= 7) return 'Every day';
+    if (days.length == 5 &&
+        const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].every(days.contains)) {
+      return 'Weekdays';
+    }
+    if (days.length == 2 && days.contains('Sat') && days.contains('Sun')) {
+      return 'Weekends';
+    }
+    if (days.isEmpty) return 'Once';
+    return days.join(', ');
+  }
+
+  Alarm copyWith({
+    String? id,
+    String? medicationId,
+    String? medicationName,
+    String? time,
+    bool? enabled,
+    List<String>? days,
+    String? label,
+    String? lastTaken,
+  }) =>
+      Alarm(
+        id: id ?? this.id,
+        medicationId: medicationId ?? this.medicationId,
+        medicationName: medicationName ?? this.medicationName,
+        time: time ?? this.time,
         enabled: enabled ?? this.enabled,
-        days: days,
+        days: days ?? this.days,
+        label: label ?? this.label,
         lastTaken: lastTaken ?? this.lastTaken,
       );
 
@@ -88,16 +135,19 @@ class Alarm {
         'time': time,
         'enabled': enabled,
         'days': days,
+        'label': label,
         'lastTaken': lastTaken,
       };
 
   factory Alarm.fromJson(Map<String, dynamic> json) => Alarm(
         id: json['id'] as String,
-        medicationId: json['medicationId'] as String,
-        medicationName: json['medicationName'] as String,
+        medicationId: json['medicationId'] as String? ?? '',
+        medicationName: json['medicationName'] as String? ?? 'Medication',
         time: json['time'] as String,
         enabled: json['enabled'] as bool? ?? true,
-        days: (json['days'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+        days: (json['days'] as List<dynamic>?)?.map((e) => e as String).toList() ??
+            const [],
+        label: json['label'] as String? ?? 'Medication reminder',
         lastTaken: json['lastTaken'] as String?,
       );
 }

@@ -150,10 +150,16 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Test Alarms'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Header
           Container(
             width: double.infinity,
@@ -431,14 +437,6 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => widget.onViewChange?.call('dashboard'),
-                          icon: const Icon(Icons.arrow_back, size: 18),
-                          label: const Text('Back to Dashboard'),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -447,6 +445,7 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

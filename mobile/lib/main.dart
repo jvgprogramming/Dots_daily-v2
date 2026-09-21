@@ -4,13 +4,15 @@ import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/medications_provider.dart';
-import 'widgets/navigation_header.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/medications_page.dart';
+import 'pages/alarms_page.dart';
+import 'pages/alarm_ringing_page.dart';
 import 'pages/chatbot_page.dart';
 import 'pages/symptoms_page.dart';
 import 'pages/test_alarm_page.dart';
 import 'pages/profile_page.dart';
+import 'models/medication.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,11 +24,34 @@ void main() async {
   runApp(const MyApp());
 }
 
+/// Global navigator key so notification taps can open the ringing screen
+/// even when the app is restored from the background.
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Notification taps route into the app: open the alarm ringing screen.
+    NotificationService.onAlarmTap = (payload) {
+      if (payload != null && payload.startsWith('alarm:')) {
+        final id = payload.substring('alarm:'.length);
+        final alarm = _findAlarmById(id);
+        if (alarm != null) {
+          AlarmRingingPage.open(navigatorKey.currentContext!, alarm);
+          return;
+        }
+      }
+      // Fallback: open alarms list.
+      final ctx = navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Medication reminder — open the Alarms tab for details')),
+        );
+      }
+    };
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
@@ -35,10 +60,24 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'DOTS Daily',
         debugShowCheckedModeBanner: false,
+        navigatorKey: navigatorKey,
         theme: AppTheme.lightTheme,
         home: const MainShell(),
       ),
     );
+  }
+
+  Alarm? _findAlarmById(String id) {
+    // The provider is not accessible above MaterialApp, so look it up via
+    // the navigator context instead.
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return null;
+    final meds = Provider.of<MedicationsProvider>(ctx, listen: false);
+    try {
+      return meds.alarms.firstWhere((a) => a.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -50,87 +89,189 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  String _currentView = 'dashboard';
+  int _currentIndex = 0;
 
-  void _onViewChange(String view) {
-    setState(() {
-      _currentView = view;
-    });
+  static const _tabs = [
+    ('dashboard', 'Home', Icons.home_outlined, Icons.home_rounded),
+    ('alarms', 'Alarms', Icons.alarm_outlined, Icons.alarm_rounded),
+    ('medications', 'Meds', Icons.medication_outlined, Icons.medication_rounded),
+    ('chatbot', 'Chat', Icons.chat_outlined, Icons.chat_rounded),
+    ('symptoms', 'Symptoms', Icons.monitor_heart_outlined, Icons.monitor_heart_rounded),
+  ];
+
+  void _onTabTapped(int index) {
+    setState(() => _currentIndex = index);
   }
 
-  void _onTriggerAlarm(Map<String, String> alarmInfo) {
-    // Navigate to test alarm page when alarm is triggered from dashboard
-    setState(() {
-      _currentView = 'test-alarm';
-    });
+  /// Push a full-screen page above the tab shell (with its own back button).
+  Future<void> _pushPage(String route) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => _buildPushedPage(route)),
+    );
+  }
+
+  Widget _buildPushedPage(String route) {
+    switch (route) {
+      case 'profile':
+        return const ProfilePage();
+      case 'test-alarm':
+        return const TestAlarmPage();
+      default:
+        return const ProfilePage();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    // If not logged in, show login page
     if (!auth.isLoggedIn) {
       return const LoginPage();
     }
 
     return Scaffold(
-      backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Sticky navigation header
-            NavigationHeader(
-              currentView: _currentView,
-              onViewChange: _onViewChange,
-            ),
+      backgroundColor: AppColors.background,
+      extendBody: true,
+      body: Stack(
+        children: [
+          // Tab content
+          Offstage(
+            offstage: false,
+            child: _buildTab(_tabs[_currentIndex].$1),
+          ),
 
-            // Page content
-            Expanded(
-              child: _buildPage(),
+          // Floating profile button (top-right) — kept subtle.
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16, top: 4),
+                child: _ProfileBubble(
+                  onTap: () => _pushPage('profile'),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: _onTabTapped,
+        destinations: [
+          for (final tab in _tabs)
+            NavigationDestination(
+              icon: Icon(tab.$3),
+              selectedIcon: Icon(tab.$4),
+              label: tab.$2,
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildPage() {
-    switch (_currentView) {
+  Widget _buildTab(String view) {
+    switch (view) {
       case 'dashboard':
         return DashboardPage(
-          onViewChange: _onViewChange,
-          onTriggerAlarm: _onTriggerAlarm,
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) {
+              _onTabTapped(index);
+            } else {
+              _pushPage(v);
+            }
+          },
+          onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
+      case 'alarms':
+        return AlarmsPage(onViewChange: (v) {
+          final index = _tabs.indexWhere((t) => t.$1 == v);
+          if (index != -1) _onTabTapped(index);
+        });
       case 'medications':
         return MedicationsPage(
-          onViewChange: _onViewChange,
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) _onTabTapped(index);
+          },
         );
       case 'chatbot':
         return ChatbotPage(
-          onViewChange: _onViewChange,
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) _onTabTapped(index);
+          },
         );
       case 'symptoms':
         return SymptomsPage(
-          onViewChange: _onViewChange,
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) _onTabTapped(index);
+          },
         );
-      case 'test-alarm':
-        return TestAlarmPage(
-          onViewChange: _onViewChange,
-        );
-      case 'profile':
-        return const ProfilePage();
       default:
         return DashboardPage(
-          onViewChange: _onViewChange,
-          onTriggerAlarm: _onTriggerAlarm,
+          onViewChange: (v) {
+            final index = _tabs.indexWhere((t) => t.$1 == v);
+            if (index != -1) {
+              _onTabTapped(index);
+            } else {
+              _pushPage(v);
+            }
+          },
+          onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
     }
   }
 }
 
-// Login Page (simple version)
+/// Small floating avatar button that opens the profile page.
+class _ProfileBubble extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ProfileBubble({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: AppColors.primaryGradient),
+          borderRadius: BorderRadius.circular(21),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            user?.initials ?? '',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =====================================================================
+// Login Page
+// =====================================================================
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -142,6 +283,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _obscure = true;
 
   @override
   void dispose() {
@@ -157,16 +299,11 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
     setState(() => _loading = false);
 
-    // Show error if login failed
     if (!auth.isLoggedIn && auth.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.error!),
           backgroundColor: AppColors.destructive,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
         ),
       );
     }
@@ -175,89 +312,149 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lightTheme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(16),
+      backgroundColor: AppColors.background,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFD6F3F5), AppColors.background],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: AppColors.primaryGradient,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.medication_rounded,
+                        color: Colors.white,
+                        size: 38,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.medication,
-                      color: AppColors.primary,
-                      size: 34,
+                    const SizedBox(height: 24),
+                    const Text(
+                      'DOTS Daily',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.foreground,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'DOTS Daily',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.foreground,
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your TB treatment companion.\nSign in to continue.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to continue your treatment support workflow.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Login form
-                  TextField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      hintText: 'you@example.com',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Enter your password',
-                      prefixIcon: Icon(Icons.lock_outlined),
-                    ),
-                    obscureText: true,
-                    onSubmitted: (_) => _handleLogin(),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _handleLogin,
-                      child: _loading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                    // Card-wrapped form
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _emailController,
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              hintText: 'you@example.com',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _passwordController,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              hintText: 'Enter your password',
+                              prefixIcon: const Icon(Icons.lock_outlined),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscure
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                                onPressed: () => setState(() => _obscure = !_obscure),
                               ),
-                            )
-                          : const Text('Sign In'),
+                            ),
+                            obscureText: _obscure,
+                            onSubmitted: (_) => _handleLogin(),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _loading ? null : _handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: _loading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Sign In',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

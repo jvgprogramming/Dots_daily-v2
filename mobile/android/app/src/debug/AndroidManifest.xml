@@ -4,4 +4,10 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- The local Laravel backend is served over plain HTTP (http://127.0.0.1:8000,
+         http://10.0.2.2:8000, or a LAN IP). Android 9+ blocks cleartext traffic by
+         default, so allow it for debug builds only. Release builds keep the secure
+         default and still require HTTPS. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

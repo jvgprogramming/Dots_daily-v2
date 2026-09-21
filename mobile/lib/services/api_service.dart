@@ -14,10 +14,13 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  /// Default backend URL based on the current platform.
+  /// Default backend URL based on the current platform. Only used when
+  /// `API_BASE_URL` is not supplied via `--dart-define`.
   /// - Android emulator uses 10.0.2.2 (special alias for host machine's localhost).
   /// - iOS simulator uses 127.0.0.1 (localhost).
-  /// - Real devices use the host machine's LAN IP (override via [defaultBaseUrl]).
+  /// - Real devices: pass `--dart-define=API_BASE_URL=...` with either the host
+  ///   machine's LAN IP, or `http://127.0.0.1:8000/api/v1` combined with
+  ///   `adb reverse tcp:8000 tcp:8000`.
   static String get defaultBaseUrl {
     try {
       if (Platform.isAndroid) {
@@ -32,9 +35,23 @@ class ApiService {
     return 'http://127.0.0.1:8000/api/v1';
   }
 
-  /// The active base URL. Change this at runtime to point to a different server.
-  /// naga change ang ip depende kung din naka connect
-  String baseUrl = 'http://10.200.132.10:8000/api/v1';
+  /// Value of the `API_BASE_URL` dart-define, e.g.
+  /// `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1`.
+  /// Empty when the define is not supplied.
+  static const String _configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// The base URL to use: the `API_BASE_URL` dart-define when supplied,
+  /// otherwise the per-platform [defaultBaseUrl]. A trailing slash is ignored.
+  static String get resolvedBaseUrl => _stripTrailingSlash(
+        _configuredBaseUrl.isNotEmpty ? _configuredBaseUrl : defaultBaseUrl,
+      );
+
+  /// The active base URL. Defaults to [resolvedBaseUrl], and can also be changed
+  /// at runtime to point at a different server.
+  String baseUrl = resolvedBaseUrl;
+
+  static String _stripTrailingSlash(String url) =>
+      url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
   String? _token;
 
