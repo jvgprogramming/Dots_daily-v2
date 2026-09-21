@@ -5,7 +5,10 @@ use App\Http\Controllers\API\Auth\EmailVerificationController;
 use App\Http\Controllers\API\Auth\ForgotPasswordController;
 use App\Http\Controllers\API\Auth\MobileAuthController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
+use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\SearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -51,6 +54,23 @@ Route::prefix('v1')->group(function () {
 
         // Email Verification
         Route::post('/email/verification-notification', [EmailVerificationController::class, 'sendVerification']);
+
+        // Dashboard (Admin)
+        Route::get('/dashboard/stats', [DashboardController::class, 'stats'])->middleware('role:admin');
+
+        // Global search (Admin)
+        Route::get('/search', [SearchController::class, 'index'])->middleware('role:admin');
+
+        // Medication inventory (Admin)
+        Route::prefix('medications-inventory')->middleware('role:admin')->group(function () {
+            Route::get('/', [MedicationInventoryController::class, 'index']);
+            Route::get('summary', [MedicationInventoryController::class, 'summary']);
+            Route::post('/', [MedicationInventoryController::class, 'store']);
+            Route::put('{medication}', [MedicationInventoryController::class, 'update']);
+            Route::post('{medication}/adjust', [MedicationInventoryController::class, 'adjust']);
+            Route::get('{medication}/movements', [MedicationInventoryController::class, 'movements']);
+            Route::delete('{medication}', [MedicationInventoryController::class, 'destroy']);
+        });
 
         // Patient Routes (Admin)
         Route::prefix('patients')->middleware('role:admin')->group(function () {

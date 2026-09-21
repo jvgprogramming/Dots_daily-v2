@@ -1,25 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPatientList } from "@/lib/services/patients";
-import type { PatientSelectOption } from "@/lib/types";
+import { globalSearch } from "@/lib/services/search";
+import type { GlobalSearchData, GlobalSearchResultItem } from "@/lib/types";
 
 interface UseGlobalSearchResult {
   query: string;
   setQuery: (q: string) => void;
-  results: PatientSelectOption[];
+  /** Grouped results in display order */
+  groups: Array<{ type: GlobalSearchResultItem["type"]; label: string; items: GlobalSearchResultItem[] }>;
+  items: GlobalSearchResultItem[];
+  totals: GlobalSearchData["totals"] | null;
   loading: boolean;
   error: string;
 }
 
+const GROUP_LABELS: Record<GlobalSearchResultItem["type"], string> = {
+  patient: "Patients",
+  treatment_plan: "Treatment Plans",
+  medication: "Medications",
+  monitoring_entry: "Monitoring",
+};
+
 /**
- * Global patient search with debounced API calls.
+ * Global search across patients, treatment plans, medications, and
+ * monitoring entries with debounced API calls.
  * Used by the top-bar search in the dashboard header.
  */
 export function useGlobalSearch(delay = 300): UseGlobalSearchResult {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
-  const [results, setResults] = useState<PatientSelectOption[]>([]);
+  const [data, setData] = useState<GlobalSearchData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +41,7 @@ export function useGlobalSearch(delay = 300): UseGlobalSearchResult {
 
   useEffect(() => {
     if (debounced.length < 2) {
-      setResults([]);
+      setData(null);
       setLoading(false);
       setError("");
       return;
@@ -40,14 +51,14 @@ export function useGlobalSearch(delay = 300): UseGlobalSearchResult {
     setLoading(true);
     setError("");
 
-    getPatientList(debounced)
+    globalSearch(debounced)
       .then((res) => {
         if (cancelled) return;
-        setResults(res.data ?? []);
+        setData(res.data ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setResults([]);
+        setData(null);
         setError(err instanceof Error ? err.message : "Search failed");
       })
       .finally(() => {
@@ -59,5 +70,20 @@ export function useGlobalSearch(delay = 300): UseGlobalSearchResult {
     };
   }, [debounced]);
 
-  return { query, setQuery, results, loading, error };
+  const groups: UseGlobalSearchResult["groups"] = data
+    ? (
+        [
+          ["patient", data.patients],
+          ["treatment_plan", data.treatment_plans],
+          ["medication", data.medications],
+          ["monitoring_entry", data.monitoring_entries],
+        ] as const
+      )
+        .filter(([, items]) => items.length > 0)
+        .map(([type, items]) => ({ type, label: GROUP_LABELS[type], items }))
+    : [];
+
+  const items = groups.flatMap((g) => g.items);
+
+  return { query, setQuery, groups, items, totals: data?.totals ?? null, loading, error };
 }

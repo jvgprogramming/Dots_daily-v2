@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -108,10 +109,15 @@ function SummaryCard({
 }
 
 export default function MonitoringPage() {
+  const searchParams = useSearchParams();
+  const deepLinkPatientId = searchParams.get("patient");
+
   // ── Patient selection ──
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [patientSearch, setPatientSearch] = useState("");
-  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(
+    deepLinkPatientId ? Number(deepLinkPatientId) || null : null
+  );
   const [patientsLoading, setPatientsLoading] = useState(true);
 
   // ── Monitoring data ──

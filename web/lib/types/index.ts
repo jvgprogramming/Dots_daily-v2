@@ -369,6 +369,9 @@ export interface TreatmentPlan {
 }
 
 // ── Medication ──
+export type StorageCondition = "room_temperature" | "refrigerator" | "cold_storage" | "special";
+export type StockStatus = "in_stock" | "low_stock" | "out_of_stock" | "expired";
+
 export interface Medication {
   id: number;
   name: string;
@@ -379,6 +382,67 @@ export interface Medication {
   unit: string;
   description: string | null;
   is_active: boolean;
+}
+
+export interface MedicationInventoryItem {
+  id: number;
+  name: string;
+  generic_name: string;
+  brand_name: string | null;
+  dosage: string;
+  quantity: number;
+  reorder_level: number;
+  unit: string;
+  storage_condition: StorageCondition;
+  expiry_date: string | null;
+  stock_status: StockStatus;
+  nearing_expiry: boolean;
+  days_until_expiry: number | null;
+  last_restocked_at: string | null;
+  notes: string | null;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface MedicationInventorySummary {
+  total_medicines: number;
+  in_stock: number;
+  low_stock: number;
+  out_of_stock: number;
+  expired: number;
+  nearing_expiry: number;
+  storage_breakdown: {
+    room_temperature: number;
+    refrigerator: number;
+    cold_storage: number;
+    special: number;
+  };
+}
+
+export type StockMovementType = "initial" | "restock" | "deduction" | "correction";
+
+export interface MedicationStockMovement {
+  id: number;
+  type: StockMovementType;
+  quantity_change: number;
+  quantity_before: number;
+  quantity_after: number;
+  reason: string | null;
+  user: string | null;
+  created_at: string;
+}
+
+export interface MedicationInventoryPayload {
+  name: string;
+  generic_name: string;
+  brand_name?: string;
+  dosage: string;
+  quantity: number;
+  reorder_level?: number;
+  unit: string;
+  storage_condition: StorageCondition;
+  expiry_date: string;
+  notes?: string;
 }
 
 // ── Daily Monitoring ──
@@ -489,6 +553,89 @@ export interface PatientMonitoringData {
     monitoring_entries_count: number;
   };
   progress: MonitoringProgress | null;
+}
+
+// ── Dashboard ──
+export interface DashboardStat {
+  title: string;
+  value: number;
+  change: string;
+  patient_drafts?: number;
+  change_note?: string;
+  trend: "up" | "down" | "neutral";
+}
+
+export interface DashboardAdherencePoint {
+  month: string;
+  rate: number;
+}
+
+export interface DashboardActivityPoint {
+  day: string;
+  new: number;
+  followups: number;
+}
+
+export interface DashboardDistributionItem {
+  phase: string;
+  key: string;
+  color: string;
+  count: number;
+  percentage: number;
+}
+
+export interface DashboardRecentPatient {
+  id: number;
+  name: string;
+  health_id_number: string | null;
+  date: string | null;
+  status: string;
+}
+
+export interface DashboardStatsData {
+  stats: DashboardStat[];
+  adherence_trend: DashboardAdherencePoint[];
+  patient_activity: DashboardActivityPoint[];
+  treatment_distribution: DashboardDistributionItem[];
+  recent_patients: DashboardRecentPatient[];
+  overview: {
+    adherence_rate: number | null;
+    treatment_success: number | null;
+    follow_up_rate: number | null;
+  };
+  generated_at: string;
+}
+
+// ── Global Search ──
+export type GlobalSearchResultType =
+  | "patient"
+  | "treatment_plan"
+  | "medication"
+  | "monitoring_entry";
+
+export interface GlobalSearchResultItem {
+  type: GlobalSearchResultType;
+  id: number;
+  patient_id?: number;
+  title: string;
+  subtitle: string | null;
+  meta: string | null;
+  status: string | null;
+}
+
+export interface GlobalSearchData {
+  query: string;
+  patients: GlobalSearchResultItem[];
+  treatment_plans: GlobalSearchResultItem[];
+  medications: GlobalSearchResultItem[];
+  monitoring_entries: GlobalSearchResultItem[];
+  totals: {
+    patients: number;
+    treatment_plans: number;
+    medications: number;
+    monitoring_entries: number;
+    all: number;
+  };
 }
 
 // ── Navigation ──

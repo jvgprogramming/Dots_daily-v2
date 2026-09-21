@@ -8,10 +8,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, error, ...props }, ref) => {
+  ({ className, type, error, value, ...props }, ref) => {
     return (
       <input
         type={type}
+        value={value === null ? "" : value}
         className={cn(
           "flex h-11 w-full rounded-[10px] border bg-bg-card px-4 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500",
