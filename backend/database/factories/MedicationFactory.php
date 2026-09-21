@@ -20,7 +20,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Rifadin',
             'dosage_form' => 'capsule',
             'strength' => '300mg',
-            'unit' => 'mg',
+            'unit' => 'capsules',
         ],
         [
             'name' => 'Isoniazid',
@@ -28,7 +28,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Nydrazid',
             'dosage_form' => 'tablet',
             'strength' => '300mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
         [
             'name' => 'Pyrazinamide',
@@ -36,7 +36,7 @@ class MedicationFactory extends Factory
             'brand_name' => null,
             'dosage_form' => 'tablet',
             'strength' => '500mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
         [
             'name' => 'Ethambutol',
@@ -44,7 +44,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Myambutol',
             'dosage_form' => 'tablet',
             'strength' => '400mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
         [
             'name' => 'Streptomycin',
@@ -52,7 +52,7 @@ class MedicationFactory extends Factory
             'brand_name' => null,
             'dosage_form' => 'injection',
             'strength' => '1g',
-            'unit' => 'g',
+            'unit' => 'vials',
         ],
         [
             'name' => 'Rifapentine',
@@ -60,7 +60,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Priftin',
             'dosage_form' => 'tablet',
             'strength' => '150mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
         [
             'name' => 'Moxifloxacin',
@@ -68,7 +68,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Avelox',
             'dosage_form' => 'tablet',
             'strength' => '400mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
         [
             'name' => 'Bedaquiline',
@@ -76,7 +76,7 @@ class MedicationFactory extends Factory
             'brand_name' => 'Sirturo',
             'dosage_form' => 'tablet',
             'strength' => '100mg',
-            'unit' => 'mg',
+            'unit' => 'tablets',
         ],
     ];
 
@@ -95,7 +95,12 @@ class MedicationFactory extends Factory
             'brand_name' => $medication['brand_name'],
             'dosage_form' => $medication['dosage_form'],
             'strength' => $medication['strength'],
+            'dosage' => $medication['strength'] . ' ' . rtrim($medication['unit'], 's'),
             'unit' => $medication['unit'],
+            'quantity' => fake()->numberBetween(0, 600),
+            'reorder_level' => 50,
+            'storage_condition' => Medication::STORAGE_ROOM_TEMPERATURE,
+            'expiry_date' => now()->addMonths(fake()->numberBetween(6, 24))->toDateString(),
             'description' => fake()->optional()->sentence(),
             'is_active' => true,
         ];

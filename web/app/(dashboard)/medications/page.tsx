@@ -38,8 +38,8 @@ import {
   createMedication,
   updateMedication,
   deleteMedication,
-  adjustMedicationStock,
   getMedicationMovements,
+  formatValidationErrors,
 } from "@/lib/services/medications";
 import type {
   MedicationInventoryItem,
@@ -93,6 +93,7 @@ const EMPTY_FORM: MedicationInventoryPayload = {
   storage_condition: "room_temperature",
   expiry_date: "",
   notes: "",
+  stock_change_reason: "",
 };
 
 function formatDate(iso: string | null): string {
@@ -158,14 +159,8 @@ export default function MedicationsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<MedicationInventoryItem | null>(null);
-
-  // ── Adjust stock state ──
-  const [adjusting, setAdjusting] = useState<MedicationInventoryItem | null>(null);
-  const [adjustMode, setAdjustMode] = useState<"delta" | "absolute">("delta");
-  const [adjustInput, setAdjustInput] = useState(0);
-  const [adjustReason, setAdjustReason] = useState("");
-  const [adjustSaving, setAdjustSaving] = useState(false);
-  const [adjustError, setAdjustError] = useState("");
+  // Stock at edit-start, so we can ask why the quantity changed
+  const [originalQty, setOriginalQty] = useState(0);
 
   // ── Movement history state ──
   const [historyFor, setHistoryFor] = useState<MedicationInventoryItem | null>(null);
@@ -218,6 +213,7 @@ export default function MedicationsPage() {
 
   const openEdit = (item: MedicationInventoryItem) => {
     setEditing(item);
+    setOriginalQty(item.quantity ?? 0);
     setForm({
       name: item.name,
       generic_name: item.generic_name,
@@ -229,6 +225,7 @@ export default function MedicationsPage() {
       storage_condition: item.storage_condition ?? "room_temperature",
       expiry_date: item.expiry_date ?? "",
       notes: item.notes ?? "",
+      stock_change_reason: "",
     });
     setFormError("");
     setModalOpen(true);
@@ -249,7 +246,7 @@ export default function MedicationsPage() {
       setModalOpen(false);
       await load();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save medicine");
+      setFormError(formatValidationErrors(err));
     } finally {
       setSaving(false);
     }
@@ -266,44 +263,6 @@ export default function MedicationsPage() {
       setError(err instanceof Error ? err.message : "Failed to remove medicine");
     } finally {
       setSaving(false);
-    }
-  };
-
-  // ── Adjust stock helpers ──
-  const openAdjust = (item: MedicationInventoryItem) => {
-    setAdjusting(item);
-    setAdjustMode("delta");
-    setAdjustInput(0);
-    setAdjustReason("");
-    setAdjustError("");
-  };
-
-  const adjustedQty = adjusting
-    ? adjustMode === "absolute"
-      ? adjustInput
-      : adjusting.quantity + adjustInput
-    : 0;
-
-  const adjustValid =
-    adjusting !== null && adjustedQty >= 0 && (adjustMode === "absolute" ? adjustInput !== adjusting.quantity : adjustInput !== 0);
-
-  const handleAdjust = async () => {
-    if (!adjusting || !adjustValid) return;
-    setAdjustSaving(true);
-    setAdjustError("");
-    try {
-      await adjustMedicationStock(adjusting.id, {
-        ...(adjustMode === "absolute"
-          ? { new_quantity: adjustInput }
-          : { quantity_change: adjustInput }),
-        reason: adjustReason || undefined,
-      });
-      setAdjusting(null);
-      await load();
-    } catch (err: unknown) {
-      setAdjustError(err instanceof Error ? err.message : "Failed to adjust stock");
-    } finally {
-      setAdjustSaving(false);
     }
   };
 
@@ -418,14 +377,6 @@ export default function MedicationsPage() {
       className: "text-right",
       cell: (m: MedicationInventoryItem) => (
         <div className="flex items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={() => openAdjust(m)}
-            className="rounded-[6px] p-1.5 text-text-tertiary transition-colors hover:bg-bg-subtle hover:text-text-primary"
-            aria-label={`Adjust stock for ${m.name}`}
-          >
-            <PackageSearch className="h-4 w-4" />
-          </button>
           <button
             type="button"
             onClick={() => openHistory(m)}
@@ -601,21 +552,36 @@ export default function MedicationsPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-text-secondary mb-1.5 block">Dosage *</label>
+              <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                Dosage {editing ? "(optional)" : "*"}
+              </label>
               <Input
                 placeholder="e.g. 300mg capsule"
                 value={form.dosage}
                 onChange={(e) => updateField("dosage", e.target.value)}
               />
+              {editing && !form.dosage && (
+                <p className="mt-1 text-[11px] text-text-tertiary">
+                  Legacy medicine — no dosage presentation on file; leave blank if unknown.
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1.5 block">Quantity *</label>
-              <Input
-                type="number"
-                min={0}
-                value={form.quantity}
-                onChange={(e) => updateField("quantity", Number(e.target.value))}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.quantity}
+                  onChange={(e) => updateField("quantity", Number(e.target.value))}
+                />
+                <span className="shrink-0 text-xs text-text-tertiary">
+                  {form.unit}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-text-tertiary">
+                Count of items on hand ({form.unit}) — the dose strength (mg/g) lives in the Dosage field above.
+              </p>
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1.5 block">Unit *</label>
@@ -630,6 +596,9 @@ export default function MedicationsPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-text-tertiary">
+                How the stock is counted (packaging), not the dose strength (mg/g).
+              </p>
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1.5 block">Low Stock Alert Level</label>
@@ -655,7 +624,9 @@ export default function MedicationsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-text-secondary mb-1.5 block">Expiry Date *</label>
+              <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                Expiry Date {editing ? "(optional)" : "*"}
+              </label>
               <Input
                 type="date"
                 value={form.expiry_date}
@@ -673,6 +644,26 @@ export default function MedicationsPage() {
               />
             </div>
           </div>
+
+          {/* Reason — only when quantity changed on edit */}
+          {editing && form.quantity !== originalQty && (
+            <div>
+              <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                Reason for stock change{' '}
+                <span className="font-normal text-text-tertiary">({originalQty} → {form.quantity} {form.unit})</span>
+              </label>
+              <textarea
+                rows={2}
+                className="flex w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
+                placeholder="e.g. Delivered 2 boxes from supplier, dispensed to patients…"
+                value={form.stock_change_reason ?? ""}
+                onChange={(e) => updateField("stock_change_reason", e.target.value)}
+              />
+              <p className="mt-1 text-[11px] text-text-tertiary">
+                Recorded in the stock history for this medicine.
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>
@@ -716,84 +707,6 @@ export default function MedicationsPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
               {saving ? "Removing…" : "Remove"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Adjust stock modal ── */}
-      <Modal
-        open={adjusting !== null}
-        onClose={() => !adjustSaving && setAdjusting(null)}
-        title="Adjust Stock"
-        description={adjusting ? `${adjusting.name} · current stock: ${adjusting.quantity} ${adjusting.unit}` : undefined}
-        size="sm"
-      >
-        <div className="space-y-5">
-          {adjustError && <Alert variant="danger">{adjustError}</Alert>}
-
-          {/* Mode toggle */}
-          <div className="flex rounded-[8px] border border-border-light p-1">
-            {(["delta", "absolute"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setAdjustMode(mode);
-                  setAdjustInput(0);
-                }}
-                className={`flex-1 rounded-[6px] px-3 py-1.5 text-sm font-medium transition-colors ${
-                  adjustMode === mode
-                    ? "bg-primary-50 text-primary-700"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                {mode === "delta" ? "Add / Remove" : "Set exact"}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-text-secondary mb-1.5 block">
-              {adjustMode === "delta" ? "Quantity change (use − to deduct)" : "New quantity"}
-            </label>
-            <Input
-              type="number"
-              value={adjustInput}
-              onChange={(e) => setAdjustInput(Number(e.target.value))}
-            />
-          </div>
-
-          {/* Live preview */}
-          <div className="flex items-center justify-center gap-3 rounded-[10px] bg-bg-subtle px-4 py-3">
-            <span className="text-lg font-semibold text-text-tertiary">{adjusting?.quantity ?? 0}</span>
-            <span className={`text-sm font-semibold ${adjustedQty >= (adjusting?.quantity ?? 0) ? "text-success-text" : "text-warning-text"}`}>
-              →
-            </span>
-            <span className="text-lg font-bold text-text-primary">{adjustedQty}</span>
-            <span className="text-xs text-text-tertiary">{adjusting?.unit}</span>
-            {!adjustValid && adjustedQty < 0 && (
-              <span className="text-xs text-danger-text">cannot go below zero</span>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-text-secondary mb-1.5 block">Reason</label>
-            <textarea
-              rows={2}
-              className="flex w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
-              placeholder="e.g. Delivered 2 boxes from supplier, dispensed to patients…"
-              value={adjustReason}
-              onChange={(e) => setAdjustReason(e.target.value)}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setAdjusting(null)} disabled={adjustSaving}>
-              Cancel
-            </Button>
-            <Button onClick={handleAdjust} disabled={adjustSaving || !adjustValid}>
-              {adjustSaving ? "Saving…" : "Confirm Adjustment"}
             </Button>
           </div>
         </div>

@@ -58,6 +58,21 @@ class Medication extends Model
      */
     public const NEARING_EXPIRY_DAYS = 90;
 
+    /**
+     * Stock count units — what `quantity` counts (discrete items in stock).
+     * Deliberately excludes mass units (mg/g): those describe the *dose*
+     * strength (see `strength`/`dosage`), not how many items are on the shelf.
+     */
+    public const STOCK_UNITS = [
+        'tablets',
+        'capsules',
+        'vials',
+        'strips',
+        'bottles',
+        'ampoules',
+        'sachets',
+    ];
+
     protected $table = 'medications';
 
     public function treatmentPlanMedications(): HasMany

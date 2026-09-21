@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -7,6 +7,20 @@ import type {
   MedicationInventoryPayload,
   MedicationStockMovement,
 } from "@/lib/types";
+
+/**
+ * Flatten a Laravel validation error response into
+ * "Field: message" lines for inline form display.
+ */
+export function formatValidationErrors(err: unknown): string {
+  if (err instanceof ApiError && err.errors) {
+    return Object.entries(err.errors)
+      .map(([field, messages]) => `${field.replaceAll("_", " ")}: ${messages.join(" ")}`)
+      .join("\n");
+  }
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
 
 export interface MedicationInventoryParams {
   page?: number;
@@ -46,7 +60,7 @@ export async function createMedication(payload: MedicationInventoryPayload): Pro
   return api.post<ApiResponse>("/medications-inventory", payload);
 }
 
-/** Update a medicine (also used for restocking). */
+/** Update a medicine. The ONLY place stock quantity changes — logged in the movement ledger. */
 export async function updateMedication(
   id: number,
   payload: MedicationInventoryPayload
@@ -57,22 +71,6 @@ export async function updateMedication(
 /** Remove a medicine from active inventory (archived, not deleted). */
 export async function deleteMedication(id: number): Promise<ApiResponse> {
   return api.delete<ApiResponse>(`/medications-inventory/${id}`);
-}
-
-export interface AdjustStockPayload {
-  /** Signed delta (+50) — mutually exclusive with new_quantity */
-  quantity_change?: number;
-  /** Absolute resulting quantity — mutually exclusive with quantity_change */
-  new_quantity?: number;
-  reason?: string;
-}
-
-/** Adjust stock quantity (restock, deduction or correction). */
-export async function adjustMedicationStock(
-  id: number,
-  payload: AdjustStockPayload
-): Promise<ApiResponse<{ medication: MedicationInventoryItem; movement: MedicationStockMovement }>> {
-  return api.post(`/medications-inventory/${id}/adjust`, payload);
 }
 
 /** Stock movement history (audit trail) for a medicine. */

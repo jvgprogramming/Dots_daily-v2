@@ -67,7 +67,6 @@ Route::prefix('v1')->group(function () {
             Route::get('summary', [MedicationInventoryController::class, 'summary']);
             Route::post('/', [MedicationInventoryController::class, 'store']);
             Route::put('{medication}', [MedicationInventoryController::class, 'update']);
-            Route::post('{medication}/adjust', [MedicationInventoryController::class, 'adjust']);
             Route::get('{medication}/movements', [MedicationInventoryController::class, 'movements']);
             Route::delete('{medication}', [MedicationInventoryController::class, 'destroy']);
         });

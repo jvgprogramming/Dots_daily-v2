@@ -4,7 +4,6 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Medication;
 use App\Models\MedicationStockMovement;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,9 +17,13 @@ use Illuminate\Support\Facades\DB;
  * stock_status (computed) and notes.
  *
  * Endpoints:
- *   GET    /medications-inventory            → paginated inventory list + summary
- *   POST   /medications-inventory            → register new medicine
- *   PUT    /medications-inventory/{medication} → update medicine / restock
+ *   GET    /medications-inventory              → paginated inventory list + summary
+ *   GET    /medications-inventory/summary      → stock counts + expiry buckets
+ *   POST   /medications-inventory              → register new medicine
+ *   PUT    /medications-inventory/{medication} → update medicine / restock (the only
+ *                                                place stock quantity can change —
+ *                                                logged in the movement ledger)
+ *   GET    /medications-inventory/{medication}/movements → audit trail
  *   DELETE /medications-inventory/{medication} → soft-delete from inventory
  */
 class MedicationInventoryController extends BaseApiController
@@ -68,9 +71,8 @@ class MedicationInventoryController extends BaseApiController
      */
     public function summary(): JsonResponse
     {
-        $now = Carbon::today();
-        $nearingDays = Medication::NEARING_EXPIRY_DAYS;
-        $nearingDate = (clone $now)->copy()->addDays($nearingDays);
+        $today = now()->startOfDay();
+        $nearingDate = (clone $today)->addDays(Medication::NEARING_EXPIRY_DAYS);
 
         $summary = [
             'total_medicines' => Medication::count(),
@@ -78,14 +80,14 @@ class MedicationInventoryController extends BaseApiController
             'low_stock' => Medication::where('stock_status', Medication::STOCK_LOW_STOCK)->count(),
             'out_of_stock' => Medication::where('stock_status', Medication::STOCK_OUT_OF_STOCK)->count(),
             'expired' => Medication::where('stock_status', Medication::STOCK_EXPIRED)->count(),
-            'nearing_expiry' => Medication::whereDate('expiry_date', '>=', $now->toDateString())
+            'nearing_expiry' => Medication::whereDate('expiry_date', '>=', $today->toDateString())
                 ->whereDate('expiry_date', '<=', $nearingDate->toDateString())
                 ->count(),
             'storage_breakdown' => [
                 'room_temperature' => Medication::where('storage_condition', Medication::STORAGE_ROOM_TEMPERATURE)->count(),
                 'refrigerator' => Medication::where('storage_condition', Medication::STORAGE_REFRIGERATOR)->count(),
                 'cold_storage' => Medication::where('storage_condition', Medication::STORAGE_COLD_STORAGE)->count(),
-                'special' => Medication::where('storage_condition', Medication::STORAGE_SPECIAL)->count(),
+            'special' => Medication::where('storage_condition', Medication::STORAGE_SPECIAL)->count(),
             ],
         ];
 
@@ -132,7 +134,7 @@ class MedicationInventoryController extends BaseApiController
         try {
             DB::beginTransaction();
 
-            $fields = $this->applyInventoryFields($data);
+            $fields = $this->applyInventoryFields($data, $medication);
 
             $qtyBefore = (int) $medication->quantity;
             $qtyAfter = (int) ($fields['quantity'] ?? $qtyBefore);
@@ -144,7 +146,8 @@ class MedicationInventoryController extends BaseApiController
 
             $medication->update($fields);
 
-            // Ledger: log any quantity change made through the edit form
+            // Ledger: the edit form is the ONLY place quantity can change,
+            // so every stock delta made through it is recorded here.
             if ($qtyAfter !== $qtyBefore) {
                 $medication->stockMovements()->create([
                     'type' => $qtyAfter > $qtyBefore
@@ -153,9 +156,9 @@ class MedicationInventoryController extends BaseApiController
                     'quantity_change' => $qtyAfter - $qtyBefore,
                     'quantity_before' => $qtyBefore,
                     'quantity_after' => $qtyAfter,
-                    'reason' => $data['notes'] ?? 'Updated via medicine edit',
+                    'reason' => $data['stock_change_reason'] ?? null,
                     'user_id' => Auth::id(),
-                ]);
+                ]); 
             }
 
             DB::commit();
@@ -180,68 +183,6 @@ class MedicationInventoryController extends BaseApiController
     }
 
     /**
-     * Adjust stock quantity for a medicine (restock, deduction or correction).
-     * Records a ledger entry and recomputes stock status atomically.
-     */
-    public function adjust(Request $request, Medication $medication): JsonResponse
-    {
-        $data = $request->validate([
-            // Signed delta (+50) or absolute new quantity
-            'quantity_change' => ['required_without:new_quantity', 'integer'],
-            'new_quantity' => ['required_without:quantity_change', 'integer', 'min:0'],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        try {
-            DB::beginTransaction();
-
-            $qtyBefore = (int) $medication->quantity;
-            $qtyAfter = isset($data['new_quantity'])
-                ? (int) $data['new_quantity']
-                : $qtyBefore + (int) $data['quantity_change'];
-
-            if ($qtyAfter < 0) {
-                return $this->error(message: 'Stock cannot go below zero.', code: 422);
-            }
-
-            $type = match (true) {
-                $qtyAfter > $qtyBefore => MedicationStockMovement::TYPE_RESTOCK,
-                $qtyAfter < $qtyBefore => MedicationStockMovement::TYPE_DEDUCTION,
-                default => MedicationStockMovement::TYPE_CORRECTION,
-            };
-
-            $medication->update([
-                'quantity' => $qtyAfter,
-                'stock_status' => $medication->computeStockStatus(),
-                'last_restocked_at' => $qtyAfter > $qtyBefore ? now() : $medication->last_restocked_at,
-            ]);
-
-            $movement = $medication->stockMovements()->create([
-                'type' => $type,
-                'quantity_change' => $qtyAfter - $qtyBefore,
-                'quantity_before' => $qtyBefore,
-                'quantity_after' => $qtyAfter,
-                'reason' => $data['reason'] ?? null,
-                'user_id' => Auth::id(),
-            ]);
-
-            DB::commit();
-
-            return $this->success(
-                data: [
-                    'medication' => $this->serialize($medication->fresh()),
-                    'movement' => $this->serializeMovement($movement),
-                ],
-                message: 'Stock adjusted successfully.',
-            );
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return $this->error(message: 'Failed to adjust stock. ' . $e->getMessage(), code: 500);
-        }
-    }
-
-    /**
      * Stock movement history (audit trail) for a medicine.
      */
     public function movements(Request $request, Medication $medication): JsonResponse
@@ -261,39 +202,71 @@ class MedicationInventoryController extends BaseApiController
             'name' => ['required', 'string', 'max:255'],
             'generic_name' => ['required', 'string', 'max:255'],
             'brand_name' => ['nullable', 'string', 'max:255'],
-            'dosage' => ['required', 'string', 'max:100'],
+            // Nullable: pre-inventory legacy medicines have no presentation on file
+            'dosage' => ['nullable', 'string', 'max:100'],
             'quantity' => ['required', 'integer', 'min:0'],
             'reorder_level' => ['nullable', 'integer', 'min:0'],
-            'unit' => ['required', 'string', 'max:20'],
+            // Stock count unit (what quantity counts), NOT the dose unit (mg/g)
+            'unit' => ['required', 'string', 'max:20', 'in:' . implode(',', Medication::STOCK_UNITS)],
             'storage_condition' => ['required', 'string', 'in:' . implode(',', Medication::STORAGE_CONDITIONS)],
-            'expiry_date' => ['required', 'date'],
+            // Nullable: pre-inventory legacy medicines have no expiry on file
+            'expiry_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            // Why the quantity changed — recorded in the stock movement ledger
+            'stock_change_reason' => ['nullable', 'string', 'max:500'],
         ]);
     }
 
     /**
      * Map validated payload onto model fields and derive stock status.
+     *
+     * $existing (on update) lets legacy values survive an edit that leaves
+     * dosage blank, and normalizes empty strings to null so nullable DATE
+     * columns never receive '' (strict-mode SQL error).
      */
-    private function applyInventoryFields(array $data): array
+    private function applyInventoryFields(array $data, ?Medication $existing = null): array
     {
-        $medication = new Medication($data);
-        $status = $medication->computeStockStatus();
+        $dosage = $data['dosage'] ?? null;
+        if ($dosage !== null && trim($dosage) === '') {
+            $dosage = null;
+        }
+
+        $expiry = $data['expiry_date'] ?? null;
+        if ($expiry !== null && trim($expiry) === '') {
+            $expiry = null;
+        }
+
+        $brand = $data['brand_name'] ?? null;
+        if ($brand !== null && trim($brand) === '') {
+            $brand = null;
+        }
+
+        $notes = $data['notes'] ?? null;
+        if ($notes !== null && trim($notes) === '') {
+            $notes = null;
+        }
+
+        // Compute stock status from NORMALIZED values (an empty expiry
+        // string would otherwise be read as "already expired")
+        $probe = new Medication([...$data, 'dosage' => $dosage, 'expiry_date' => $expiry]);
+        $status = $probe->computeStockStatus();
 
         $fields = [
             'name' => $data['name'],
             'generic_name' => $data['generic_name'],
-            'brand_name' => $data['brand_name'] ?? null,
-            // Legacy NOT NULL columns kept in sync from the new dosage field
-            'dosage_form' => $this->dosageFormFrom($data['dosage'] ?? ''),
-            'strength' => $data['dosage'] ?? null,
-            'dosage' => $data['dosage'] ?? null,
+            'brand_name' => $brand,
+            // Legacy NOT NULL columns kept in sync from the dosage field;
+            // on update, an absent dosage preserves the existing form
+            'dosage_form' => $this->dosageFormFrom($dosage ?? '', $existing?->dosage_form),
+            'strength' => $dosage ?? $existing?->strength ?? '',
+            'dosage' => $dosage,
             'quantity' => $data['quantity'],
             'reorder_level' => $data['reorder_level'] ?? 10,
             'unit' => $data['unit'],
             'storage_condition' => $data['storage_condition'],
-            'expiry_date' => $data['expiry_date'],
+            'expiry_date' => $expiry,
             'stock_status' => $status,
-            'notes' => $data['notes'] ?? null,
+            'notes' => $notes,
         ];
 
         // New registrations with initial stock count as a restock event
@@ -318,14 +291,17 @@ class MedicationInventoryController extends BaseApiController
         ];
     }
 
-    /** Extract the presentation word (tablet, capsule, vial…) from a dosage string. */
-    private function dosageFormFrom(string $dosage): string
+    /**
+     * Extract the presentation word (tablet, capsule, vial…) from a dosage
+     * string. Falls back to the existing dosage_form on update, then 'tablet'.
+     */
+    private function dosageFormFrom(string $dosage, ?string $fallback = null): string
     {
         if (preg_match('/(tablet|capsule|vial|ampoule|sachet|strip|bottle|solution|suspension|injection)/i', $dosage, $m)) {
             return strtolower(substr($m[1], 0, 20));
         }
 
-        return 'tablet';
+        return $fallback ?: 'tablet';
     }
 
     private function serialize(Medication $m): array

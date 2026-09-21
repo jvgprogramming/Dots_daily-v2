@@ -389,7 +389,8 @@ export interface MedicationInventoryItem {
   name: string;
   generic_name: string;
   brand_name: string | null;
-  dosage: string;
+  /** Dose presentation, e.g. "300mg capsule" — null for legacy medicines without one */
+  dosage: string | null;
   quantity: number;
   reorder_level: number;
   unit: string;
@@ -436,13 +437,16 @@ export interface MedicationInventoryPayload {
   name: string;
   generic_name: string;
   brand_name?: string;
-  dosage: string;
+  dosage?: string;
   quantity: number;
   reorder_level?: number;
+  /** Stock count unit (tablets, vials…) — NOT the dose unit (mg/g) */
   unit: string;
   storage_condition: StorageCondition;
-  expiry_date: string;
+  expiry_date?: string;
   notes?: string;
+  /** Why the quantity changed — recorded in the stock movement ledger */
+  stock_change_reason?: string;
 }
 
 // ── Daily Monitoring ──
