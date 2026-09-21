@@ -8,14 +8,13 @@ import {
   useCallback,
   ReactNode,
 } from "react";
-import type { AuthUser, LoginPayload, RegisterPayload } from "@/lib/types";
+import type { AuthUser, LoginPayload } from "@/lib/types";
 import * as authService from "@/lib/services/auth";
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -43,18 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayload) => {
-    const res = await authService.register(payload);
-    setUser(res.user);
-  }, []);
-
   const logout = useCallback(async () => {
     await authService.logout();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

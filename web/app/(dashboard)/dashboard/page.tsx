@@ -84,7 +84,7 @@ const patientActivity = [
 const treatmentDistribution = [
   { phase: "Intensive", count: 0, color: "bg-primary-500", percentage: 0 },
   { phase: "Continuation", count: 0, color: "bg-warning", percentage: 0 },
-  { phase: "Completed", count: 0, color: "bg-success", percentage: 0 },
+  { phase: "Completed", count: 0, color: "bg-primary-700", percentage: 0 },
   { phase: "Interrupted", count: 0, color: "bg-danger", percentage: 0 },
 ];
 
@@ -188,8 +188,8 @@ export default function DashboardPage() {
                         x2="0"
                         y2="1"
                       >
-                        <stop offset="0%" stopColor="#15b8a8" stopOpacity={0.15} />
-                        <stop offset="100%" stopColor="#15b8a8" stopOpacity={0} />
+                        <stop offset="0%" stopColor="#16a34a" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="#16a34a" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                     <Area
                       type="monotone"
                       dataKey="rate"
-                      stroke="#15b8a8"
+                      stroke="#16a34a"
                       strokeWidth={2}
                       fill="url(#adherenceGradient)"
                     />
@@ -330,19 +330,18 @@ export default function DashboardPage() {
                     tickLine={false}
                     tick={{ fill: "#9ca3af", fontSize: 12 }}
                   />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Bar
-                    dataKey="new"
-                    name="New Patients"
-                    fill="#15b8a8"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="followups"
-                    name="Follow-ups"
-                    fill="#f59e0b"
-                    radius={[4, 4, 0, 0]}
-                  />
+                  <RechartsTooltip content={<CustomTooltip />} />                    <Bar
+                      dataKey="new"
+                      name="New Patients"
+                      fill="#16a34a"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="followups"
+                      name="Follow-ups"
+                      fill="#4ade80"
+                      radius={[4, 4, 0, 0]}
+                    />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Users,
   Search,
@@ -80,8 +81,10 @@ export default function PatientsPage() {
   const [error, setError] = useState("");
 
   // Search & filters
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
+  const [search, setSearch] = useState(urlQuery);
+  const [searchInput, setSearchInput] = useState(urlQuery);
   const [genderFilter, setGenderFilter] = useState("");
   const [page, setPage] = useState(1);
 
@@ -117,6 +120,13 @@ export default function PatientsPage() {
   useEffect(() => {
     fetchPatients();
   }, [fetchPatients]);
+
+  // Sync when arriving with ?q= from the header global search
+  useEffect(() => {
+    setSearch(urlQuery);
+    setSearchInput(urlQuery);
+    setPage(1);
+  }, [urlQuery]);
 
   // ── Search debounce ──
   const handleSearch = () => {

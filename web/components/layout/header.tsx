@@ -1,22 +1,14 @@
 "use client";
 
-import { Bell, Search, ChevronDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Bell, ChevronDown } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { GlobalSearch } from "@/components/layout/global-search";
 
 export function Header() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border-light bg-bg-card/80 backdrop-blur-xl px-8">
       {/* Search */}
-      <div className="flex-1 max-w-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-          <Input
-            placeholder="Search patients, treatments..."
-            className="pl-9 h-9 rounded-[8px] bg-bg-subtle border-border-light text-sm placeholder:text-text-tertiary"
-          />
-        </div>
-      </div>
+      <GlobalSearch />
 
       {/* Right section */}
       <div className="flex items-center gap-1">
