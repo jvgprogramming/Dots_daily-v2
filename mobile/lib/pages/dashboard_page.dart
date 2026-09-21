@@ -10,11 +10,7 @@ class DashboardPage extends StatelessWidget {
   final ValueChanged<String>? onViewChange;
   final ValueChanged<Map<String, String>>? onTriggerAlarm;
 
-  const DashboardPage({
-    super.key,
-    this.onViewChange,
-    this.onTriggerAlarm,
-  });
+  const DashboardPage({super.key, this.onViewChange, this.onTriggerAlarm});
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +19,8 @@ class DashboardPage extends StatelessWidget {
     final user = auth.user;
 
     final now = DateTime.now();
-    final today = '${_weekdayName(now.weekday)}, ${_monthName(now.month)} ${now.day}, ${now.year}';
+    final today =
+        '${_weekdayName(now.weekday)}, ${_monthName(now.month)} ${now.day}, ${now.year}';
     final todayAlarms = meds.upcomingAlarms.take(3).toList();
 
     return SingleChildScrollView(
@@ -73,7 +70,11 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildHeroSection(
-      BuildContext context, String userName, String today, MedicationsProvider meds) {
+    BuildContext context,
+    String userName,
+    String today,
+    MedicationsProvider meds,
+  ) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -217,15 +218,21 @@ class DashboardPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.shield, size: 16, color: Colors.white),
+                          const Icon(
+                            Icons.shield,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 8),
-                          Text(
-                            'TREATMENT STATUS',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
+                          Expanded(
+                            child: Text(
+                              'TREATMENT STATUS',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
                         ],
@@ -256,8 +263,13 @@ class DashboardPage extends StatelessWidget {
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
-                                    Icon(Icons.local_fire_department,
-                                        size: 14, color: Colors.white.withValues(alpha: 0.7)),
+                                    Icon(
+                                      Icons.local_fire_department,
+                                      size: 14,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${meds.doseLogs.length} day streak',
@@ -290,7 +302,9 @@ class DashboardPage extends StatelessWidget {
                                     Text(
                                       '${meds.treatmentDays} of 180 days logged',
                                       style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.8),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.8,
+                                        ),
                                         fontSize: 11,
                                       ),
                                     ),
@@ -313,7 +327,9 @@ class DashboardPage extends StatelessWidget {
                                     Text(
                                       'STREAK',
                                       style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.7),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.7,
+                                        ),
                                         fontSize: 8,
                                         letterSpacing: 1,
                                         fontWeight: FontWeight.w600,
@@ -344,11 +360,14 @@ class DashboardPage extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.2),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: (meds.treatmentDays / 180).clamp(0.0, 1.0),
+                            widthFactor: (meds.treatmentDays / 180).clamp(
+                              0.0,
+                              1.0,
+                            ),
                             child: Container(
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Colors.white, Color(0xFFA5F3FC)],
+                                  colors: [Colors.white, Color(0xFFBBF7D0)],
                                 ),
                                 borderRadius: BorderRadius.horizontal(
                                   right: Radius.circular(6),
@@ -389,7 +408,11 @@ class DashboardPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.calendar_today, size: 16, color: Colors.white),
+                          const Icon(
+                            Icons.calendar_today,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'NEXT FOLLOW-UP',
@@ -541,7 +564,7 @@ class DashboardPage extends StatelessWidget {
                 Text(
                   next != null
                       ? '${next.label} • ${next.medicationName}'
-                      : 'Tap Alarms to schedule one',
+                      : 'Tap Reminder to set your time',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.mutedForeground,
@@ -566,10 +589,34 @@ class DashboardPage extends StatelessWidget {
 
   Widget _buildStatsRow(BuildContext context, MedicationsProvider meds) {
     final stats = [
-      ('Medications', '${meds.medications.length}', 'Daily TB regimen', Icons.medication, AppColors.primary),
-      ('Adherence', '${meds.adherenceRate.toInt()}%', 'Based on dose log', Icons.trending_up, AppColors.emerald),
-      ('Reminders', '${meds.activeAlarmCount}', 'Scheduled alarms', Icons.notifications, AppColors.amber),
-      ('Logged doses', '${meds.doseLogs.length}', 'Verified and pending', Icons.history, AppColors.primary),
+      (
+        'Days taken',
+        '${meds.takenCountInMonth(DateTime.now())}',
+        'Logged this month',
+        Icons.event_available_rounded,
+        AppColors.primary,
+      ),
+      (
+        'Adherence',
+        '${meds.adherenceRate.toInt()}%',
+        'Based on dose log',
+        Icons.trending_up,
+        AppColors.emerald,
+      ),
+      (
+        'Reminders',
+        '${meds.activeAlarmCount}',
+        'Daily reminder',
+        Icons.notifications,
+        AppColors.amber,
+      ),
+      (
+        'Logged doses',
+        '${meds.doseLogs.length}',
+        'Verified and pending',
+        Icons.history,
+        AppColors.primary,
+      ),
     ];
 
     return LayoutBuilder(
@@ -580,7 +627,7 @@ class DashboardPage extends StatelessWidget {
             crossAxisCount: isWide ? 4 : 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: isWide ? 2.2 : 1.2,
+            childAspectRatio: isWide ? 2.2 : 1.0,
           ),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -601,7 +648,10 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildTodaySchedule(
-      BuildContext context, List<Alarm> alarms, MedicationsProvider meds) {
+    BuildContext context,
+    List<Alarm> alarms,
+    MedicationsProvider meds,
+  ) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -612,7 +662,11 @@ class DashboardPage extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.access_time, size: 20, color: AppColors.primary),
+                const Icon(
+                  Icons.access_time,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Column(
@@ -635,82 +689,75 @@ class DashboardPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                TextButton(
-                  onPressed: () => onViewChange?.call('medications'),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('View all', style: TextStyle(fontSize: 13)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward, size: 16),
-                    ],
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
             if (alarms.isNotEmpty)
-              ...alarms.map((alarm) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.border),
-                        borderRadius: BorderRadius.circular(12),
-                        color: AppColors.card,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            child: const Icon(
-                              Icons.access_time,
-                              color: AppColors.primary,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  alarm.medicationName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 14,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  alarm.time,
-                                  style: const TextStyle(
-                                    color: AppColors.mutedForeground,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => onViewChange?.call('alarms'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              minimumSize: Size.zero,
-                              textStyle: const TextStyle(fontSize: 12),
-                            ),
-                            child: const Text('Details'),
-                          ),
-                        ],
-                      ),
+              ...alarms.map(
+                (alarm) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.card,
                     ),
-                  ))
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: const Icon(
+                            Icons.access_time,
+                            color: AppColors.primary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                alarm.medicationName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                alarm.time,
+                                style: const TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => onViewChange?.call('reminder'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                          child: const Text('Details'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
             else
               Container(
                 width: double.infinity,
@@ -724,8 +771,11 @@ class DashboardPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    Icon(Icons.check_circle_outline,
-                        size: 40, color: Colors.grey[400]),
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 40,
+                      color: Colors.grey[400],
+                    ),
                     const SizedBox(height: 8),
                     const Text(
                       'No upcoming doses scheduled for today.',
@@ -733,7 +783,7 @@ class DashboardPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
-                      onPressed: () => onViewChange?.call('alarms'),
+                      onPressed: () => onViewChange?.call('reminder'),
                       child: const Text('Set up reminders'),
                     ),
                   ],
@@ -771,13 +821,8 @@ class DashboardPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _QuickActionButton(
-              label: 'Alarms',
-              onTap: () => onViewChange?.call('alarms'),
-            ),
-            const SizedBox(height: 8),
-            _QuickActionButton(
-              label: 'Medications',
-              onTap: () => onViewChange?.call('medications'),
+              label: 'Reminder',
+              onTap: () => onViewChange?.call('reminder'),
             ),
             const SizedBox(height: 8),
             _QuickActionButton(
@@ -794,7 +839,10 @@ class DashboardPage extends StatelessWidget {
               ),
               child: const Text(
                 'You can review your medication history and the exact dates you took each dose below.',
-                style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ],
@@ -803,7 +851,10 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMedicationHistory(BuildContext context, MedicationsProvider meds) {
+  Widget _buildMedicationHistory(
+    BuildContext context,
+    MedicationsProvider meds,
+  ) {
     final recentLogs = meds.recentDoseDates;
 
     return Card(
@@ -814,13 +865,26 @@ class DashboardPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.history, size: 20, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text(
-                  'Medication history',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                const Icon(Icons.history, size: 20, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Medication history',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => onViewChange?.call('calendar'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Calendar', style: TextStyle(fontSize: 13)),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward, size: 16),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -845,10 +909,12 @@ class DashboardPage extends StatelessWidget {
                 ),
               )
             else
-              ...recentLogs.map((log) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _DoseLogTile(log: log),
-                  )),
+              ...recentLogs.map(
+                (log) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _DoseLogTile(log: log),
+                ),
+              ),
           ],
         ),
       ),
@@ -885,10 +951,7 @@ class DashboardPage extends StatelessWidget {
                 children: [
                   const Text(
                     'TB symptom monitor',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -926,7 +989,7 @@ class DashboardPage extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: () => onTriggerAlarm?.call({
                   'id': 'test-alarm',
-                  'medicationName': 'Rifampicin + Isoniazid',
+                  'medicationName': MedicationsProvider.medicineName,
                   'time': '08:00 AM',
                   'dosage': '2 tablets',
                 }),
@@ -952,8 +1015,18 @@ class DashboardPage extends StatelessWidget {
 
   String _monthName(int month) {
     const names = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return names[month - 1];
   }
@@ -991,6 +1064,7 @@ class _StatCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
+                    maxLines: 1,
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.mutedForeground,
@@ -1010,18 +1084,29 @@ class _StatCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 10,
-                color: AppColors.mutedForeground,
+            Flexible(
+              child: Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ],
@@ -1035,10 +1120,7 @@ class _QuickActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _QuickActionButton({
-    required this.label,
-    required this.onTap,
-  });
+  const _QuickActionButton({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1053,7 +1135,15 @@ class _QuickActionButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontSize: 14)),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 8),
             const Icon(Icons.arrow_forward, size: 16),
           ],
         ),
@@ -1077,72 +1167,82 @@ class _DoseLogTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: log.verified
-                                      ? AppColors.emerald.withValues(alpha: 0.1)
-                                      : Colors.grey.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: Icon(
-                                  Icons.check_circle,
-                                  color: log.verified ? AppColors.emerald : Colors.grey,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            log.medicationName,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w500, fontSize: 13),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: log.verified
-                                                ? AppColors.emerald.withValues(alpha: 0.1)
-                                                : AppColors.muted,
-                                            borderRadius: BorderRadius.circular(5),
-                                          ),
-                                          child: Text(
-                                            log.verified ? 'Verified' : 'Pending',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w600,
-                                              color: log.verified
-                                                  ? AppColors.emerald
-                                                  : AppColors.mutedForeground,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 1),
-                                    Text(
-                                      log.formattedDateTime,
-                                      style: const TextStyle(
-                                          fontSize: 11, color: AppColors.mutedForeground),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right, size: 18, color: AppColors.mutedForeground),
-                            ],
-                          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: log.verified
+                  ? AppColors.emerald.withValues(alpha: 0.1)
+                  : Colors.grey.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.check_circle,
+              color: log.verified ? AppColors.emerald : Colors.grey,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        log.medicationName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: log.verified
+                            ? AppColors.emerald.withValues(alpha: 0.1)
+                            : AppColors.muted,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        log.verified ? 'Verified' : 'Pending',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: log.verified
+                              ? AppColors.emerald
+                              : AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  log.formattedDateTime,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.mutedForeground,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right,
+            size: 18,
+            color: AppColors.mutedForeground,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1160,12 +1260,7 @@ class _CurvePainter extends CustomPainter {
 
     final path = Path()
       ..moveTo(0, size.height)
-      ..quadraticBezierTo(
-        size.width / 2,
-        -size.height,
-        size.width,
-        size.height,
-      )
+      ..quadraticBezierTo(size.width / 2, -size.height, size.width, size.height)
       ..lineTo(size.width, 0)
       ..lineTo(0, 0)
       ..close();

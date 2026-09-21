@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../providers/medications_provider.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 
@@ -24,13 +25,7 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
     return _nextNotificationId;
   }
 
-  static const _testMedications = [
-    'Rifampicin 600mg',
-    'Isoniazid 300mg',
-    'Pyrazinamide 1500mg',
-    'Ethambutol 1200mg',
-    'Pyridoxine B6 25mg',
-  ];
+  static const _testMedications = [MedicationsProvider.medicineFullName];
 
   static const _testTimes = [
     '07:00 AM',
@@ -106,9 +101,11 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
 
     // Schedule 3 test alarms every 30 seconds for demo
     for (int i = 0; i < 3; i++) {
-      final medName = _testMedications[i];
+      final medName = _testMedications[i % _testMedications.length];
       final alarmId = _nextId();
-      final scheduledTime = DateTime.now().add(Duration(seconds: 10 + (i * 30)));
+      final scheduledTime = DateTime.now().add(
+        Duration(seconds: 10 + (i * 30)),
+      );
 
       try {
         await _notificationService.scheduleNotification(
@@ -123,7 +120,8 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
           _alarmHistory.insert(0, {
             'id': alarmId.toString(),
             'medication': medName,
-            'time': '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}',
+            'time':
+                '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}',
             'type': 'Scheduled (+${10 + (i * 30)}s)',
             'timestamp': DateTime.now(),
           });
@@ -160,175 +158,180 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: AppColors.primaryGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: AppColors.primaryGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_active,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Test Alarms',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Verify notifications work on your device',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionCard(
+                          icon: Icons.notifications,
+                          label: 'Instant Alarm',
+                          subtitle: 'Show now',
+                          color: AppColors.primary,
+                          loading: _sending,
+                          onTap: () => _sendTestNotification(immediate: true),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ActionCard(
+                          icon: Icons.timer,
+                          label: 'Scheduled',
+                          subtitle: 'In 10 seconds',
+                          color: AppColors.amber,
+                          loading: _sending,
+                          onTap: () => _sendTestNotification(immediate: false),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionCard(
+                          icon: Icons.repeat,
+                          label: 'Batch (3x)',
+                          subtitle: 'Every 30s',
+                          color: AppColors.emerald,
+                          loading: _sending,
+                          onTap: _scheduleDailyTest,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ActionCard(
+                          icon: Icons.cancel_schedule_send,
+                          label: 'Cancel All',
+                          subtitle: 'Clear pending',
+                          color: AppColors.destructive,
+                          loading: false,
+                          onTap: _cancelAllAlarms,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Alarm history
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Alarm History',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_alarmHistory.isNotEmpty)
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _alarmHistory.clear()),
+                          child: const Text('Clear'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_alarmHistory.isEmpty)
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Icon(
-                        Icons.notifications_active,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Test Alarms',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Verify notifications work on your device',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.notifications,
-                        label: 'Instant Alarm',
-                        subtitle: 'Show now',
-                        color: AppColors.primary,
-                        loading: _sending,
-                        onTap: () => _sendTestNotification(immediate: true),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.timer,
-                        label: 'Scheduled',
-                        subtitle: 'In 10 seconds',
-                        color: AppColors.amber,
-                        loading: _sending,
-                        onTap: () => _sendTestNotification(immediate: false),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.repeat,
-                        label: 'Batch (3x)',
-                        subtitle: 'Every 30s',
-                        color: AppColors.emerald,
-                        loading: _sending,
-                        onTap: _scheduleDailyTest,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.cancel_schedule_send,
-                        label: 'Cancel All',
-                        subtitle: 'Clear pending',
-                        color: AppColors.destructive,
-                        loading: false,
-                        onTap: _cancelAllAlarms,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Alarm history
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Alarm History',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (_alarmHistory.isNotEmpty)
-                      TextButton(
-                        onPressed: () => setState(() => _alarmHistory.clear()),
-                        child: const Text('Clear'),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                if (_alarmHistory.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.notifications_off_outlined,
-                            size: 48, color: AppColors.mutedForeground),
-                        SizedBox(height: 12),
-                        Text(
-                          'No alarms triggered yet',
-                          style: TextStyle(
-                            fontSize: 15,
+                      child: const Column(
+                        children: [
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 48,
                             color: AppColors.mutedForeground,
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Tap one of the buttons above to test',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.mutedForeground,
+                          SizedBox(height: 12),
+                          Text(
+                            'No alarms triggered yet',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ..._alarmHistory.map((alarm) => Container(
+                          SizedBox(height: 4),
+                          Text(
+                            'Tap one of the buttons above to test',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._alarmHistory.map(
+                      (alarm) => Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -392,60 +395,64 @@ class _TestAlarmPageState extends State<TestAlarmPage> {
                             ),
                           ],
                         ),
-                      )),
+                      ),
+                    ),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // Instructions card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.muted.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              size: 18, color: AppColors.primary),
-                          SizedBox(width: 8),
-                          Text(
-                            'How to test',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                  // Instructions card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.muted.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 18,
+                              color: AppColors.primary,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        '• "Instant Alarm" sends a notification immediately\n'
-                        '• "Scheduled" sends one after 10 seconds\n'
-                        '• "Batch" sends 3 alarms, each 30 seconds apart\n'
-                        '• "Cancel All" removes all pending scheduled alarms\n\n'
-                        'Make sure your phone is not on silent/DND mode.\n'
-                        'On Android 13+, you need to grant notification permission.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.mutedForeground,
-                          height: 1.5,
+                            SizedBox(width: 8),
+                            Text(
+                              'How to test',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                        const SizedBox(height: 8),
+                        const Text(
+                          '• "Instant Alarm" sends a notification immediately\n'
+                          '• "Scheduled" sends one after 10 seconds\n'
+                          '• "Batch" sends 3 alarms, each 30 seconds apart\n'
+                          '• "Cancel All" removes all pending scheduled alarms\n\n'
+                          'Make sure your phone is not on silent/DND mode.\n'
+                          'On Android 13+, you need to grant notification permission.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.mutedForeground,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 32),
-              ],
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
