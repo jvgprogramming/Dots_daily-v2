@@ -38,7 +38,18 @@ dependencies:
   intl: ^0.20.3
   flutter_local_notifications: ^22.0.1
   timezone: ^0.11.1
+  # The device's IANA timezone name, so scheduled alarms ring at the local
+  # wall-clock time the patient picked instead of UTC.
+  flutter_timezone: ^4.1.1
   http: ^1.2.0
+  # Keeps the display on while the alarm rings, like a real alarm clock.
+  wakelock_plus: ^1.2.8
+  # Device PIN/pattern/biometric prompt, used to gate the app after an alarm
+  # dismissed over the lock screen.
+  local_auth: ^2.3.0
+  # Platform implementations referenced directly for the auth dialog strings.
+  local_auth_android: ^1.0.48
+  local_auth_darwin: ^1.6.0
 
 dev_dependencies:
   flutter_test:

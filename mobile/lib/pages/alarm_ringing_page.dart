@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/medication.dart';
 import '../providers/medications_provider.dart';
+import '../services/device_lock_service.dart';
 import '../theme/app_theme.dart';
+import 'app_lock_page.dart';
 
 /// Result of the ringing screen interaction.
 enum AlarmDismissAction { taken, snoozed, dismissed }
@@ -57,6 +60,9 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
     super.initState();
     // Portrait, immersive: hide status bar like a real alarm.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // The screen must not sleep while the alarm is ringing — the patient may
+    // still be reaching for the phone or fumbling for the dismiss button.
+    WakelockPlus.enable();
 
     _pulse = AnimationController(
       vsync: this,
@@ -76,11 +82,12 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
     _clock?.cancel();
     _pulse.dispose();
     _breath.dispose();
+    WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
-  void _finish(AlarmDismissAction action) {
+  Future<void> _finish(AlarmDismissAction action) async {
     if (action == AlarmDismissAction.taken && !widget.preview) {
       context.read<MedicationsProvider>().addDoseLog(
         DoseLog(
@@ -93,7 +100,24 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
         ),
       );
     }
-    Navigator.of(context).pop(action);
+
+    // The activity is showWhenLocked, so after the alarm closes the whole app
+    // would sit exposed over the keyguard. Park the lock gate underneath this
+    // page first (push), then pop — the user only ever sees: alarm → PIN.
+    final locked = await DeviceLockService.isDeviceLocked();
+    if (locked && mounted) {
+      Navigator.of(context, rootNavigator: true).push(
+        PageRouteBuilder(
+          opaque: true,
+          barrierDismissible: false,
+          pageBuilder: (_, _, _) => const AppLockPage(),
+          transitionsBuilder: (_, animation, _, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      );
+    }
+
+    if (mounted) Navigator.of(context).pop(action);
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');

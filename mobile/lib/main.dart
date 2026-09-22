@@ -21,7 +21,12 @@ void main() async {
   final notificationService = NotificationService();
   await notificationService.initialize();
 
-  runApp(const MyApp());
+  // The alarm may have started the app itself (full-screen intent while the
+  // phone was locked and the process was dead). Capture its payload now, so
+  // once the first frame is up the ringing screen can be opened over it.
+  final alarmLaunchPayload = await notificationService.launchPayload();
+
+  runApp(MyApp(alarmLaunchPayload: alarmLaunchPayload));
 }
 
 /// Global navigator key so notification taps can open the ringing screen
@@ -29,7 +34,10 @@ void main() async {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.alarmLaunchPayload});
+
+  /// Non-null when an alarm notification started the app itself.
+  final String? alarmLaunchPayload;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +74,7 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,
         theme: AppTheme.lightTheme,
-        home: const MainShell(),
+        home: AlarmLaunchGate(alarmLaunchPayload: alarmLaunchPayload),
       ),
     );
   }
@@ -83,6 +91,49 @@ class MyApp extends StatelessWidget {
       return null;
     }
   }
+}
+
+/// Opens the ringing screen once, if the app was started by an alarm.
+///
+/// Waits a frame so the navigator and providers exist before pushing over
+/// them, then stays out of the way (renders nothing) for the app's lifetime.
+class AlarmLaunchGate extends StatefulWidget {
+  final String? alarmLaunchPayload;
+
+  const AlarmLaunchGate({super.key, this.alarmLaunchPayload});
+
+  @override
+  State<AlarmLaunchGate> createState() => _AlarmLaunchGateState();
+}
+
+class _AlarmLaunchGateState extends State<AlarmLaunchGate> {
+  bool _handled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openAlarmIfNeeded());
+  }
+
+  void _openAlarmIfNeeded() {
+    if (_handled || !mounted) return;
+    _handled = true;
+
+    final payload = widget.alarmLaunchPayload;
+    if (payload == null || !payload.startsWith('alarm:')) return;
+
+    final id = payload.substring('alarm:'.length);
+    final meds = Provider.of<MedicationsProvider>(context, listen: false);
+    try {
+      final alarm = meds.alarms.firstWhere((a) => a.id == id);
+      AlarmRingingPage.open(context, alarm);
+    } catch (_) {
+      // Unknown id — nothing to ring for; the app opens normally.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => const MainShell();
 }
 
 class MainShell extends StatefulWidget {
@@ -190,7 +241,6 @@ class _MainShellState extends State<MainShell> {
               _pushPage(v);
             }
           },
-          onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
       case 'reminder':
         return ReminderPage(
@@ -230,7 +280,6 @@ class _MainShellState extends State<MainShell> {
               _pushPage(v);
             }
           },
-          onTriggerAlarm: (_) => _pushPage('test-alarm'),
         );
     }
   }

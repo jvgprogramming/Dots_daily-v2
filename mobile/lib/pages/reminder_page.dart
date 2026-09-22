@@ -26,6 +26,11 @@ class _ReminderPageState extends State<ReminderPage> {
   bool _saving = false;
   Timer? _clock;
 
+  /// Lock-screen (full-screen intent) alarm access: null = not checked yet,
+  /// true = allowed, false = denied. Session-only, refreshed by each request.
+  bool? _fsiAllowed;
+  bool _fsiAsking = false;
+
   int get _notificationId =>
       MedicationsProvider.reminderId.hashCode & 0x7FFFFFFF;
 
@@ -69,10 +74,18 @@ class _ReminderPageState extends State<ReminderPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        // Clears the notch with half the extra space the home hero gets.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          28,
+        ),
         children: [
           _buildHeader(),
           const SizedBox(height: 16),
+          _buildPermissionCard(),
+          const SizedBox(height: 12),
           _buildTimeCard(),
           const SizedBox(height: 12),
           _buildEnabledCard(),
@@ -157,6 +170,84 @@ class _ReminderPageState extends State<ReminderPage> {
                 height: 1.4,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The alarm covering the lock screen needs full-screen-intent access,
+  /// which Android 14+ ships OFF. This card makes the state explicit instead
+  /// of relying on a one-shot prompt the user can dismiss or never see.
+  Widget _buildPermissionCard() {
+    final granted = _fsiAllowed;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: granted == false
+            ? AppColors.amber.withValues(alpha: 0.12)
+        : AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: granted == false
+              ? AppColors.amber.withValues(alpha: 0.45)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: (granted == false ? AppColors.amber : AppColors.primary)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(19),
+            ),
+            child: _fsiAsking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    granted == false
+                        ? Icons.lock_clock
+                        : Icons.alarm_on_rounded,
+                    size: 19,
+                    color: granted == false
+                        ? AppColors.amber
+                        : AppColors.primary,
+                  ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Lock-screen alarm access',
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  granted == false
+                      ? 'Blocked — the alarm cannot ring over the lock screen.'
+                      : granted == true
+                          ? 'Allowed — the alarm covers the lock screen.'
+                          : 'Let the alarm ring over your lock screen, like a real alarm.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _fsiAsking ? null : _ensureLockScreenPermission,
+            child: Text(granted == false ? 'Allow' : 'Check'),
           ),
         ],
       ),
@@ -402,6 +493,24 @@ class _ReminderPageState extends State<ReminderPage> {
     if (picked != null) setState(() => _time = picked);
   }
 
+  /// Opens the system page that grants lock-screen (full-screen) alarm
+  /// access. Silent no-op returning true when already granted; resolves with
+  /// the granted state once the user returns from settings.
+  Future<bool> _ensureLockScreenPermission() async {
+    setState(() => _fsiAsking = true);
+    try {
+      final granted =
+          await NotificationService().requestFullScreenIntentPermission();
+      if (mounted) setState(() => _fsiAllowed = granted);
+      return granted;
+    } catch (e) {
+      debugPrint('Lock-screen permission request failed: $e');
+      return false;
+    } finally {
+      if (mounted) setState(() => _fsiAsking = false);
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
 
@@ -413,14 +522,25 @@ class _ReminderPageState extends State<ReminderPage> {
       enabled: _enabled,
     );
 
+    // Lock-screen access is asked for FIRST, outside the scheduling try:
+    // the system page must appear even if scheduling below fails, and the
+    // request is a silent no-op once the user has already allowed it.
+    final fsiGranted = _enabled ? await _ensureLockScreenPermission() : true;
+
     try {
       await _applySchedule(_time, _enabled);
       if (!mounted) return;
-      _showSnack(
-        _enabled
-            ? 'Reminder saved for ${_fmt(_time)} every day'
-            : 'Daily reminder turned off',
-      );
+      if (!_enabled) {
+        _showSnack('Daily reminder turned off');
+      } else if (fsiGranted) {
+        _showSnack('Reminder saved for ${_fmt(_time)} every day');
+      } else {
+        _showSnack(
+          'Reminder saved — but lock-screen alarms are blocked, so it will '
+          'show as a regular notification',
+          error: true,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       _showSnack('Could not schedule the reminder: $e', error: true);

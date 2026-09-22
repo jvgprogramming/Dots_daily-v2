@@ -61,7 +61,13 @@ class _CalendarPageState extends State<CalendarPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        // Clears the notch with half the extra space the home hero gets.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          28,
+        ),
         children: [
           _buildHeader(meds),
           const SizedBox(height: 16),

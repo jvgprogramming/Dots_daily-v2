@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 
@@ -36,8 +37,18 @@ class NotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    // Initialize timezone database (needed for zoned scheduling)
+    // Initialize timezone database (needed for zoned scheduling).
     tz_data.initializeTimeZones();
+
+    // Without this, tz.local silently stays UTC: a "07:00" reminder rings at
+    // 07:00 UTC — 15:00 in Manila — hours after the patient's breakfast.
+    try {
+      final name = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+    } catch (e) {
+      debugPrint('Could not detect the device timezone ($e) — alarms may '
+          'ring at UTC wall-clock times.');
+    }
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
@@ -326,6 +337,34 @@ class NotificationService {
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
     onAlarmTap?.call(response.payload);
+  }
+
+  /// Payload of the notification that launched the app, if any.
+  ///
+  /// Covers the overnight case: the alarm fired while the app was dead, the
+  /// full-screen intent started MainActivity, and [_onNotificationTap] never
+  /// ran because there was no tap — the system opened us. Call once at
+  /// startup and route the payload to the ringing screen.
+  Future<String?> launchPayload() async {
+    await _ensureInitialized();
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    return details.notificationResponse?.payload;
+  }
+
+  /// Whether the alarm may cover the lock screen (full-screen intent),
+  /// asking the user via the system page when not yet granted.
+  ///
+  /// Android 14+ stopped granting this at install time for most apps — the
+  /// alarm then arrives as a plain heads-up banner instead. Calling this when
+  /// already granted changes nothing system-side.
+  Future<bool> requestFullScreenIntentPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    return await android?.requestFullScreenIntentPermission() ?? true;
   }
 
   /// Get plugin instance (for advanced use).

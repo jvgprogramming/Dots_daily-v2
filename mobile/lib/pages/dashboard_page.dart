@@ -15,10 +15,35 @@ String _formatFollowUpDate(DateTime date) {
   return '${months[date.month - 1]} ${date.day}, ${date.year}';
 }
 
-class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onViewChange;
-  final ValueChanged<Map<String, String>>? onTriggerAlarm;
+class DashboardPage extends StatefulWidget {
+  final ValueChanged<String>? onViewChange;
 
-  const DashboardPage({super.key, this.onViewChange, this.onTriggerAlarm});
+  const DashboardPage({super.key, this.onViewChange});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  /// First day of the month the home calendar shows.
+  late DateTime _month;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month);
+  }
+
+  bool get _canGoForward {
+    final now = DateTime.now();
+    return _month.isBefore(DateTime(now.year, now.month));
+  }
+
+  void _changeMonth(int delta) {
+    if (delta > 0 && !_canGoForward) return;
+    setState(() => _month = DateTime(_month.year, _month.month + delta));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +58,9 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
 
     return RefreshIndicator(
       onRefresh: () => meds.refresh(),
-      child: SingleChildScrollView(
+      child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
+        padding: EdgeInsets.zero,
         children: [
           // Hero Section
           _buildHeroSection(context, user?.fullName ?? '', today, meds),
@@ -51,32 +76,17 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
                 _buildNextDoseCard(context, meds),
                 const SizedBox(height: 16),
 
-                // Stats cards row
-                _buildStatsRow(context, meds),
+                // Treatment calendar with day-status legend
+                _buildTreatmentCalendar(meds),
                 const SizedBox(height: 16),
 
-                // Schedule + Quick Summary (stacked on phones)
-                _buildTodaySchedule(context, todayAlarms, meds),
-                const SizedBox(height: 12),
-                _buildQuickSummary(context),
-                const SizedBox(height: 16),
-
-                // Medication History
-                _buildMedicationHistory(context, meds),
-                const SizedBox(height: 16),
-
-                // TB Symptom Monitor
-                _buildSymptomMonitorCard(context),
-                const SizedBox(height: 16),
-
-                // Test alarm button (demo)
-                if (onTriggerAlarm != null) _buildTestAlarmCard(context),
+                // Today's doses (upcoming reminders only)
+                _buildTodayDoses(context, todayAlarms),
                 const SizedBox(height: 32),
               ],
             ),
           ),
         ],
-        ),
       ),
     );
   }
@@ -137,7 +147,14 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
           ),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+            // Top inset keeps the avatar row clear of the status bar / notch,
+            // the same way the navigation header does.
+            padding: EdgeInsets.fromLTRB(
+              16,
+              MediaQuery.of(context).padding.top + 16,
+              16,
+              40,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -195,7 +212,7 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
                     ),
                     // Settings icon
                     GestureDetector(
-                      onTap: () => onViewChange?.call('profile'),
+                      onTap: () => widget.onViewChange?.call('profile'),
                       child: Container(
                         width: 42,
                         height: 42,
@@ -312,20 +329,20 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
                                         fontSize: 36,
                                         fontWeight: FontWeight.bold,
                                       ),
-                                    ),                                Text(
-                                  meds.totalScheduledDays != null
-                                      ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
-                                      : '${meds.treatmentDays} days taken',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(
-                                      alpha: 0.8,
                                     ),
-                                    fontSize: 11,
-                                  ),
+                                    Text(
+                                      meds.totalScheduledDays != null
+                                          ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
+                                          : '${meds.treatmentDays} days taken',
+                                      style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.8),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -342,9 +359,8 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
                                     Text(
                                       'STREAK',
                                       style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.7),
                                         fontSize: 8,
                                         letterSpacing: 1,
                                         fontWeight: FontWeight.w600,
@@ -608,423 +624,232 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
     );
   }
 
-  Widget _buildStatsRow(BuildContext context, MedicationsProvider meds) {
-    final stats = [
-      (
-        'Days taken',
-        '${meds.takenCountInMonth(DateTime.now())}',
-        'Logged this month',
-        Icons.event_available_rounded,
-        AppColors.primary,
-      ),
-      (
-        'Adherence',
-        '${meds.adherenceRate.toInt()}%',
-        'Based on dose log',
-        Icons.trending_up,
-        AppColors.emerald,
-      ),
-      (
-        'Reminders',
-        '${meds.activeAlarmCount}',
-        'Daily reminder',
-        Icons.notifications,
-        AppColors.amber,
-      ),
-      (
-        'Logged doses',
-        '${meds.doseLogs.length}',
-        'Verified and pending',
-        Icons.history,
-        AppColors.primary,
-      ),
-    ];
+  // ---------- Treatment calendar ----------
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
-        return GridView.builder(
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: isWide ? 4 : 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: isWide ? 2.2 : 1.0,
+  /// The month grid from the Calendar tab, simplified: the same taken /
+  /// pending / missed coloring the clinic sees, with a legend underneath.
+  Widget _buildTreatmentCalendar(MedicationsProvider meds) {
+    final firstOfMonth = DateTime(_month.year, _month.month);
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final leadingBlanks = firstOfMonth.weekday % 7; // Sunday-first
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: stats.length,
-          itemBuilder: (context, index) {
-            final stat = stats[index];
-            return _StatCard(
-              label: stat.$1,
-              value: stat.$2,
-              subtitle: stat.$3,
-              icon: stat.$4,
-              iconColor: stat.$5,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildTodaySchedule(
-    BuildContext context,
-    List<Alarm> alarms,
-    MedicationsProvider meds,
-  ) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.access_time,
-                  size: 20,
-                  color: AppColors.primary,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_month_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _monthLabel,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Today's schedule",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+              ),
+              _MiniMonthButton(
+                icon: Icons.chevron_left_rounded,
+                onTap: () => _changeMonth(-1),
+              ),
+              const SizedBox(width: 8),
+              _MiniMonthButton(
+                icon: Icons.chevron_right_rounded,
+                onTap: _canGoForward ? () => _changeMonth(1) : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final label in const ['S', 'M', 'T', 'W', 'T', 'F', 'S'])
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.mutedForeground,
                       ),
-                      Text(
-                        'Upcoming medication doses and quick actions',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (alarms.isNotEmpty)
-              ...alarms.map(
-                (alarm) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(12),
-                      color: AppColors.card,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(22),
-                          ),
-                          child: const Icon(
-                            Icons.access_time,
-                            color: AppColors.primary,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                alarm.medicationName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 14,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                alarm.time,
-                                style: const TextStyle(
-                                  color: AppColors.mutedForeground,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => onViewChange?.call('reminder'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            minimumSize: Size.zero,
-                            textStyle: const TextStyle(fontSize: 12),
-                          ),
-                          child: const Text('Details'),
-                        ),
-                      ],
                     ),
                   ),
                 ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: AppColors.border,
-                    style: BorderStyle.solid,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 40,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'No upcoming doses scheduled for today.',
-                      style: TextStyle(color: AppColors.mutedForeground),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () => onViewChange?.call('reminder'),
-                      child: const Text('Set up reminders'),
-                    ),
-                  ],
-                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            childAspectRatio: 1.0,
+            children: [
+              for (var i = 0; i < leadingBlanks; i++) const SizedBox.shrink(),
+              for (var day = 1; day <= daysInMonth; day++)
+                _buildDayCell(meds, DateTime(_month.year, _month.month, day)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Wrap(
+            spacing: 14,
+            runSpacing: 8,
+            children: [
+              _LegendDot(
+                color: AppColors.primary,
+                label: 'Taken',
               ),
-          ],
+              _LegendDot(
+                color: AppColors.amber,
+                label: 'Pending',
+                ring: true,
+              ),
+              _LegendDot(color: AppColors.destructive, label: 'Missed'),
+              _LegendDot(color: AppColors.primaryDark, label: 'Today', ring: true),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayCell(MedicationsProvider meds, DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isToday = day == today;
+    final isFuture = day.isAfter(today);
+    final beforeStart = day.isBefore(meds.regimenStart);
+
+    final doses = meds.dosesOnDay(day);
+    final taken = doses.isNotEmpty;
+    final unverified = doses.any((log) => !log.verified);
+    final missed = !taken && !isFuture && !beforeStart;
+
+    Color background = Colors.transparent;
+    Color foreground = AppColors.foreground;
+    Color borderColor = Colors.transparent;
+
+    if (taken && !unverified) {
+      background = AppColors.primary;
+      foreground = Colors.white;
+    } else if (unverified) {
+      background = AppColors.amber.withValues(alpha: 0.18);
+      foreground = AppColors.amber;
+      borderColor = AppColors.amber.withValues(alpha: 0.6);
+    } else if (missed) {
+      background = AppColors.destructive.withValues(alpha: 0.08);
+      foreground = AppColors.mutedForeground;
+      borderColor = AppColors.destructive.withValues(alpha: 0.4);
+    } else {
+      // Future days and days before the regimen started.
+      foreground = AppColors.mutedForeground.withValues(alpha: 0.45);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: isToday ? AppColors.primaryDark : borderColor,
+          width: isToday ? 2 : 1,
+        ),
+      ),
+      // Scales down rather than overflowing when the system text size is
+      // large or the phone is narrow.
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Text(
+              '${day.day}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildQuickSummary(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.timeline, size: 20, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text(
-                  'Quick summary',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Fast access to treatment and support views',
-              style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
-            ),
-            const SizedBox(height: 12),
-            _QuickActionButton(
-              label: 'Reminder',
-              onTap: () => onViewChange?.call('reminder'),
-            ),
-            const SizedBox(height: 8),
-            _QuickActionButton(
-              label: 'Symptom monitor',
-              onTap: () => onViewChange?.call('symptoms'),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.muted.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'You can review your medication history and the exact dates you took each dose below.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-          ],
-        ),
+  /// A slim row of today's remaining doses, kept because the hero card
+  /// replaced the old schedule section.
+  Widget _buildTodayDoses(BuildContext context, List<Alarm> alarms) {
+    if (alarms.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
       ),
-    );
-  }
-
-  Widget _buildMedicationHistory(
-    BuildContext context,
-    MedicationsProvider meds,
-  ) {
-    final recentLogs = meds.recentDoseDates;
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.history, size: 20, color: AppColors.primary),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Medication history',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => onViewChange?.call('calendar'),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Calendar', style: TextStyle(fontSize: 13)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward, size: 16),
-                    ],
-                  ),
-                ),
-              ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TODAY',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+              color: AppColors.mutedForeground,
             ),
-            const Text(
-              'Dates and times you recorded each medication intake',
-              style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
-            ),
-            const SizedBox(height: 12),
-            if (recentLogs.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text(
-                    'No medication history yet. Log a dose to begin tracking your dates.',
-                    style: TextStyle(color: AppColors.mutedForeground),
-                  ),
-                ),
-              )
-            else
-              ...recentLogs.map(
-                (log) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _DoseLogTile(log: log),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSymptomMonitorCard(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: const Color(0xFFFFF7ED),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.monitor_heart,
-                color: AppColors.orange,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          const SizedBox(height: 8),
+          ...alarms.map(
+            (alarm) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
                 children: [
-                  const Text(
-                    'TB symptom monitor',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  const Icon(
+                    Icons.access_time,
+                    size: 16,
+                    color: AppColors.primary,
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Track TB symptoms and medication side effects for early intervention',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.mutedForeground,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${alarm.displayTime} · ${alarm.medicationName}',
+                      style: const TextStyle(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: () => onViewChange?.call('symptoms'),
-                    child: const Text('Check symptoms'),
+                  TextButton(
+                    onPressed: () => widget.onViewChange?.call('reminder'),
+                    child: const Text('Details'),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTestAlarmCard(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: AppColors.primary.withValues(alpha: 0.05),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => onTriggerAlarm?.call({
-                  'id': 'test-alarm',
-                  'medicationName': MedicationsProvider.medicineName,
-                  'time': '08:00 AM',
-                  'dosage': '2 tablets',
-                }),
-                icon: const Icon(Icons.access_time, size: 18),
-                label: const Text('Test medication alarm'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Demo: simulate an alarm notification',
-              style: TextStyle(fontSize: 11, color: AppColors.mutedForeground),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1036,234 +861,79 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
 
   String _monthName(int month) {
     const names = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return names[month - 1];
   }
+
+  String get _monthLabel {
+    return '${_monthName(_month.month)} ${_month.year}';
+  }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String subtitle;
+class _MiniMonthButton extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
+  final VoidCallback? onTap;
 
-  const _StatCard({
+  const _MiniMonthButton({required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.primary.withValues(alpha: onTap == null ? 0.06 : 0.12),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(
+            icon,
+            color: AppColors.primary,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  final bool ring;
+
+  const _LegendDot({
+    required this.color,
     required this.label,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
+    this.ring = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.mutedForeground,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, size: 16, color: iconColor),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            Flexible(
-              child: Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickActionButton({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          alignment: Alignment.centerLeft,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DoseLogTile extends StatelessWidget {
-  final DoseLog log;
-
-  const _DoseLogTile({required this.log});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: log.verified
-                  ? AppColors.emerald.withValues(alpha: 0.1)
-                  : Colors.grey.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(
-              Icons.check_circle,
-              color: log.verified ? AppColors.emerald : Colors.grey,
-              size: 18,
-            ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: ring ? Colors.transparent : color,
+            shape: BoxShape.circle,
+            border: ring ? Border.all(color: color, width: 2) : null,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        log.medicationName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: log.verified
-                            ? AppColors.emerald.withValues(alpha: 0.1)
-                            : AppColors.muted,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        log.verified ? 'Verified' : 'Pending',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: log.verified
-                              ? AppColors.emerald
-                              : AppColors.mutedForeground,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  log.formattedDateTime,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.mutedForeground,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.chevron_right,
-            size: 18,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11.5,
             color: AppColors.mutedForeground,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
