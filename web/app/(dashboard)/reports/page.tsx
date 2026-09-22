@@ -8,7 +8,7 @@
  * reporting storage — everything comes from the MedicationLog table.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -38,13 +38,18 @@ import {
 } from "recharts";
 import {
   Activity,
+  CalendarX2,
   Camera,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   ImageOff,
   Pill,
   RefreshCw,
+  Search,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import { getMedicationReports } from "@/lib/services/dashboard";
@@ -96,10 +101,11 @@ function fmtTime(hhmmss: string | null | undefined): string {
   return `${hour12}:${m ?? "00"} ${amPm}`;
 }
 
-const STATUS_META: Record<string, { label: string; variant: "success" | "warning" | "danger" }> = {
+const STATUS_META: Record<string, { label: string; variant: "success" | "warning" | "danger" | "default" }> = {
   taken: { label: "Taken", variant: "success" },
   late: { label: "Late", variant: "warning" },
   missed: { label: "Missed", variant: "danger" },
+  rescheduled: { label: "Rescheduled", variant: "default" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -108,6 +114,147 @@ function StatusBadge({ status }: { status: string }) {
     <Badge variant={meta?.variant ?? "default"} size="sm">
       {meta?.label ?? status.replace(/_/g, " ")}
     </Badge>
+  );
+}
+
+type AdherenceQuickFilter = "all" | "taken" | "late" | "missed" | "unrecorded";
+
+const ADHERENCE_FILTERS: { key: AdherenceQuickFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "taken", label: "Taken" },
+  { key: "late", label: "Late" },
+  { key: "missed", label: "Missed" },
+  { key: "unrecorded", label: "Unrecorded" },
+];
+
+// ─── Searchable patient selector (combobox) ───
+function PatientSelector({
+  patients,
+  value,
+  onChange,
+}: {
+  patients: PatientSelectOption[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selected = patients.find((p) => String(p.id) === value) ?? null;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        String(p.id).includes(q) ||
+        (p.health_id_number ?? "").toLowerCase().includes(q)
+    );
+  }, [patients, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <label className="mb-1 block text-xs font-medium text-text-secondary">
+        Patient
+      </label>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o);
+          setQuery("");
+        }}
+        className="flex h-10 w-full items-center justify-between rounded-[10px] border border-border-default bg-bg-card px-3 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
+      >
+        <span className={selected ? "truncate" : "text-text-tertiary"}>
+          {selected
+            ? `${selected.name}${selected.health_id_number ? ` · ${selected.health_id_number}` : ""}`
+            : "All patients"}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-text-tertiary" />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-[10px] border border-border-light bg-bg-card shadow-dropdown">
+          <div className="relative p-2 border-b border-border-light">
+            <Search className="absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+            <input
+              autoFocus
+              className="h-8 w-full rounded-[6px] bg-bg-subtle pl-8 pr-8 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
+              placeholder="Search by name, ID, or health ID…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-bg-subtle ${
+                !value ? "text-primary-700 font-medium" : "text-text-primary"
+              }`}
+            >
+              <Users className="h-4 w-4 text-text-tertiary" />
+              All patients
+              {!value && <Check className="ml-auto h-4 w-4 text-primary-600" />}
+            </button>
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  onChange(String(p.id));
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-bg-subtle ${
+                  value === String(p.id) ? "text-primary-700 font-medium" : "text-text-primary"
+                }`}
+              >
+                <span className="truncate">
+                  {p.name}
+                  {p.health_id_number && (
+                    <span className="ml-1.5 text-xs text-text-tertiary">
+                      {p.health_id_number}
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-[11px] text-text-tertiary">#{p.id}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-center text-xs text-text-tertiary">
+                No patients match “{query}”.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -147,6 +294,7 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(() => fmtISO(new Date(Date.now() - 29 * 86400000)));
   const [to, setTo] = useState(() => fmtISO(new Date()));
   const [patientId, setPatientId] = useState("");
+  const [adherenceFilter, setAdherenceFilter] = useState<AdherenceQuickFilter>("all");
 
   const [previewLog, setPreviewLog] = useState<ReportMedicationLog | null>(null);
 
@@ -196,6 +344,21 @@ export default function ReportsPage() {
   const patientRows = data?.patients ?? [];
   const recentLogs = data?.recent_logs ?? [];
   const proofUploads = data?.proof_uploads ?? [];
+  const rescheduledFollowUps = data?.rescheduled_follow_ups ?? [];
+
+  // ── Adherence quick filters (client-side over loaded report data) ──
+  const filteredPatientRows = useMemo(() => {
+    if (adherenceFilter === "all") return patientRows;
+    if (adherenceFilter === "unrecorded") {
+      return patientRows.filter((p) => p.total_doses === 0 || (p.adherence_rate !== null && p.adherence_rate < 50));
+    }
+    return patientRows.filter((p) => p[adherenceFilter] > 0);
+  }, [patientRows, adherenceFilter]);
+
+  const filteredRecentLogs = useMemo(() => {
+    if (adherenceFilter === "all" || adherenceFilter === "unrecorded") return recentLogs;
+    return recentLogs.filter((l) => l.status === adherenceFilter);
+  }, [recentLogs, adherenceFilter]);
 
   const pct = (v: number | null | undefined) => Math.max(0, Math.min(100, v ?? 0));
   const fmtPct = (v: number | null | undefined) =>
@@ -235,6 +398,12 @@ export default function ReportsPage() {
       hint: "Not confirmed",
       progress: overview && overview.total_doses > 0 ? (overview.missed / overview.total_doses) * 100 : 0,
       progressVariant: "danger" as const,
+    },
+    {
+      title: "Unrecorded Days",
+      value: overview?.unrecorded_days ?? 0,
+      icon: CalendarX2,
+      hint: "Treatment days with no log",
     },
     {
       title: "Proof Uploads",
@@ -313,22 +482,27 @@ export default function ReportsPage() {
               onChange={(e) => setTo(e.target.value)}
             />
           </div>
-          <div className="w-64">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
-              Patient
-            </label>
-            <select
-              className={SELECT_CLASSES}
+          <div className="w-72">
+            <PatientSelector
+              patients={patients}
               value={patientId}
-              onChange={(e) => setPatientId(e.target.value)}
-            >
-              <option value="">All patients</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              onChange={setPatientId}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pb-0.5">
+            {ADHERENCE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setAdherenceFilter(f.key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-150 ${
+                  adherenceFilter === f.key
+                    ? "bg-primary-500 text-white"
+                    : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
           {data && (
             <p className="ml-auto text-xs text-text-tertiary">
@@ -565,9 +739,13 @@ export default function ReportsPage() {
                   cell: (p) => fmtDate(p.last_dose_date),
                 },
               ]}
-              data={patientRows}
+              data={filteredPatientRows}
               keyExtractor={(p) => p.id}
-              emptyMessage="No patient medication logs in this range."
+              emptyMessage={
+                adherenceFilter === "all"
+                  ? "No patient medication logs in this range."
+                  : `No patients with ${ADHERENCE_FILTERS.find((f) => f.key === adherenceFilter)?.label.toLowerCase()} doses in this range.`
+              }
             />
           )}
         </CardContent>
@@ -579,6 +757,9 @@ export default function ReportsPage() {
           <CardTitle>Recent Medication Logs</CardTitle>
           <CardDescription>
             Latest dose confirmations recorded from the mobile app
+            {adherenceFilter !== "all" && adherenceFilter !== "unrecorded"
+              ? ` · filtered: ${adherenceFilter}`
+              : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -670,9 +851,15 @@ export default function ReportsPage() {
                     ),
                 },
               ]}
-              data={recentLogs}
+              data={filteredRecentLogs}
               keyExtractor={(l) => l.id}
-              emptyMessage="No medication logs recorded in this range yet."
+              emptyMessage={
+                adherenceFilter === "unrecorded"
+                  ? "Unrecorded days are treatment days with no log at all — check the summary card."
+                  : adherenceFilter === "all"
+                  ? "No medication logs recorded in this range yet."
+                  : `No ${adherenceFilter} doses in the recent feed for this range.`
+              }
             />
           )}
         </CardContent>
@@ -736,6 +923,88 @@ export default function ReportsPage() {
                 ) : null
               )}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Rescheduled follow-ups ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Rescheduled Follow-ups</CardTitle>
+          <CardDescription>
+            Follow-up visits moved to a new date — still visible in reporting
+            history
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : rescheduledFollowUps.length === 0 ? (
+            <EmptyState
+              icon={<CalendarX2 className="h-5 w-5" />}
+              title="No rescheduled follow-ups"
+              description="Follow-ups rescheduled from the Treatments hub will appear here."
+            />
+          ) : (
+            <Table
+              columns={[
+                {
+                  key: "patient_name",
+                  header: "Patient",
+                  cell: (r) => (
+                    <div>
+                      <p className="font-medium text-text-primary">{r.patient_name}</p>
+                      <p className="text-xs text-text-tertiary">{r.plan_name ?? "Treatment plan"}</p>
+                    </div>
+                  ),
+                },
+                {
+                  key: "original_date",
+                  header: "Original Date",
+                  cell: (r) => (
+                    <span className="text-text-secondary line-through decoration-text-tertiary/60">
+                      {fmtDate(r.original_date)}
+                    </span>
+                  ),
+                },
+                {
+                  key: "new_date",
+                  header: "New Date",
+                  cell: (r) => (
+                    <span className="font-medium text-text-primary">{fmtDate(r.new_date)}</span>
+                  ),
+                },
+                {
+                  key: "rescheduled_at",
+                  header: "Rescheduled On",
+                  cell: (r) => fmtDate(r.rescheduled_at),
+                },
+                {
+                  key: "reason",
+                  header: "Reason",
+                  className: "max-w-[220px]",
+                  cell: (r) =>
+                    r.reason ? (
+                      <span className="line-clamp-2 text-xs text-text-secondary" title={r.reason}>
+                        {r.reason}
+                      </span>
+                    ) : (
+                      <span className="text-text-tertiary">—</span>
+                    ),
+                },
+                {
+                  key: "rescheduled_by_name",
+                  header: "By",
+                  cell: (r) => r.rescheduled_by_name ?? "—",
+                },
+              ]}
+              data={rescheduledFollowUps}
+              keyExtractor={(r) => r.id}
+            />
           )}
         </CardContent>
       </Card>

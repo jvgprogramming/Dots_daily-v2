@@ -10,6 +10,7 @@ use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
+use App\Http\Controllers\API\TreatmentsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -64,6 +65,11 @@ Route::prefix('v1')->group(function () {
 
         // Reports (Admin) — medication adherence + proof evidence from live logs
         Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');
+
+        // Treatments hub (Admin) — records, follow-up schedule, reschedule
+        Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin');
+        Route::post('/treatments/{plan}/reschedule-follow-up', [TreatmentsController::class, 'rescheduleFollowUp'])
+            ->middleware('role:admin');
 
         // Medication inventory (Admin)
         Route::prefix('medications-inventory')->middleware('role:admin')->group(function () {

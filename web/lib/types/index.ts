@@ -635,6 +635,8 @@ export interface ReportOverview {
   taken: number;
   missed: number;
   late: number;
+  /** Treatment days with no medication log at all (derived from active plans) */
+  unrecorded_days: number;
   adherence_rate: number | null;
   doses_with_proof: number;
   proof_upload_rate: number | null;
@@ -666,13 +668,89 @@ export interface ReportPatientRow {
   proof_uploads: number;
 }
 
+export interface RescheduledFollowUp {
+  id: number;
+  patient_id: number;
+  patient_name: string;
+  treatment_plan_id: number;
+  plan_name: string | null;
+  original_date: string;
+  new_date: string;
+  rescheduled_at: string;
+  reason: string | null;
+  notes: string | null;
+  rescheduled_by_name: string | null;
+}
+
 export interface ReportsData {
   overview: ReportOverview;
   trend: ReportTrendPoint[];
   patients: ReportPatientRow[];
   recent_logs: ReportMedicationLog[];
   proof_uploads: ReportMedicationLog[];
+  rescheduled_follow_ups: RescheduledFollowUp[];
   generated_at: string;
+}
+
+// ── Treatments hub ──
+export type TreatmentsStatusFilter = "all" | "active" | "due_soon" | "rescheduled" | "completed";
+export type TreatmentRecordStatus = "active" | "due_soon" | "rescheduled" | "completed" | "discontinued" | "interrupted";
+export type FollowUpStatus = "scheduled" | "due" | "overdue" | "completed" | "none";
+
+export interface TreatmentAdherence {
+  rate: number | null;
+  taken: number;
+  late: number;
+  missed: number;
+  total: number;
+}
+
+export interface TreatmentRecord {
+  id: number;
+  patient_id: number;
+  patient_name: string;
+  plan_name: string;
+  regimen_type: string | null;
+  phase: string;
+  status: "active" | "completed" | "discontinued" | "interrupted" | string;
+  record_status: TreatmentRecordStatus;
+  start_date: string | null;
+  expected_end_date: string | null;
+  actual_end_date: string | null;
+  next_follow_up: string | null;
+  next_follow_up_status: FollowUpStatus;
+  last_reschedule: {
+    id: number;
+    original_date: string;
+    new_date: string;
+    reason: string | null;
+    notes: string | null;
+  } | null;
+  adherence: TreatmentAdherence;
+  medications_count: number;
+}
+
+export interface TreatmentsSummary {
+  active_plans: number;
+  due_follow_ups: number;
+  overdue_follow_ups: number;
+  rescheduled_cases: number;
+  completed_plans: number;
+  adherence_rate: number | null;
+  total_records: number;
+}
+
+export interface TreatmentsData {
+  summary: TreatmentsSummary;
+  records: TreatmentRecord[];
+  follow_ups: TreatmentRecord[];
+}
+
+export interface RescheduleFollowUpPayload {
+  current_date: string;
+  new_date: string;
+  reason?: string;
+  notes?: string;
 }
 
 // ── Global Search ──
