@@ -12,7 +12,7 @@
  * from the patient profile as treatment progresses.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -29,20 +29,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  AlertCircle,
-  Save,
-  CircleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import {
-  registerPatient,
-  savePatientDraft,
-  completePatientDraft,
-  updatePatientDraft,
-} from "@/lib/services/patients";
+import { registerPatient, completePatientDraft } from "@/lib/services/patients";
 import { ApiError } from "@/lib/services/api";
 import type {
   PatientRegistrationPayload,
@@ -89,6 +81,21 @@ const REGIMEN_OPTIONS = [
 
 const SELECT_CLASSES =
   "flex h-11 w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500";
+
+// ─── Philippine mobile number helpers ───
+// Accepts 09XXXXXXXXX, 9XXXXXXXXX, or +639XXXXXXXXX (max 13 chars incl. country code).
+const PH_PHONE_MAX_LENGTH = 13;
+const PH_PHONE_REGEX = /^(?:\+639\d{9}|09\d{9}|9\d{9})$/;
+
+function sanitizePhoneNumber(value: string): string {
+  let cleaned = value.replace(/[^\d+]/g, "");
+  if (cleaned.startsWith("+")) {
+    cleaned = `+${cleaned.slice(1).replace(/\+/g, "")}`;
+  } else {
+    cleaned = cleaned.replace(/\+/g, "");
+  }
+  return cleaned.slice(0, PH_PHONE_MAX_LENGTH);
+}
 
 function Field({
   label,
@@ -288,10 +295,15 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
   const validateStep = (id: StepId): string[] => {
     const miss: string[] = [];
     switch (id) {
-      case "account":
+      case "account": {
         if (!form.email.trim()) miss.push("Email is required.");
         if (!isResume && form.password.length < 8) miss.push("Password must be at least 8 characters.");
+        const contact = (form.contact_number || form.phone || "").replace(/[\s-]/g, "");
+        if (contact && !PH_PHONE_REGEX.test(contact)) {
+          miss.push("Contact number must be a valid Philippine mobile number (e.g., 09123456789 or +639123456789).");
+        }
         break;
+      }
       case "demographics":
         if (!form.last_name.trim()) miss.push("Surname is required.");
         if (!form.first_name.trim()) miss.push("Given name is required.");
@@ -322,6 +334,12 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
     setMissing([]);
     setStepIndex((i) => Math.max(i - 1, 0));
   };
+
+  // Re-validate live while a warning is showing, so it clears as fields are fixed.
+  useEffect(() => {
+    if (missing.length > 0) setMissing(validateStep(currentStep.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, stepIndex]);
 
   // Build display name from parts
   const displayName = useMemo(() => {
@@ -357,30 +375,6 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
       } else {
         setError(err instanceof Error ? err.message : "Registration failed");
       }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ── Save as draft ──
-  const handleSaveDraft = async () => {
-    setError("");
-    setSubmitting(true);
-    try {
-      const payload: PatientRegistrationPayload = {
-        ...form,
-        name: displayName === "—" ? "" : displayName,
-        status: "draft",
-      };
-      if (isResume && draft) {
-        await updatePatientDraft(draft.patientId, payload);
-        onSaved("Draft updated. Resume anytime from the patient list.");
-      } else {
-        await savePatientDraft(payload);
-        onSaved("Draft saved. Resume anytime from the patient list.");
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save draft");
     } finally {
       setSubmitting(false);
     }
@@ -422,6 +416,17 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
         })}
       </div>
 
+      {/* ── Validation warning ── */}
+      {missing.length > 0 && (
+        <Alert variant="warning" title="Please complete the required fields" className="mb-3 shrink-0">
+          <ul className="list-disc pl-4 space-y-0.5">
+            {missing.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto -mx-6 px-6">
         <AnimatePresence mode="wait">
@@ -431,7 +436,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -12 }}
             transition={{ duration: 0.15 }}
-            className="space-y-4 pb-2"
+            className="space-y-4 pb-6"
           >
             {/* ══════════ STEP 0: ACCOUNT ══════════ */}
             {currentStep.id === "account" && (
@@ -449,12 +454,14 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                       onChange={(e) => update("email", e.target.value)}
                     />
                   </Field>
-                  <Field label="Contact Number">
+                  <Field label="Contact Number" hint="Philippine mobile format: 09123456789 or +639123456789.">
                     <Input
                       type="tel"
-                      placeholder="+63 912 345 6789"
+                      inputMode="tel"
+                      placeholder="09123456789"
+                      maxLength={PH_PHONE_MAX_LENGTH}
                       value={form.contact_number || form.phone}
-                      onChange={(e) => update("contact_number", e.target.value)}
+                      onChange={(e) => update("contact_number", sanitizePhoneNumber(e.target.value))}
                     />
                   </Field>
                   {!isResume && (
@@ -1022,16 +1029,6 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
             {currentStep.id === "review" && (
               <>
                 <SectionHeader icon={ClipboardCheck} title="Review Patient Information" />
-                {missing.length > 0 && (
-                  <Alert variant="danger">
-                    <span className="flex items-start gap-2">
-                      <CircleAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                      <span>
-                        Please complete required fields: {missing.join(" ")}
-                      </span>
-                    </span>
-                  </Alert>
-                )}
                 <div className="space-y-4">
                   <ReviewGroup title="Patient Information">
                     <ReviewRow label="Name" value={displayName} />
@@ -1104,15 +1101,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
       </div>
 
       {/* ── Sticky footer ── */}
-      <div className="flex items-center justify-between gap-3 pt-4 mt-4 border-t border-border-light shrink-0">
-        <div>
-          {stepIndex > 0 && stepIndex < STEPS.length - 1 && (
-            <Button variant="ghost" size="sm" onClick={handleSaveDraft} disabled={submitting}>
-              <Save className="h-4 w-4" />
-              Save as Draft
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-border-light shrink-0">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={goPrev} disabled={stepIndex === 0 || submitting}>
             <ChevronLeft className="h-4 w-4" />
