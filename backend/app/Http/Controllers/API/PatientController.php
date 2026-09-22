@@ -327,6 +327,7 @@ class PatientController extends BaseApiController
                 'date_of_birth' => $data['date_of_birth'] ?? null,
                 'gender' => $data['gender'] ?? null,
                 'civil_status' => $data['civil_status'] ?? null,
+                'weight_kg' => $data['weight_kg'] ?? null,
                 'address' => $data['address'] ?? null,
                 'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
                 'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,

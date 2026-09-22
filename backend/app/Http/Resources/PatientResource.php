@@ -23,6 +23,7 @@ class PatientResource extends JsonResource
             'emergency_contact_name' => $this->emergency_contact_name,
             'emergency_contact_phone' => $this->emergency_contact_phone,
             'occupation' => $this->occupation,
+            'weight_kg' => $this->weight_kg,
             'nationality' => $this->nationality,
             'health_id_number' => $this->health_id_number,
             'philhealth_number' => $this->philhealth_number,

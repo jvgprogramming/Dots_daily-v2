@@ -72,6 +72,7 @@ const emptyForm: CreatePatientPayload = {
   date_of_birth: "",
   gender: "",
   civil_status: "",
+  weight_kg: "",
   address: "",
   emergency_contact_name: "",
   emergency_contact_phone: "",
@@ -211,6 +212,7 @@ export default function PatientsPage() {
       date_of_birth: patient.date_of_birth || "",
       gender: patient.gender || "",
       civil_status: patient.civil_status || "",
+      weight_kg: patient.weight_kg != null ? String(patient.weight_kg) : "",
       address: patient.address || "",
       emergency_contact_name: patient.emergency_contact_name || "",
       emergency_contact_phone: patient.emergency_contact_phone || "",
@@ -700,6 +702,19 @@ export default function PatientsPage() {
                     <option value="widowed">Widowed</option>
                     <option value="separated">Separated</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Weight (kg)</label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    min="1"
+                    max="500"
+                    placeholder="e.g., 54.5"
+                    value={formData.weight_kg || ""}
+                    onChange={(e) => updateField("weight_kg", e.target.value)}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1.5 block">Address</label>

@@ -69,6 +69,7 @@ Route::prefix('v1')->group(function () {
 
         // Treatments hub (Admin) — records, follow-up schedule, reschedule
         Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin');
+        Route::put('/treatments/{plan}', [TreatmentsController::class, 'updateTreatment'])->middleware('role:admin');
         Route::post('/treatments/{plan}/reschedule-follow-up', [TreatmentsController::class, 'rescheduleFollowUp'])
             ->middleware('role:admin');
 

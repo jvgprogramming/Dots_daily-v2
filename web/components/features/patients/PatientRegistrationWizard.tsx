@@ -182,6 +182,7 @@ export function emptyRegistrationForm(): PatientRegistrationPayload {
     date_of_birth: "",
     gender: "",
     civil_status: "",
+    weight_kg: "",
     nationality: "Filipino",
     address: "",
     contact_number: "",
@@ -580,6 +581,28 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                       <option value="widowed">Widowed</option>
                       <option value="separated">Separated</option>
                     </select>
+                  </Field>
+                  <Field
+                    label="Weight (kg)"
+                    hint="Baseline for weight-based dosing — editable later from the patient profile."
+                  >
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.1"
+                      min="1"
+                      max="500"
+                      placeholder="e.g., 54.5"
+                      value={form.weight_kg}
+                      onChange={(e) => {
+                        // Digits + one decimal point, max 3 decimals, 5 digits before it
+                        const v = e.target.value.replace(/[^\d.]/g, "");
+                        const parts = v.split(".");
+                        const intPart = parts[0].slice(0, 5);
+                        const decPart = parts.length > 1 ? "." + parts.slice(1).join("").slice(0, 2) : "";
+                        update("weight_kg", intPart + decPart);
+                      }}
+                    />
                   </Field>
                 </div>
                 <Field label="Permanent Address" required>
@@ -1035,6 +1058,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                     <ReviewRow label="Date of Birth" value={form.date_of_birth || "—"} />
                     <ReviewRow label="Sex" value={form.gender || "—"} />
                     <ReviewRow label="Civil Status" value={form.civil_status || "—"} />
+                    <ReviewRow label="Weight (kg)" value={form.weight_kg ? `${form.weight_kg} kg` : "—"} />
                     <ReviewRow label="Nationality" value={form.nationality || "—"} />
                     <ReviewRow label="Address" value={form.address || "—"} />
                     <ReviewRow label="PhilHealth" value={form.philhealth_number || "—"} />

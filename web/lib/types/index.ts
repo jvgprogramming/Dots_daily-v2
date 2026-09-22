@@ -142,6 +142,8 @@ export interface PatientRegistrationPayload {
   date_of_birth: string;
   gender: string;
   civil_status: string;
+  /** Baseline weight in kg at registration (weight-based dosing anchor). */
+  weight_kg: string;
   nationality: string;
   address: string;
   contact_number: string;
@@ -216,6 +218,7 @@ export interface PatientProfile {
   middle_name?: string | null;
   name_extension?: string | null;
   civil_status?: string | null;
+  weight_kg?: string | number | null;
   philhealth_number?: string | null;
   draft_data?: Partial<PatientRegistrationPayload> | null;
   tb_notifications?: TbNotification[];
@@ -250,6 +253,7 @@ export interface PatientListItem {
   middle_name?: string | null;
   name_extension?: string | null;
   civil_status?: string | null;
+  weight_kg?: string | number | null;
   philhealth_number?: string | null;
   date_of_birth: string | null;
   gender: string | null;
@@ -290,6 +294,7 @@ export interface CreatePatientPayload {
   date_of_birth?: string;
   gender?: string;
   civil_status?: string;
+  weight_kg?: string;
   address?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -312,6 +317,7 @@ export interface UpdatePatientPayload {
   date_of_birth?: string;
   gender?: string;
   civil_status?: string;
+  weight_kg?: string;
   address?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -346,6 +352,10 @@ export interface PatientSelectOption {
 }
 
 // ── Treatment Plan ──
+export type TreatmentPlanStatus = "active" | "completed" | "discontinued" | "interrupted";
+export type TreatmentOutcome = "cured" | "treatment_completed" | "died" | "failed" | "lost_to_followup";
+export type TreatmentPhase = "intensive" | "continuation";
+
 export interface TreatmentPlan {
   id: number;
   patient_id: number;
@@ -354,18 +364,45 @@ export interface TreatmentPlan {
   plan_name: string;
   regimen_type?: string | null;
   regimen_type_end?: string | null;
-  outcome?: string | null;
+  outcome?: TreatmentOutcome | string | null;
   outcome_date?: string | null;
   outcome_reason?: string | null;
   phase: "intensive" | "continuation" | "completed";
   start_date: string;
   expected_end_date: string;
   actual_end_date: string | null;
-  status: "active" | "completed" | "discontinued" | "interrupted";
+  status: TreatmentPlanStatus | string;
   discontinuation_reason: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Treatment lifecycle update ──
+export interface NewLabTestEntry {
+  test_type: string;
+  test_name?: string;
+  test_date?: string;
+  result?: string;
+  status?: "done" | "not_available" | "not_yet_done";
+  remarks?: string;
+}
+
+export interface UpdateTreatmentPayload {
+  regimen_type?: string | null;
+  regimen_type_end?: string | null;
+  phase?: TreatmentPhase | null;
+  status?: TreatmentPlanStatus | null;
+  outcome?: TreatmentOutcome | null;
+  outcome_date?: string | null;
+  outcome_reason?: string | null;
+  notes?: string | null;
+  /** Appended as NEW laboratory test entries for the patient. */
+  new_lab_tests?: NewLabTestEntry[];
+}
+
+export interface UpdatedTreatmentRecord extends TreatmentRecord {
+  new_labs_count?: number;
 }
 
 // ── Medication ──
@@ -729,6 +766,11 @@ export interface TreatmentRecord {
   patient_name: string;
   plan_name: string;
   regimen_type: string | null;
+  regimen_type_end: string | null;
+  outcome: string | null;
+  outcome_date: string | null;
+  outcome_reason: string | null;
+  notes: string | null;
   phase: string;
   status: "active" | "completed" | "discontinued" | "interrupted" | string;
   record_status: TreatmentRecordStatus;
