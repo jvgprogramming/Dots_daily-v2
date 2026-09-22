@@ -4,6 +4,8 @@ import type {
   TreatmentsData,
   TreatmentRecord,
   RescheduleFollowUpPayload,
+  UpdateTreatmentPayload,
+  UpdatedTreatmentRecord,
 } from "@/lib/types";
 
 export type TreatmentsStatusFilter =
@@ -34,6 +36,20 @@ export async function getTreatments(
   return api.get<ApiResponse<TreatmentsData>>("/treatments", {
     params: Object.keys(searchParams).length > 0 ? searchParams : undefined,
   });
+}
+
+/**
+ * Treatment lifecycle update on the existing plan record — no duplicates.
+ * Appends new lab tests as new entries; never rewrites intake data.
+ */
+export async function updateTreatment(
+  planId: number,
+  payload: UpdateTreatmentPayload
+): Promise<ApiResponse<{ record: UpdatedTreatmentRecord }>> {
+  return api.put<ApiResponse<{ record: UpdatedTreatmentRecord }>>(
+    `/treatments/${planId}`,
+    payload
+  );
 }
 
 /**

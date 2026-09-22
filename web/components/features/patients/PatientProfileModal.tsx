@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle, Pencil, PlayCircle } from "lucide-react";
+import { Loader2, AlertCircle, Pencil, PlayCircle, RefreshCw } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,14 @@ const REGIMEN_LABELS: Record<string, string> = {
   individualized: "Individualized MDR/XDR regimen",
 };
 
+const TREATMENT_OUTCOME_LABELS: Record<string, string> = {
+  cured: "Cured",
+  treatment_completed: "Treatment Completed",
+  died: "Died",
+  failed: "Failed",
+  lost_to_followup: "Lost to Follow-up",
+};
+
 function fmtDate(value: string | null | undefined): string {
   if (!value) return "—";
   try {
@@ -114,9 +122,11 @@ export interface PatientProfileModalProps {
   onClose: () => void;
   onEdit: (patientId: number) => void;
   onResumeDraft: (patientId: number) => void;
+  /** Opens the treatment lifecycle update flow (Treatments tab workflow). */
+  onUpdateTreatment?: (planId: number) => void;
 }
 
-export function PatientProfileModal({ open, patientId, onClose, onEdit, onResumeDraft }: PatientProfileModalProps) {
+export function PatientProfileModal({ open, patientId, onClose, onEdit, onResumeDraft, onUpdateTreatment }: PatientProfileModalProps) {
   const [data, setData] = useState<PatientDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -224,6 +234,7 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
               <Row label="Date of Birth" value={fmtDate(p.date_of_birth)} />
               <Row label="Sex" value={p.gender ? p.gender.charAt(0).toUpperCase() + p.gender.slice(1) : "—"} />
               <Row label="Civil Status" value={p.civil_status ? p.civil_status.charAt(0).toUpperCase() + p.civil_status.slice(1) : "—"} />
+              <Row label="Weight (kg)" value={p.weight_kg != null && p.weight_kg !== "" ? `${p.weight_kg} kg` : "—"} />
               <Row label="Nationality" value={p.nationality || "—"} />
               <Row label="Address" value={p.address || "—"} />
               <Row label="PhilHealth" value={p.philhealth_number || "—"} />
@@ -324,7 +335,7 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
               )}
             </Group>
 
-            {/* ── Treatment ── */}
+            {/* ── Treatment (live from the treatment plan — same source as the Treatments tab) ── */}
             <Group title="Treatment">
               {plan ? (
                 <>
@@ -332,10 +343,27 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
                   <Row label="Start Date" value={fmtDate(plan.start_date)} />
                   <Row label="Phase" value={plan.phase ? plan.phase.charAt(0).toUpperCase() + plan.phase.slice(1) : "—"} />
                   <Row label="Expected End" value={fmtDate(plan.expected_end_date)} />
+                  {plan.actual_end_date && <Row label="Actual End" value={fmtDate(plan.actual_end_date)} />}
                   <Row label="Status" value={plan.status ? plan.status.charAt(0).toUpperCase() + plan.status.slice(1) : "—"} />
                   <Row label="Regimen at End" value={plan.regimen_type_end ? label(REGIMEN_LABELS, plan.regimen_type_end) : "To be recorded after treatment"} />
-                  <Row label="Treatment Outcome" value={plan.outcome ?? "To be recorded after treatment"} />
+                  <Row
+                    label="Treatment Outcome"
+                    value={
+                      plan.outcome
+                        ? `${label(TREATMENT_OUTCOME_LABELS, plan.outcome)}${plan.outcome_date ? ` · ${fmtDate(plan.outcome_date)}` : ""}`
+                        : "To be recorded after treatment"
+                    }
+                  />
+                  {plan.outcome && plan.outcome_reason && <Row label="Outcome Reason" value={plan.outcome_reason} />}
                   {plan.notes && <Row label="Notes" value={plan.notes} />}
+                  {onUpdateTreatment && !isDraft && (
+                    <div className="pt-1.5">
+                      <Button variant="outline" size="sm" onClick={() => onUpdateTreatment(plan.id)}>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Update Treatment
+                      </Button>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-text-tertiary">No treatment plan yet{isDraft ? " — created when registration is completed." : "."}</p>

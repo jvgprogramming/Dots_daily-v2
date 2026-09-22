@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'date_of_birth',
     'gender',
     'civil_status',
+    'weight_kg',
     'address',
     'emergency_contact_name',
     'emergency_contact_phone',
@@ -110,6 +111,7 @@ class Patient extends Model
     {
         return [
             'date_of_birth' => 'date',
+            'weight_kg' => 'decimal:2',
             'registered_at' => 'datetime',
             'draft_data' => 'array',
         ];

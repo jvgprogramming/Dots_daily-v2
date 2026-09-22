@@ -22,6 +22,12 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
+import { PatientProfileModal } from "@/components/features/patients/PatientProfileModal";
+import {
+  TreatmentUpdateModal,
+  type TreatmentUpdateTarget,
+} from "@/components/features/treatments/TreatmentUpdateModal";
+import { optionLabel, TREATMENT_OUTCOME_OPTIONS } from "@/lib/treatment-options";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -268,6 +274,11 @@ export default function TreatmentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TreatmentsStatusFilter>("all");
   const [rescheduleTarget, setRescheduleTarget] = useState<TreatmentRecord | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<TreatmentUpdateTarget | null>(null);
+  const [profile, setProfile] = useState<{ open: boolean; patientId: number | null }>({
+    open: false,
+    patientId: null,
+  });
 
   const loadTreatments = useCallback(async () => {
     setError("");
@@ -309,6 +320,32 @@ export default function TreatmentsPage() {
     setTimeout(() => setToast(""), 5000);
     setRefreshing(true);
     loadTreatments();
+  };
+
+  const handleUpdateSuccess = (message: string) => {
+    setUpdateTarget(null);
+    setToast(message);
+    setTimeout(() => setToast(""), 5000);
+    setRefreshing(true);
+    loadTreatments();
+  };
+
+  const openUpdateModal = (r: TreatmentRecord) => {
+    setRescheduleTarget(null);
+    setProfile({ open: false, patientId: null });
+    setUpdateTarget({
+      planId: r.id,
+      patientName: r.patient_name,
+      planName: r.plan_name,
+      regimen_type: r.regimen_type,
+      regimen_type_end: r.regimen_type_end,
+      phase: r.phase,
+      status: r.status,
+      outcome: r.outcome,
+      outcome_date: r.outcome_date,
+      outcome_reason: r.outcome_reason,
+      notes: r.notes,
+    });
   };
 
   const pct = (v: number | null | undefined) => Math.max(0, Math.min(100, v ?? 0));
@@ -371,6 +408,28 @@ export default function TreatmentsPage() {
       },
     },
     {
+      key: "outcome",
+      header: "Outcome",
+      cell: (r: TreatmentRecord) => {
+        if (!r.outcome) {
+          return <span className="text-text-tertiary">—</span>;
+        }
+        return (
+          <div>
+            <Badge
+              variant={r.outcome === "cured" || r.outcome === "treatment_completed" ? "success" : r.outcome === "died" || r.outcome === "failed" ? "danger" : "warning"}
+              size="sm"
+            >
+              {optionLabel(TREATMENT_OUTCOME_OPTIONS, r.outcome).split(" — ")[0]}
+            </Badge>
+            {r.outcome_date && (
+              <p className="text-[11px] text-text-tertiary mt-0.5">{fmtDate(r.outcome_date)}</p>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       key: "adherence",
       header: "Adherence",
       className: "min-w-[150px]",
@@ -402,11 +461,12 @@ export default function TreatmentsPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              window.location.href = `/monitoring?patient=${r.patient_id}`;
-            }}
+            onClick={() => setProfile({ open: true, patientId: r.patient_id })}
           >
             View
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => openUpdateModal(r)}>
+            Update Treatment
           </Button>
           {r.status === "active" && r.next_follow_up && (
             <Button
@@ -650,6 +710,29 @@ export default function TreatmentsPage() {
           onSuccess={handleRescheduleSuccess}
         />
       )}
+
+      {/* ── Treatment lifecycle update modal ── */}
+      {updateTarget && (
+        <TreatmentUpdateModal
+          target={updateTarget}
+          onClose={() => setUpdateTarget(null)}
+          onSaved={handleUpdateSuccess}
+        />
+      )}
+
+      {/* ── Patient profile modal (reads the same live plan data) ── */}
+      <PatientProfileModal
+        open={profile.open}
+        patientId={profile.patientId}
+        onClose={() => setProfile({ open: false, patientId: null })}
+        onEdit={() => setProfile({ open: false, patientId: null })}
+        onResumeDraft={() => setProfile({ open: false, patientId: null })}
+        onUpdateTreatment={(planId) => {
+          const record = (data?.records ?? []).find((r) => r.id === planId);
+          setProfile({ open: false, patientId: null });
+          if (record) openUpdateModal(record);
+        }}
+      />
     </div>
   );
 }

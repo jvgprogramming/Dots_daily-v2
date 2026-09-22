@@ -133,6 +133,11 @@ class TreatmentsController extends BaseApiController
                 'patient_name' => $name,
                 'plan_name' => $plan->plan_name,
                 'regimen_type' => $plan->regimen_type,
+                'regimen_type_end' => $plan->regimen_type_end,
+                'outcome' => $plan->outcome,
+                'outcome_date' => $plan->outcome_date?->toDateString(),
+                'outcome_reason' => $plan->outcome_reason,
+                'notes' => $plan->notes,
                 'phase' => $plan->phase,
                 'status' => $plan->status,
                 'record_status' => $recordStatus,
@@ -188,6 +193,118 @@ class TreatmentsController extends BaseApiController
             'records' => $filtered,
             'follow_ups' => $followUps->slice(0, 50)->values(),
         ], message: 'Treatment hub data retrieved successfully.');
+    }
+
+    /**
+     * Treatment lifecycle update on the EXISTING plan record (no duplicates).
+     *
+     * Accepts partial updates: current regimen/phase/status, regimen at end,
+     * outcome (+ date/reason), progression notes, and appends new lab tests
+     * as NEW LaboratoryTest entries (never rewriting registration-era labs).
+     * If the plan completes with an outcome, actual_end_date is stamped.
+     */
+    public function updateTreatment(Request $request, TreatmentPlan $plan): JsonResponse
+    {
+        $data = $request->validate([
+            'regimen_type' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'regimen_type_end' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'phase' => ['sometimes', 'nullable', 'string', 'in:intensive,continuation'],
+            'status' => ['sometimes', 'nullable', 'string', 'in:active,completed,discontinued,interrupted'],
+            'outcome' => ['sometimes', 'nullable', 'string', 'in:cured,treatment_completed,died,failed,lost_to_followup'],
+            'outcome_date' => ['sometimes', 'nullable', 'date'],
+            'outcome_reason' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+
+            // Appended as new lab entries for the same patient
+            'new_lab_tests' => ['sometimes', 'array'],
+            'new_lab_tests.*.test_type' => ['required_with:new_lab_tests', 'string', 'max:50'],
+            'new_lab_tests.*.test_name' => ['nullable', 'string', 'max:255'],
+            'new_lab_tests.*.test_date' => ['nullable', 'date'],
+            'new_lab_tests.*.result' => ['nullable', 'string', 'max:255'],
+            'new_lab_tests.*.status' => ['nullable', 'string', 'in:done,not_available,not_yet_done'],
+            'new_lab_tests.*.remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $plan = DB::transaction(function () use ($data, $plan, $request) {
+            $planFields = collect($data)
+                ->only(['regimen_type', 'regimen_type_end', 'phase', 'status', 'outcome', 'outcome_date', 'outcome_reason', 'notes'])
+                ->all();
+
+            // `phase` is NOT NULL — a null phase means "no change" and the last
+            // recorded phase is kept as history (e.g. when discontinuing).
+            if (($planFields['phase'] ?? null) === null) {
+                unset($planFields['phase']);
+            }
+
+            if (!empty($planFields)) {
+                $plan->update($planFields);
+            }
+
+            // Outcome recorded → completion date follows the outcome date
+            if (array_key_exists('outcome', $data) && $data['outcome']) {
+                $plan->update([
+                    'actual_end_date' => $data['outcome_date'] ?? CarbonImmutable::today()->toDateString(),
+                ]);
+            }
+
+            // Append new lab tests as NEW rows (append-only, keeps intake labs intact)
+            foreach ($data['new_lab_tests'] ?? [] as $lab) {
+                $plan->patient->laboratoryTests()->create([
+                    'test_type' => $lab['test_type'],
+                    'test_name' => $lab['test_name'] ?? null,
+                    'test_date' => $lab['test_date'] ?? null,
+                    'result' => $lab['result'] ?? null,
+                    'status' => $lab['status'] ?? 'done',
+                    'remarks' => $lab['remarks'] ?? null,
+                ]);
+            }
+
+            return $plan;
+        });
+
+        $plan->load(['patient.user', 'treatmentPlanMedications']);
+
+        // Return the same record shape the hub uses so the UI can refresh in place
+        $today = CarbonImmutable::today();
+        $planReschedules = FollowUpReschedule::where('treatment_plan_id', $plan->id)->orderByDesc('id')->get();
+        $followUp = $this->followUpInfo($plan, $today, $planReschedules);
+
+        $taken = (int) MedicationLog::whereHas('treatmentPlanMedication', fn ($q) => $q->where('treatment_plan_id', $plan->id))->where('status', 'taken')->count();
+        $late = (int) MedicationLog::whereHas('treatmentPlanMedication', fn ($q) => $q->where('treatment_plan_id', $plan->id))->where('status', 'late')->count();
+        $missed = (int) MedicationLog::whereHas('treatmentPlanMedication', fn ($q) => $q->where('treatment_plan_id', $plan->id))->where('status', 'missed')->count();
+        $totalDoses = $taken + $late + $missed;
+
+        $record = [
+            'id' => $plan->id,
+            'patient_id' => $plan->patient_id,
+            'patient_name' => trim(($plan->patient->first_name ?? '') . ' ' . ($plan->patient->last_name ?? '')) ?: ($plan->patient->user?->name ?? 'Unnamed patient'),
+            'plan_name' => $plan->plan_name,
+            'regimen_type' => $plan->regimen_type,
+            'regimen_type_end' => $plan->regimen_type_end,
+            'outcome' => $plan->outcome,
+            'outcome_date' => $plan->outcome_date?->toDateString(),
+            'outcome_reason' => $plan->outcome_reason,
+            'phase' => $plan->phase,
+            'status' => $plan->status,
+            'record_status' => $plan->status,
+            'start_date' => $plan->start_date?->toDateString(),
+            'expected_end_date' => $plan->expected_end_date?->toDateString(),
+            'actual_end_date' => $plan->actual_end_date?->toDateString(),
+            'next_follow_up' => $followUp['date'] ?? null,
+            'next_follow_up_status' => $followUp['status'] ?? 'none',
+            'adherence' => [
+                'rate' => $totalDoses > 0 ? round((($taken + $late) / $totalDoses) * 100, 1) : null,
+                'taken' => $taken,
+                'late' => $late,
+                'missed' => $missed,
+                'total' => $totalDoses,
+            ],
+            'medications_count' => $plan->treatmentPlanMedications->count(),
+            'notes' => $plan->notes,
+            'new_labs_count' => count($data['new_lab_tests'] ?? []),
+        ];
+
+        return $this->success(data: ['record' => $record], message: 'Treatment updated successfully.');
     }
 
     /**

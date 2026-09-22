@@ -61,6 +61,7 @@ class TreatmentPlan extends Model
             'start_date' => 'date',
             'expected_end_date' => 'date',
             'actual_end_date' => 'date',
+            'outcome_date' => 'date',
         ];
     }
 }

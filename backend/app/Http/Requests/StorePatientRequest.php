@@ -44,6 +44,7 @@ class StorePatientRequest extends FormRequest
             // Everything else stored as-is in draft_data
             'date_of_birth' => ['nullable', 'date'],
             'gender' => ['nullable', 'string', 'in:male,female,other'],
+            'weight_kg' => ['nullable', 'numeric', 'min:1', 'max:500'],
             'status' => ['required', 'in:draft'],
         ];
     }
@@ -64,6 +65,7 @@ class StorePatientRequest extends FormRequest
             'name_extension' => ['nullable', 'string', 'max:20'],
             'date_of_birth' => ['required', 'date', 'before:today'],
             'gender' => ['required', 'string', 'in:male,female,other'],
+            'weight_kg' => ['nullable', 'numeric', 'min:1', 'max:500'],
             'civil_status' => ['nullable', 'string', 'max:20'],
             'nationality' => ['nullable', 'string', 'max:100'],
             'address' => ['required', 'string', 'max:500'],
@@ -139,6 +141,9 @@ class StorePatientRequest extends FormRequest
             'date_of_birth.required' => 'Date of birth is required.',
             'gender.required' => 'Sex is required.',
             'address.required' => 'Permanent address is required.',
+            'weight_kg.numeric' => 'Weight must be a number.',
+            'weight_kg.min' => 'Weight must be at least 1 kg.',
+            'weight_kg.max' => 'Weight cannot exceed 500 kg.',
             'notification.required' => 'Notification and facility information is required.',
             'notification.reason.required' => 'Reason for notification is required.',
             'diagnosis.required' => 'Diagnosis information is required.',

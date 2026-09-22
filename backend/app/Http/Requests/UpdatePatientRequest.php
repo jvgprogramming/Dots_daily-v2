@@ -31,6 +31,7 @@ class UpdatePatientRequest extends FormRequest
             'date_of_birth' => ['nullable', 'date'],
             'gender' => ['nullable', 'string', 'in:male,female,other'],
             'civil_status' => ['nullable', 'string', 'max:20'],
+            'weight_kg' => ['nullable', 'numeric', 'min:1', 'max:500'],
             'address' => ['nullable', 'string', 'max:500'],
             'emergency_contact_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
@@ -48,6 +49,9 @@ class UpdatePatientRequest extends FormRequest
             'email.unique' => 'This email is already registered.',
             'password.min' => 'Password must be at least 8 characters.',
             'gender.in' => 'Gender must be male, female, or other.',
+            'weight_kg.numeric' => 'Weight must be a number.',
+            'weight_kg.min' => 'Weight must be at least 1 kg.',
+            'weight_kg.max' => 'Weight cannot exceed 500 kg.',
             'health_id_number.unique' => 'This health ID number is already registered.',
         ];
     }
