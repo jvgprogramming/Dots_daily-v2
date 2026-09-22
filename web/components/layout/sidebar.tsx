@@ -9,7 +9,6 @@ import {
   Activity,
   ClipboardList,
   BarChart3,
-  Bell,
   Settings,
   LogOut,
   AlertCircle,
@@ -51,14 +50,7 @@ const navGroups = [
   },
   {
     title: "System",
-    items: [
-      {
-        label: "Notifications",
-        href: "/notifications",
-        icon: Bell,
-      },
-      { label: "Settings", href: "/settings", icon: Settings },
-    ],
+    items: [{ label: "Settings", href: "/settings", icon: Settings }],
   },
 ];
 

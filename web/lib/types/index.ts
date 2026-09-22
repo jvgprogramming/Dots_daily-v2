@@ -874,6 +874,77 @@ export interface GlobalSearchData {
   };
 }
 
+// ── Settings ──
+export type SettingsGroup = "facility" | "clinical" | "notifications" | "reports" | "security";
+export type StaffRole = "admin" | "clinician" | "nurse" | "staff";
+export type SettingsModule = "patients" | "treatments" | "monitoring" | "reports" | "settings";
+
+export interface SettingEntry {
+  value: string;
+  updated_at: string | null;
+  updated_by_name: string | null;
+}
+
+export interface SettingsData {
+  settings: Record<SettingsGroup, Record<string, SettingEntry>>;
+  modules: SettingsModule[];
+}
+
+export interface StaffUser {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: StaffRole;
+  permissions: SettingsModule[] | null;
+  is_active: boolean;
+  email_verified_at: string | null;
+  last_login_at: string | null;
+  created_at: string | null;
+}
+
+export interface CreateStaffUserPayload {
+  name: string;
+  email: string;
+  phone?: string;
+  password: string;
+  role: StaffRole;
+  permissions?: SettingsModule[];
+  is_active?: boolean;
+}
+
+export interface UpdateStaffUserPayload {
+  name?: string;
+  phone?: string;
+  password?: string;
+  role?: StaffRole;
+  permissions?: SettingsModule[];
+  is_active?: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  user_name: string;
+  action: string;
+  description: string | null;
+  ip_address: string | null;
+  created_at: string | null;
+}
+
+export interface LoginActivityRow {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  last_login_at: string | null;
+  is_active: boolean;
+}
+
+export interface AuditData {
+  entries: AuditEntry[];
+  login_activity: LoginActivityRow[];
+}
+
 // ── Navigation ──
 export interface NavItem {
   label: string;
