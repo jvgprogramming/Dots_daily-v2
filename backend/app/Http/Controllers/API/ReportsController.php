@@ -199,6 +199,34 @@ class ReportsController extends BaseApiController
             ];
         })->sortByDesc('total_doses')->values();
 
+        // ── Unrecorded days: scheduled treatment days with no log at all ──
+        $unrecordedDays = $this->countUnrecordedDays($from, $to, $dailyRows, $patientId);
+
+        // ── Rescheduled follow-ups in range (from the reschedule audit) ──
+        $reschedulesQuery = \App\Models\FollowUpReschedule::query()
+            ->with(['patient.user', 'treatmentPlan', 'rescheduledBy'])
+            ->orderByDesc('rescheduled_at')
+            ->orderByDesc('id')
+            ->limit(self::RECENT_LIMIT);
+        if ($patientId) {
+            $reschedulesQuery->where('patient_id', $patientId);
+        }
+        $rescheduledFollowUps = $reschedulesQuery->get()->map(fn ($r) => [
+            'id' => $r->id,
+            'patient_id' => $r->patient_id,
+            'patient_name' => $r->patient
+                ? (trim(($r->patient->first_name ?? '') . ' ' . ($r->patient->last_name ?? '')) ?: ($r->patient->user?->name ?? 'Unnamed patient'))
+                : 'Unknown patient',
+            'treatment_plan_id' => $r->treatment_plan_id,
+            'plan_name' => $r->treatmentPlan?->plan_name,
+            'original_date' => $r->original_date->toDateString(),
+            'new_date' => $r->new_date->toDateString(),
+            'rescheduled_at' => $r->rescheduled_at->toDateString(),
+            'reason' => $r->reason,
+            'notes' => $r->notes,
+            'rescheduled_by_name' => $r->rescheduledBy?->name,
+        ])->values();
+
         // ── Log payload shape (shared by recent logs + proof uploads) ──
         $logPayload = fn (MedicationLog $log) => $this->formatLog($log);
 
@@ -232,6 +260,7 @@ class ReportsController extends BaseApiController
                 'taken' => $taken,
                 'missed' => $missed,
                 'late' => $late,
+                'unrecorded_days' => $unrecordedDays,
                 'adherence_rate' => $adherenceRate,
                 // The denominator behind adherence_rate: days a dose was expected,
                 // and how many of them the patient actually took.
@@ -247,6 +276,7 @@ class ReportsController extends BaseApiController
             'patients' => $patientBreakdown,
             'recent_logs' => $recentLogs,
             'proof_uploads' => $proofUploads,
+            'rescheduled_follow_ups' => $rescheduledFollowUps,
             'generated_at' => now()->toIso8601String(),
         ], message: 'Reports data retrieved successfully.');
     }
@@ -278,6 +308,36 @@ class ReportsController extends BaseApiController
             'observed_by_name' => $log->observedBy?->name,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Treatment days within [from, to] (on or before today) with a scheduled
+     * medication time but no medication log row → "unrecorded". Derived live
+     * from active treatment plans; no separate storage.
+     */
+    private function countUnrecordedDays(\Carbon\CarbonImmutable $from, \Carbon\CarbonImmutable $to, $dailyRows, ?int $patientId): int
+    {
+        $plansQuery = \App\Models\TreatmentPlan::query()->where('status', 'active');
+        if ($patientId) {
+            $plansQuery->where('patient_id', $patientId);
+        }
+        $plans = $plansQuery->get(['id', 'patient_id', 'start_date', 'expected_end_date']);
+
+        $unrecorded = 0;
+        $today = \Carbon\CarbonImmutable::today();
+
+        foreach ($plans as $plan) {
+            $start = \Carbon\CarbonImmutable::parse($plan->start_date)->max($from);
+            $end = \Carbon\CarbonImmutable::parse($plan->expected_end_date)->min($to)->min($today);
+
+            for ($d = $start->copy(); $d->lte($end); $d = $d->addDay()) {
+                if (! $dailyRows->has($d->toDateString())) {
+                    $unrecorded++;
+                }
+            }
+        }
+
+        return $unrecorded;
     }
 
     /**
