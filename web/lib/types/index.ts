@@ -610,6 +610,71 @@ export interface DashboardStatsData {
   generated_at: string;
 }
 
+// ── Reports (medication adherence) ──
+export type MedicationLogStatus = "taken" | "late" | "missed" | string;
+
+export interface ReportMedicationLog {
+  id: number;
+  patient_id: number;
+  patient_name: string;
+  medication_name: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  status: MedicationLogStatus;
+  taken_at: string | null;
+  dose_quantity: string | null;
+  proof_photo: string | null;
+  proof_url: string | null;
+  notes: string | null;
+  observed_by_name: string | null;
+  created_at: string | null;
+}
+
+export interface ReportOverview {
+  total_doses: number;
+  taken: number;
+  missed: number;
+  late: number;
+  adherence_rate: number | null;
+  doses_with_proof: number;
+  proof_upload_rate: number | null;
+  patients_with_logs: number;
+  from: string;
+  to: string;
+}
+
+export interface ReportTrendPoint {
+  date: string;
+  label: string;
+  total: number;
+  taken: number;
+  late: number;
+  missed: number;
+  rate: number | null;
+}
+
+export interface ReportPatientRow {
+  id: number;
+  name: string;
+  status: string;
+  total_doses: number;
+  taken: number;
+  missed: number;
+  late: number;
+  adherence_rate: number | null;
+  last_dose_date: string | null;
+  proof_uploads: number;
+}
+
+export interface ReportsData {
+  overview: ReportOverview;
+  trend: ReportTrendPoint[];
+  patients: ReportPatientRow[];
+  recent_logs: ReportMedicationLog[];
+  proof_uploads: ReportMedicationLog[];
+  generated_at: string;
+}
+
 // ── Global Search ──
 export type GlobalSearchResultType =
   | "patient"

@@ -8,6 +8,7 @@ use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -60,6 +61,9 @@ Route::prefix('v1')->group(function () {
 
         // Global search (Admin)
         Route::get('/search', [SearchController::class, 'index'])->middleware('role:admin');
+
+        // Reports (Admin) — medication adherence + proof evidence from live logs
+        Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');
 
         // Medication inventory (Admin)
         Route::prefix('medications-inventory')->middleware('role:admin')->group(function () {
