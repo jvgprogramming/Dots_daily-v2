@@ -41,6 +41,19 @@ class MedicationsProvider extends ChangeNotifier {
   /// UI stops offering a "log this dose" action that could only fail.
   bool _canLogDoses = true;
 
+  /// Adherence over the patient's full scheduled course (plan start → scheduled
+  /// end), computed by the backend on the same basis the admin dashboard uses.
+  /// Null until the first successful sync, or when there is no active plan.
+  double? _adherenceRate;
+  int? _adherenceScheduledDays;
+  int? _adherenceDaysTaken;
+
+  /// When the scheduled course ends, and the next follow-up visit the clinic
+  /// derives from the plan (the same schedule the treatments hub shows).
+  DateTime? _treatmentEndDate;
+  DateTime? _nextFollowUpDate;
+  String _nextFollowUpStatus = 'none';
+
   bool _syncing = false;
   String? _syncError;
 
@@ -65,6 +78,21 @@ class MedicationsProvider extends ChangeNotifier {
 
   /// Whether the backend has a regimen this app can log doses against.
   bool get canLogDoses => _canLogDoses;
+
+  /// Scheduled dose days across the whole course, and how many were taken.
+  int? get adherenceScheduledDays => _adherenceScheduledDays;
+  int? get adherenceDaysTaken => _adherenceDaysTaken;
+
+  /// The scheduled last day of treatment, if the plan has one.
+  DateTime? get treatmentEndDate => _treatmentEndDate;
+
+  /// The next follow-up visit, derived from the plan by the backend — the
+  /// same schedule the admin's treatments hub works from. Null when there is
+  /// nothing scheduled.
+  DateTime? get nextFollowUpDate => _nextFollowUpDate;
+
+  /// `scheduled`, `due` (within 14 days), `overdue`, or `none`.
+  String get nextFollowUpStatus => _nextFollowUpStatus;
 
   /// The patient's single daily reminder (falls back to the default).
   Alarm get reminder {
@@ -253,12 +281,15 @@ class MedicationsProvider extends ChangeNotifier {
   /// How well the patient has kept up with their medicine: the share of the
   /// days a dose was *expected* that one was actually taken.
   ///
-  /// The window runs from the regimen start to today (or the end of the plan),
-  /// so a day the patient never logged counts against them exactly like a day
-  /// recorded as missed — otherwise a patient could score 100% by going quiet.
-  /// The admin web app computes the same figure from the same definition, so
-  /// the two surfaces cannot disagree.
+  /// Prefers the backend's own figure — adherence over the full scheduled
+  /// course (plan start → scheduled end), the same basis the admin dashboard,
+  /// reports and treatments hub report, so the clinic and the app cannot
+  /// disagree. Before the first successful sync, a local estimate is shown
+  /// instead: regimen start → today, where a day never logged counts against
+  /// the patient exactly like a day recorded as missed.
   double get adherenceRate {
+    if (_adherenceRate != null) return _adherenceRate!;
+
     var start = _dayOnly(regimenStart);
 
     if (_planStartDate == null) {
@@ -300,11 +331,30 @@ class MedicationsProvider extends ChangeNotifier {
   /// How many days of treatment the patient has a dose recorded for.
   int get treatmentDays => _doseLogs.where((log) => !log.isMissed).length;
 
+  /// Course progress: how much of the scheduled course has elapsed, matching
+  /// the backend's plan window (start → scheduled end). Falls back to the old
+  /// "days logged of 180" heuristic only when no plan data has been synced.
   int get progressPercentage {
+    final start = _planStartDate;
+    final end = _treatmentEndDate ?? _planEndDate;
+    if (start != null && end != null) {
+      final now = DateTime.now();
+      final totalDays = end.difference(_dayOnly(start)).inDays + 1;
+      if (totalDays > 0) {
+        final elapsed = _dayOnly(now).difference(_dayOnly(start)).inDays + 1;
+        return (elapsed * 100 ~/ totalDays).clamp(0, 100);
+      }
+    }
     const totalTreatmentDays = 180;
     if (treatmentDays == 0) return 0;
     return ((treatmentDays / totalTreatmentDays) * 100).round().clamp(0, 100);
   }
+
+  /// Total scheduled days of the course, when known from the plan.
+  int? get totalScheduledDays =>
+      _adherenceScheduledDays ?? (_planStartDate != null && _planEndDate != null
+          ? _planEndDate!.difference(_dayOnly(_planStartDate!)).inDays + 1
+          : null);
 
   int get activeAlarmCount => _alarms.where((a) => a.enabled).length;
 
@@ -500,6 +550,17 @@ class MedicationsProvider extends ChangeNotifier {
     _planEndDate = plan == null
         ? null
         : DateTime.tryParse('${plan['actual_end_date'] ?? plan['expected_end_date']}');
+
+    // Full-course adherence, straight from the backend's own calculation.
+    final adherence = data['adherence'] as Map<String, dynamic>?;
+    _adherenceRate = (adherence?['rate'] as num?)?.toDouble();
+    _adherenceScheduledDays = adherence?['scheduled_days'] as int?;
+    _adherenceDaysTaken = adherence?['days_taken'] as int?;
+
+    // Treatment end + the clinic's follow-up schedule.
+    _treatmentEndDate = DateTime.tryParse('${data['treatment_end_date'] ?? ''}');
+    _nextFollowUpDate = DateTime.tryParse('${data['next_follow_up'] ?? ''}');
+    _nextFollowUpStatus = data['next_follow_up_status'] as String? ?? 'none';
   }
 
   /// Sends one dose and adopts the server's row on success.

@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Auth\ForgotPasswordController;
 use App\Http\Controllers\API\Auth\MobileAuthController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\DoseVerificationController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\MobileDoseLogController;
 use App\Http\Controllers\API\PatientController;
@@ -66,6 +67,11 @@ Route::prefix('v1')->group(function () {
 
         // Reports (Admin) — medication adherence + proof evidence from live logs
         Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');
+
+        // Dose verification (Admin) — confirm a patient's logged intake by setting
+        // `medication_logs.observed_by`, the flag the calendars read for verified/pending.
+        Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin');
+        Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin');
 
         // Treatments hub (Admin) — records, follow-up schedule, reschedule
         Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin');

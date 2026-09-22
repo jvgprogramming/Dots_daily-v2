@@ -55,7 +55,12 @@ class ReportsController extends BaseApiController
 
         // ── Base query: logs in range ─────────────────────────────────
         $baseQuery = MedicationLog::query()
-            ->whereBetween('scheduled_date', [$fromDate, $toDate])
+            // whereDate, not a raw between: the model's `date` cast writes a full
+            // datetime, which a DATE column truncates on MySQL but quietly keeps on
+            // SQLite — a plain string comparison would silently drop the boundary
+            // days from the report.
+            ->whereDate('scheduled_date', '>=', $fromDate)
+            ->whereDate('scheduled_date', '<=', $toDate)
             ->when($patientId, fn ($q) => $q->where('patient_id', $patientId));
 
         // ── Overview totals ───────────────────────────────────────────
@@ -68,10 +73,13 @@ class ReportsController extends BaseApiController
             ->where('proof_photo', '!=', '')
             ->count();
 
-        // ── Adherence = days taken ÷ days expected ────────────────────
-        // The same definition the patient's app and the monitoring calendar use
-        // (see App\Support\Adherence), so all three surfaces agree. A day with no
-        // log at all is expected-but-not-taken, not simply absent.
+        // ── Adherence = days taken ÷ days expected over the full course ──
+        // The headline figure ignores the admin's from/to filter on purpose: a
+        // course of TB treatment is months long, so it is judged from the plan's
+        // start date to its scheduled end (future days included) — the same basis
+        // the dashboard, the treatments hub and the patient's app use (see
+        // App\Support\Adherence::planWindowSummary). A day with no log at all is
+        // expected-but-not-taken, not simply absent.
         $scopePatientIds = $patientId
             ? [(int) $patientId]
             : (clone $baseQuery)->distinct()->pluck('patient_id')
@@ -81,13 +89,13 @@ class ReportsController extends BaseApiController
                 ->values()
                 ->all();
 
-        $loggedSets = Adherence::loggedDaySets($scopePatientIds, $from, $to);
-        $expectedSets = Adherence::expectedDaySets($scopePatientIds, $from, $to, $loggedSets);
-        $daySummary = Adherence::summarize($expectedSets, $loggedSets);
-        $scheduledDays = $daySummary['expected'];
-        $daysTaken = $daySummary['taken'];
+        $planWindow = Adherence::planWindowSummary($scopePatientIds);
+        $loggedSets = $planWindow['logged'];
+        $expectedSets = $planWindow['expected'];
+        $scheduledDays = $planWindow['summary']['expected'];
+        $daysTaken = $planWindow['summary']['taken'];
 
-        $adherenceRate = $daySummary['rate'];
+        $adherenceRate = $planWindow['summary']['rate'];
         $proofRate = $totalDoses > 0
             ? round(($dosesWithProof / $totalDoses) * 100, 1)
             : null;
@@ -306,6 +314,9 @@ class ReportsController extends BaseApiController
             'proof_url' => $this->proofUrl($log->proof_photo),
             'notes' => $log->notes,
             'observed_by_name' => $log->observedBy?->name,
+            // Confirmed by a DOTS observer — what the admin can toggle from this
+            // same table, and what the calendars read for their green/pending split.
+            'verified' => $log->observed_by !== null,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
     }

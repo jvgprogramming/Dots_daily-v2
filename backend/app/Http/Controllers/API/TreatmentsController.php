@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API;
 use App\Models\FollowUpReschedule;
 use App\Models\MedicationLog;
 use App\Models\TreatmentPlan;
+use App\Support\Adherence;
+use App\Support\FollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,9 +26,6 @@ use Illuminate\Support\Facades\DB;
  */
 class TreatmentsController extends BaseApiController
 {
-    /** Follow-ups due within this window are "due soon". */
-    private const DUE_SOON_DAYS = 14;
-
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -55,7 +54,14 @@ class TreatmentsController extends BaseApiController
 
         $plans = $plansQuery->limit(300)->get();
 
-        // ── Adherence per plan (live from medication logs) ───────────────
+        // ── Adherence per plan over each patient's full course ──────────
+        // Day-based and plan-window based (start → scheduled end, future days
+        // included — see App\Support\Adherence::planWindowSummary), the same
+        // basis every other surface reports, so the hub never disagrees with
+        // the dashboard or the reports.
+        $planPatientIds = $plans->pluck('patient_id')->unique()->map(fn ($id) => (int) $id)->values()->all();
+        $hubWindow = Adherence::planWindowSummary($planPatientIds);
+
         $tpmIds = $plans->flatMap(fn (TreatmentPlan $p) => $p->treatmentPlanMedications->pluck('id'));
 
         $adherence = MedicationLog::query()
@@ -76,7 +82,7 @@ class TreatmentsController extends BaseApiController
             ->groupBy('treatment_plan_id');
 
         // ── Build unified record rows ────────────────────────────────────
-        $records = $plans->map(function (TreatmentPlan $plan) use ($adherence, $reschedulesByPlan, $today) {
+        $records = $plans->map(function (TreatmentPlan $plan) use ($adherence, $reschedulesByPlan, $today, $hubWindow) {
             $patient = $plan->patient;
             $name = $patient
                 ? (trim(($patient->first_name ?? '') . ' ' . ($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'))
@@ -97,7 +103,17 @@ class TreatmentsController extends BaseApiController
                 }
             }
             $totalDoses = $taken + $late + $missed;
-            $adherenceRate = $totalDoses > 0 ? round((($taken + $late) / $totalDoses) * 100, 1) : null;
+
+            // The rate counts days, not rows: expected days across the plan's
+            // window vs the days a dose was actually taken within it.
+            $windowDays = $hubWindow['expected'][$plan->patient_id] ?? [];
+            $windowTaken = 0;
+            foreach (array_keys($windowDays) as $date) {
+                if (Adherence::countsAsTaken($hubWindow['logged'][$plan->patient_id][$date] ?? null)) {
+                    $windowTaken++;
+                }
+            }
+            $adherenceRate = Adherence::rate($windowTaken, count($windowDays));
 
             $lastReschedule = $planReschedules->first();
 
@@ -143,6 +159,9 @@ class TreatmentsController extends BaseApiController
                     'late' => $late,
                     'missed' => $missed,
                     'total' => $totalDoses,
+                    // The numbers behind the rate, on the full-course basis.
+                    'scheduled_days' => count($windowDays),
+                    'days_taken' => $windowTaken,
                 ],
                 'medications_count' => $plan->treatmentPlanMedications->count(),
             ];
@@ -160,10 +179,6 @@ class TreatmentsController extends BaseApiController
             ->values();
 
         // ── Overview summary ─────────────────────────────────────────────
-        $allDoses = (int) $records->sum(fn ($r) => $r['adherence']['total']);
-        $allTaken = (int) $records->sum(fn ($r) => $r['adherence']['taken']);
-        $allLate = (int) $records->sum(fn ($r) => $r['adherence']['late']);
-
         return $this->success(data: [
             'summary' => [
                 'active_plans' => $records->where('status', 'active')->count(),
@@ -171,7 +186,8 @@ class TreatmentsController extends BaseApiController
                 'overdue_follow_ups' => $followUps->filter(fn ($r) => $r['next_follow_up_status'] === 'overdue')->count(),
                 'rescheduled_cases' => $records->where('record_status', 'rescheduled')->count(),
                 'completed_plans' => $records->where('status', 'completed')->count(),
-                'adherence_rate' => $allDoses > 0 ? round((($allTaken + $allLate) / $allDoses) * 100, 1) : null,
+                // Same full-course adherence basis as everywhere else.
+                'adherence_rate' => $hubWindow['summary']['rate'],
                 'total_records' => $records->count(),
             ],
             'records' => $filtered,
@@ -332,68 +348,13 @@ class TreatmentsController extends BaseApiController
     }
 
     /**
-     * Next follow-up for a plan with its state.
+     * Next follow-up for a plan with its state — derived by
+     * {@see FollowUps::nextFor()}, the same logic the patient's app sees.
      *
-     * Anchors are monthly anniversaries of start_date within the treatment
-     * window. A reschedule record replaces its original anchor with the new
-     * date. Status: overdue → a follow-up date already passed this window
-     * without being rescheduled; due → within DUE_SOON_DAYS; else scheduled.
+     * @param  Collection<int, FollowUpReschedule>  $planReschedules
      */
     private function followUpInfo(TreatmentPlan $plan, CarbonImmutable $today, Collection $planReschedules): ?array
     {
-        if ($plan->status !== 'active') {
-            return null;
-        }
-
-        $start = CarbonImmutable::parse($plan->start_date);
-        $end = CarbonImmutable::parse($plan->expected_end_date);
-        if ($start->gt($end)) {
-            return null;
-        }
-
-        // Latest reschedule wins per original anchor date
-        $overrides = $planReschedules
-            ->groupBy(fn (FollowUpReschedule $r) => $r->original_date->toDateString())
-            ->map(fn ($group) => $group->first()->new_date->toDateString());
-
-        $anchors = [];
-        for ($d = $start->copy(); $d->lte($end); $d = $d->addMonth()) {
-            $key = $d->toDateString();
-            $effective = $overrides->has($key) ? CarbonImmutable::parse($overrides->get($key)) : $d;
-            $anchors[] = ['original' => $key, 'date' => $effective];
-        }
-        if (empty($anchors)) {
-            return null;
-        }
-
-        // Next upcoming follow-up
-        $upcoming = collect($anchors)
-            ->filter(fn (array $a) => $a['date']->gte($today))
-            ->sortBy(fn (array $a) => $a['date']->toDateString())
-            ->first();
-
-        // Overdue rule: any follow-up anchor (effective date) strictly before
-        // today, excluding the baseline start anchor itself (treatment start
-        // day is not a follow-up visit).
-        $baseline = $start->toDateString();
-        $hasOverdue = collect($anchors)->contains(
-            fn (array $a) => $a['date']->lt($today)
-                && $a['original'] !== $baseline
-        );
-
-        if ($upcoming === null) {
-            return $hasOverdue
-                ? ['date' => null, 'status' => 'overdue']
-                : null;
-        }
-
-        $status = 'scheduled';
-        if ($hasOverdue) {
-            $status = 'overdue';
-        } elseif ($upcoming['date']->lte($today->addDays(self::DUE_SOON_DAYS))) {
-            $status = 'due';
-        }
-
-        return ['date' => $upcoming['date']->toDateString(), 'status' => $status];
+        return FollowUps::nextFor($plan, $today, $planReschedules->all());
     }
 }

@@ -39,6 +39,7 @@ import {
 } from "recharts";
 import {
   Activity,
+  BadgeCheck,
   CalendarX2,
   Camera,
   Check,
@@ -49,11 +50,16 @@ import {
   Pill,
   RefreshCw,
   Search,
+  Undo2,
   Users,
   X,
   XCircle,
 } from "lucide-react";
-import { getMedicationReports } from "@/lib/services/dashboard";
+import {
+  getMedicationReports,
+  unverifyMedicationLog,
+  verifyMedicationLog,
+} from "@/lib/services/dashboard";
 import { getPatientList } from "@/lib/services/patients";
 import type {
   PatientSelectOption,
@@ -336,6 +342,40 @@ export default function ReportsPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     loadReports();
+  };
+
+  // ── Dose verification (the admin half of the loop) ──
+  // A patient's self-logged dose stays pending until a DOTS observer confirms
+  // it. Proof photos help but are never required — asking for one per dose
+  // would be taxing on the patient.
+  const [verifyingLogId, setVerifyingLogId] = useState<number | null>(null);
+
+  const toggleVerification = async (log: ReportMedicationLog) => {
+    // Update the row in place — a reload would re-fetch the whole report and
+    // flash skeletons over perfectly good data.
+    const apply = (updated: ReportMedicationLog) =>
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              recent_logs: prev.recent_logs.map((l) => (l.id === updated.id ? updated : l)),
+              proof_uploads: prev.proof_uploads.map((l) => (l.id === updated.id ? updated : l)),
+            }
+          : prev
+      );
+
+    setVerifyingLogId(log.id);
+    setError("");
+    try {
+      const res = log.verified
+        ? await unverifyMedicationLog(log.id)
+        : await verifyMedicationLog(log.id);
+      if (res.data) apply(res.data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update verification");
+    } finally {
+      setVerifyingLogId(null);
+    }
   };
 
   const applyPreset = (days: number) => {
@@ -808,6 +848,45 @@ export default function ReportsPage() {
                   cell: (l) => <StatusBadge status={l.status} />,
                 },
                 {
+                  key: "verified",
+                  header: "Verification",
+                  cell: (l) => (
+                    <div className="flex items-center justify-between gap-2">
+                      {l.verified ? (
+                        <Badge variant="success" size="sm">
+                          <BadgeCheck className="h-3 w-3" />
+                          Verified{l.observed_by_name ? ` · ${l.observed_by_name}` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="info" size="sm">Pending</Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={verifyingLogId === l.id}
+                        onClick={() => toggleVerification(l)}
+                        title={
+                          l.verified
+                            ? "Remove verification"
+                            : "Confirm this dose was taken (DOTS observer)"
+                        }
+                      >
+                        {l.verified ? (
+                          <>
+                            <Undo2 className="h-3.5 w-3.5" />
+                            Unverify
+                          </>
+                        ) : (
+                          <>
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                            Verify
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ),
+                },
+                {
                   key: "taken_at",
                   header: "Taken At",
                   cell: (l) => fmtDateTime(l.taken_at),
@@ -1043,6 +1122,34 @@ export default function ReportsPage() {
             )}
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <StatusBadge status={previewLog.status} />
+              {previewLog.verified ? (
+                <Badge variant="success" size="sm">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified{previewLog.observed_by_name ? ` · ${previewLog.observed_by_name}` : ""}
+                </Badge>
+              ) : (
+                <Badge variant="info" size="sm">Pending verification</Badge>
+              )}
+              {previewLog.status === "taken" || previewLog.status === "late" ? (
+                <Button
+                  variant={previewLog.verified ? "outline" : "primary"}
+                  size="sm"
+                  disabled={verifyingLogId === previewLog.id}
+                  onClick={() => toggleVerification(previewLog)}
+                >
+                  {previewLog.verified ? (
+                    <>
+                      <Undo2 className="h-4 w-4" />
+                      Unverify
+                    </>
+                  ) : (
+                    <>
+                      <BadgeCheck className="h-4 w-4" />
+                      Verify dose
+                    </>
+                  )}
+                </Button>
+              ) : null}
               {previewLog.taken_at && (
                 <span className="text-text-secondary">
                   Taken {fmtDateTime(previewLog.taken_at)}
@@ -1053,7 +1160,7 @@ export default function ReportsPage() {
                   · Dose: {previewLog.dose_quantity}
                 </span>
               )}
-              {previewLog.observed_by_name && (
+              {previewLog.observed_by_name && !previewLog.verified && (
                 <span className="text-text-secondary">
                   · Observed by {previewLog.observed_by_name}
                 </span>

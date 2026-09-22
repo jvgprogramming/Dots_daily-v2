@@ -1,5 +1,10 @@
 import { api } from "./api";
-import type { ApiResponse, DashboardStatsData, ReportsData } from "@/lib/types";
+import type {
+  ApiResponse,
+  DashboardStatsData,
+  ReportMedicationLog,
+  ReportsData,
+} from "@/lib/types";
 
 /**
  * Live dashboard statistics aggregated from the database:
@@ -34,4 +39,28 @@ export async function getMedicationReports(
   return api.get<ApiResponse<ReportsData>>("/reports/medication-adherence", {
     params: Object.keys(searchParams).length > 0 ? searchParams : undefined,
   });
+}
+
+/**
+ * Confirm a patient's logged dose as a DOTS observer — sets the log's
+ * `observed_by`, which is what every calendar reads for its verified/pending
+ * split. Proof photos are optional evidence, never a requirement.
+ */
+export async function verifyMedicationLog(
+  logId: number,
+  notes?: string
+): Promise<ApiResponse<ReportMedicationLog>> {
+  return api.post<ApiResponse<ReportMedicationLog>>(
+    `/medication-logs/${logId}/verify`,
+    notes ? { notes } : undefined
+  );
+}
+
+/** Revert a verification — clears the log's `observed_by`. */
+export async function unverifyMedicationLog(
+  logId: number
+): Promise<ApiResponse<ReportMedicationLog>> {
+  return api.post<ApiResponse<ReportMedicationLog>>(
+    `/medication-logs/${logId}/unverify`
+  );
 }
