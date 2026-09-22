@@ -3,7 +3,10 @@ import '../models/user.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final ApiService _api = ApiService();
+  /// Deliberately the shared client, not a fresh one: the token set on login has
+  /// to be the same one [MedicationsProvider] sends dose writes with. A private
+  /// instance here silently strands every dose on the phone.
+  final ApiService _api = ApiService.shared;
 
   AppUser? _user;
   bool _loading = false;

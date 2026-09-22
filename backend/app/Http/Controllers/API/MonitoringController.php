@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Models\DailyMonitoring;
 use App\Models\MedicationLog;
 use App\Models\Patient;
+use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +74,17 @@ class MonitoringController extends BaseApiController
                     'taken' => $dateLogs->where('status', 'taken')->count(),
                     'missed' => $dateLogs->where('status', 'missed')->count(),
                     'late' => $dateLogs->where('status', 'late')->count(),
+                    // Doses taken but not yet confirmed by a DOTS observer. This is
+                    // the same "not verified" state the patient's app shows as a
+                    // pending day, so both calendars can agree.
+                    'pending' => $dateLogs
+                        ->whereIn('status', ['taken', 'late'])
+                        ->whereNull('observed_by')
+                        ->count(),
+                    'verified' => $dateLogs
+                        ->whereIn('status', ['taken', 'late'])
+                        ->whereNotNull('observed_by')
+                        ->count(),
                     'daily_monitoring_recorded' => $monitoringByDate->has($date),
                 ];
             })
@@ -83,13 +95,20 @@ class MonitoringController extends BaseApiController
         $takenCount = $logs->where('status', 'taken')->count();
         $missedCount = $logs->where('status', 'missed')->count();
         $lateCount = $logs->where('status', 'late')->count();
-        // Days that were scheduled but have no log at all (within treatment period, up to today)
-        $notRecordedDays = $plan
-            ? $this->countUnrecordedScheduledDays($plan, $from, $to, $logs)
-            : 0;
-        $adherenceRate = $totalDoses > 0
-            ? round((($takenCount + $lateCount) / $totalDoses) * 100, 1)
-            : null;
+        $pendingCount = $logs
+            ->whereIn('status', ['taken', 'late'])
+            ->whereNull('observed_by')
+            ->count();
+        // ── Adherence = days taken ÷ days expected (plan-aware) ──
+        // A day the patient never logged is expected-but-not-taken, exactly like
+        // a day recorded `missed`, so a patient cannot score well by going quiet.
+        $loggedSets = Adherence::loggedDaySets([$patient->id], $from, $to);
+        $expectedSets = Adherence::expectedDaySets([$patient->id], $from, $to, $loggedSets);
+        $daySummary = Adherence::summarize($expectedSets, $loggedSets);
+        $adherenceRate = $daySummary['rate'];
+        $scheduledDays = $daySummary['expected'];
+        $daysTaken = $daySummary['taken'];
+        $notRecordedDays = max(0, $scheduledDays - count($loggedSets[$patient->id] ?? []));
 
         // ── Treatment progress + risk indicators ──
         $today = CarbonImmutable::today();
@@ -178,10 +197,16 @@ class MonitoringController extends BaseApiController
             ]),
             'summary' => [
                 'adherence_rate' => $adherenceRate,
+                // Days a dose was expected vs actually taken — the numbers behind
+                // the rate, so the admin never has to guess at the denominator.
+                'scheduled_days' => $scheduledDays,
+                'days_taken' => $daysTaken,
                 'total_doses' => $totalDoses,
                 'taken' => $takenCount,
                 'missed' => $missedCount,
                 'late' => $lateCount,
+                'verified' => $takenCount + $lateCount - $pendingCount,
+                'pending' => $pendingCount,
                 'not_recorded_days' => $notRecordedDays,
                 'monitoring_entries_count' => $monitoring->count(),
             ],
@@ -189,37 +214,4 @@ class MonitoringController extends BaseApiController
         ], message: 'Monitoring data retrieved successfully.');
     }
 
-    /**
-     * Days within [from, to] that fall inside the treatment period, are on or
-     * before today, and have no medication log at all → "not recorded".
-     */
-    private function countUnrecordedScheduledDays($plan, CarbonImmutable $from, CarbonImmutable $to, $logs): int
-    {
-        $start = CarbonImmutable::parse($plan->start_date);
-        $end = $plan->actual_end_date
-            ? CarbonImmutable::parse($plan->actual_end_date)
-            : CarbonImmutable::parse($plan->expected_end_date);
-        if ($plan->status === 'active') {
-            $end = $end->min(CarbonImmutable::today());
-        }
-
-        $windowStart = $from->max($start);
-        $windowEnd = $to->min($end);
-        if ($windowStart->gt($windowEnd)) {
-            return 0;
-        }
-
-        $loggedDates = $logs
-            ->map(fn (MedicationLog $log) => $log->scheduled_date->toDateString())
-            ->unique();
-
-        $unrecorded = 0;
-        for ($d = $windowStart->copy(); $d->lte($windowEnd); $d = $d->addDay()) {
-            if (! $loggedDates->contains($d->toDateString())) {
-                $unrecorded++;
-            }
-        }
-
-        return $unrecorded;
-    }
 }

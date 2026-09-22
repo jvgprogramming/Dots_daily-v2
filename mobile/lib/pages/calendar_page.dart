@@ -65,6 +65,10 @@ class _CalendarPageState extends State<CalendarPage> {
         children: [
           _buildHeader(meds),
           const SizedBox(height: 16),
+          if (meds.syncError != null || meds.unsyncedCount > 0) ...[
+            _buildSyncNotice(meds),
+            const SizedBox(height: 16),
+          ],
           _buildSummary(meds),
           const SizedBox(height: 16),
           _buildMonthGrid(meds),
@@ -143,6 +147,44 @@ class _CalendarPageState extends State<CalendarPage> {
             '${meds.takenCountInMonth(_month)} days logged this month',
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Reports an unreachable backend or doses still waiting to sync.
+  ///
+  /// The app keeps working on local data when the server is away, so without
+  /// this the calendar would quietly show doses the web app never received.
+  Widget _buildSyncNotice(MedicationsProvider meds) {
+    final pending = meds.unsyncedCount;
+    final message =
+        meds.syncError ??
+        'Syncing $pending ${pending == 1 ? 'dose' : 'doses'}…';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.amber.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 18, color: AppColors.amber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12.5, height: 1.35),
+            ),
+          ),
+          if (pending > 0)
+            TextButton(
+              onPressed: meds.isSyncing ? null : () => meds.refresh(),
+              child: const Text('Retry'),
+            ),
         ],
       ),
     );
@@ -236,8 +278,11 @@ class _CalendarPageState extends State<CalendarPage> {
     final beforeStart = day.isBefore(meds.regimenStart);
 
     final logs = meds.logsOnDay(day);
-    final taken = logs.isNotEmpty;
-    final unverified = taken && logs.any((log) => !log.verified);
+    // A day the backend recorded as `missed` carries a log row but no dose, so it
+    // has to render as missed rather than as a logged one.
+    final doses = logs.where((log) => !log.isMissed).toList();
+    final taken = doses.isNotEmpty;
+    final unverified = doses.any((log) => !log.verified);
     final missed = !taken && !isFuture && !beforeStart;
 
     Color background = Colors.transparent;
@@ -273,7 +318,7 @@ class _CalendarPageState extends State<CalendarPage> {
         // Future days and days before the regimen started have no history.
         onTap: (isFuture || beforeStart)
             ? null
-            : () => _showDaySheet(day, logs),
+            : () => _showDaySheet(day, doses),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           decoration: BoxDecoration(
@@ -337,7 +382,13 @@ class _CalendarPageState extends State<CalendarPage> {
 
   // ---------- Day detail ----------
 
-  Future<void> _showDaySheet(DateTime day, List<DoseLog> logs) async {
+  /// [doses] are only the doses actually taken — a day the backend marked
+  /// `missed` correctly arrives here empty, so it offers the backfill action.
+  Future<void> _showDaySheet(DateTime day, List<DoseLog> doses) async {
+    // Without an assigned regimen the backend would have nothing to record the
+    // dose against, so the action is withheld rather than failing on tap.
+    final canLog = context.read<MedicationsProvider>().canLogDoses;
+
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -362,16 +413,16 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  logs.isEmpty
+                  doses.isEmpty
                       ? 'No dose logged for this day'
-                      : '${logs.length} dose${logs.length == 1 ? '' : 's'} logged',
+                      : '${doses.length} dose${doses.length == 1 ? '' : 's'} logged',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.mutedForeground,
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (logs.isEmpty) ...[
+                if (doses.isEmpty) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -395,7 +446,9 @@ class _CalendarPageState extends State<CalendarPage> {
                     width: double.infinity,
                     height: 50,
                     child: FilledButton.icon(
-                      onPressed: () => _logMissedDose(sheetContext, day),
+                      onPressed: canLog
+                          ? () => _logMissedDose(sheetContext, day)
+                          : null,
                       icon: const Icon(Icons.add_task_rounded, size: 20),
                       label: const Text(
                         'Log this dose',
@@ -413,8 +466,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Use this if you took your medicine but forgot to log it. '
-                    'It is saved as pending until it is verified.',
+                    canLog
+                        ? 'Use this if you took your medicine but forgot to log '
+                              'it. It is saved as pending until it is verified.'
+                        : 'No active treatment regimen is assigned to your '
+                              'account yet, so a dose cannot be logged.',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.4,
@@ -422,7 +478,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                   ),
                 ] else
-                  ...logs.map(_buildLogTile),
+                  ...doses.map(_buildLogTile),
               ],
             ),
           ),

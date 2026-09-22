@@ -4,6 +4,8 @@ namespace App\Http\Controllers\API;
 
 use App\Models\MedicationLog;
 use App\Models\Patient;
+use App\Models\TreatmentPlan;
+use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -66,9 +68,26 @@ class ReportsController extends BaseApiController
             ->where('proof_photo', '!=', '')
             ->count();
 
-        $adherenceRate = $totalDoses > 0
-            ? round((($taken + $late) / $totalDoses) * 100, 1)
-            : null;
+        // ── Adherence = days taken ÷ days expected ────────────────────
+        // The same definition the patient's app and the monitoring calendar use
+        // (see App\Support\Adherence), so all three surfaces agree. A day with no
+        // log at all is expected-but-not-taken, not simply absent.
+        $scopePatientIds = $patientId
+            ? [(int) $patientId]
+            : (clone $baseQuery)->distinct()->pluck('patient_id')
+                ->merge(TreatmentPlan::query()->distinct()->pluck('patient_id'))
+                ->unique()
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+        $loggedSets = Adherence::loggedDaySets($scopePatientIds, $from, $to);
+        $expectedSets = Adherence::expectedDaySets($scopePatientIds, $from, $to, $loggedSets);
+        $daySummary = Adherence::summarize($expectedSets, $loggedSets);
+        $scheduledDays = $daySummary['expected'];
+        $daysTaken = $daySummary['taken'];
+
+        $adherenceRate = $daySummary['rate'];
         $proofRate = $totalDoses > 0
             ? round(($dosesWithProof / $totalDoses) * 100, 1)
             : null;
@@ -86,23 +105,42 @@ class ReportsController extends BaseApiController
             ->get()
             ->keyBy(fn ($row) => CarbonImmutable::parse($row->scheduled_date)->toDateString());
 
+        // Days expected/taken per calendar date, so a day the patient never logged
+        // plots as 0% instead of dropping out of the trend entirely.
+        $expectedPerDate = [];
+        $takenPerDate = [];
+        foreach ($expectedSets as $pid => $days) {
+            foreach (array_keys($days) as $date) {
+                $expectedPerDate[$date] = ($expectedPerDate[$date] ?? 0) + 1;
+                if (Adherence::countsAsTaken($loggedSets[$pid][$date] ?? null)) {
+                    $takenPerDate[$date] = ($takenPerDate[$date] ?? 0) + 1;
+                }
+            }
+        }
+
         $today = CarbonImmutable::today();
         $trend = [];
         for ($day = $from->startOfDay(); $day->lte($to) && $day->lte($today); $day = $day->addDay()) {
-            $row = $dailyRows->get($day->toDateString());
+            $iso = $day->toDateString();
+            $row = $dailyRows->get($iso);
             $dayTotal = $row ? (int) $row->total : 0;
             $dayTaken = $row ? (int) $row->taken : 0;
             $dayLate = $row ? (int) $row->late : 0;
             $dayMissed = $row ? (int) $row->missed : 0;
+            $dayExpected = $expectedPerDate[$iso] ?? 0;
 
             $trend[] = [
-                'date' => $day->toDateString(),
+                'date' => $iso,
                 'label' => $day->format('M j'),
                 'total' => $dayTotal,
                 'taken' => $dayTaken,
                 'late' => $dayLate,
                 'missed' => $dayMissed,
-                'rate' => $dayTotal > 0 ? round((($dayTaken + $dayLate) / $dayTotal) * 100, 1) : null,
+                // How many patients were expected to take a dose that day.
+                'expected' => $dayExpected,
+                'rate' => $dayExpected > 0
+                    ? Adherence::rate($takenPerDate[$iso] ?? 0, $dayExpected)
+                    : ($dayTotal > 0 ? round((($dayTaken + $dayLate) / $dayTotal) * 100, 1) : null),
             ];
         }
 
@@ -117,35 +155,49 @@ class ReportsController extends BaseApiController
                 MAX(scheduled_date) as last_dose_date")
             ->groupBy('patient_id')
             ->orderByDesc('total_doses')
-            ->get();
+            ->get()
+            ->keyBy('patient_id');
 
         $patients = Patient::query()
             ->with('user')
-            ->whereIn('id', $patientAggregates->pluck('patient_id'))
+            ->whereIn('id', $scopePatientIds)
             ->get()
             ->keyBy('id');
 
-        $patientBreakdown = $patientAggregates->map(function ($row) use ($patients) {
-            $patient = $patients->get($row->patient_id);
-            $total = (int) $row->total_doses;
-            $taken = (int) $row->taken;
-            $late = (int) $row->late;
+        // Built from the scope rather than the aggregates so a patient who was
+        // prescribed a course but never logged a single dose still shows up — at
+        // 0%, which is exactly the patient an admin needs to see.
+        $patientBreakdown = collect($scopePatientIds)->map(function ($id) use ($patientAggregates, $patients, $loggedSets, $expectedSets) {
+            $row = $patientAggregates->get($id);
+            $patient = $patients->get($id);
+            $taken = (int) ($row->taken ?? 0);
+            $late = (int) ($row->late ?? 0);
+
+            $patientExpected = count($expectedSets[$id] ?? []);
+            $patientTakenDays = 0;
+            foreach (array_keys($expectedSets[$id] ?? []) as $date) {
+                if (Adherence::countsAsTaken($loggedSets[$id][$date] ?? null)) {
+                    $patientTakenDays++;
+                }
+            }
 
             return [
-                'id' => (int) $row->patient_id,
+                'id' => (int) $id,
                 'name' => $patient
                     ? (trim(($patient->first_name ?? '') . ' ' . ($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'))
                     : 'Unknown patient',
                 'status' => $patient?->status ?? 'registered',
-                'total_doses' => $total,
+                'total_doses' => (int) ($row->total_doses ?? 0),
                 'taken' => $taken,
-                'missed' => (int) $row->missed,
+                'missed' => (int) ($row->missed ?? 0),
                 'late' => $late,
-                'adherence_rate' => $total > 0 ? round((($taken + $late) / $total) * 100, 1) : null,
-                'last_dose_date' => $row->last_dose_date ? CarbonImmutable::parse($row->last_dose_date)->toDateString() : null,
-                'proof_uploads' => (int) $row->proof_uploads,
+                'scheduled_days' => $patientExpected,
+                'days_taken' => $patientTakenDays,
+                'adherence_rate' => Adherence::rate($patientTakenDays, $patientExpected),
+                'last_dose_date' => $row?->last_dose_date ? CarbonImmutable::parse($row->last_dose_date)->toDateString() : null,
+                'proof_uploads' => (int) ($row->proof_uploads ?? 0),
             ];
-        })->values();
+        })->sortByDesc('total_doses')->values();
 
         // ── Log payload shape (shared by recent logs + proof uploads) ──
         $logPayload = fn (MedicationLog $log) => $this->formatLog($log);
@@ -181,6 +233,10 @@ class ReportsController extends BaseApiController
                 'missed' => $missed,
                 'late' => $late,
                 'adherence_rate' => $adherenceRate,
+                // The denominator behind adherence_rate: days a dose was expected,
+                // and how many of them the patient actually took.
+                'scheduled_days' => $scheduledDays,
+                'days_taken' => $daysTaken,
                 'doses_with_proof' => $dosesWithProof,
                 'proof_upload_rate' => $proofRate,
                 'patients_with_logs' => $patientsWithLogs,

@@ -95,6 +95,10 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
+  /// Guards the once-per-session pull of the signed-in patient's regimen and
+  /// dose history from the backend.
+  bool _pulledFromBackend = false;
+
   static const _tabs = [
     ('dashboard', 'Home', Icons.home_outlined, Icons.home_rounded),
     ('reminder', 'Reminder', Icons.alarm_outlined, Icons.alarm_rounded),
@@ -140,7 +144,17 @@ class _MainShellState extends State<MainShell> {
     final auth = context.watch<AuthProvider>();
 
     if (!auth.isLoggedIn) {
+      // The next sign-in belongs to whoever logs in next, so pull again then.
+      _pulledFromBackend = false;
       return const LoginPage();
+    }
+
+    if (!_pulledFromBackend) {
+      _pulledFromBackend = true;
+      // Deferred a frame so the fetch starts with the providers settled.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<MedicationsProvider>().refresh();
+      });
     }
 
     return Scaffold(

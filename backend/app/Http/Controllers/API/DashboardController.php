@@ -8,6 +8,7 @@ use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Models\SymptomLog;
 use App\Models\TreatmentPlan;
+use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -112,26 +113,31 @@ class DashboardController extends BaseApiController
             ],
         ];
 
+        // Patients the clinic can hold to a schedule: anyone with a plan or a log.
+        // Used by every adherence figure below.
+        $scopePatientIds = MedicationLog::query()->distinct()->pluck('patient_id')
+            ->merge(TreatmentPlan::query()->distinct()->pluck('patient_id'))
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+        $todayDate = CarbonImmutable::parse($today);
+
         // ── Adherence trend (last 6 months) ──────────────────────────
+        // Days taken ÷ days expected — the same definition the patient's app and
+        // the reports use (see App\Support\Adherence).
         $adherenceData = [];
         for ($i = 5; $i >= 0; $i--) {
             $monthStart = $now->subMonths($i)->startOfMonth();
-            $monthEnd = $now->subMonths($i)->endOfMonth();
+            // Never expect doses in the future, so the current month stops today.
+            $monthEnd = $now->subMonths($i)->endOfMonth()->min($todayDate);
 
-            $q = MedicationLog::query()
-                ->whereBetween('scheduled_date', [$monthStart->toDateString(), $monthEnd->toDateString()]);
-
-            // Current month: only count up to today so the rate isn't diluted
-            if ($i === 0) {
-                $q->whereDate('scheduled_date', '<=', $today);
-            }
-
-            $mTotal = (clone $q)->count();
-            $mTaken = (clone $q)->whereIn('status', ['taken', 'late'])->count();
+            $monthLogged = Adherence::loggedDaySets($scopePatientIds, $monthStart, $monthEnd);
+            $monthExpected = Adherence::expectedDaySets($scopePatientIds, $monthStart, $monthEnd, $monthLogged);
 
             $adherenceData[] = [
                 'month' => $monthStart->format('M'),
-                'rate' => $mTotal > 0 ? round(($mTaken / $mTotal) * 100, 1) : 0,
+                'rate' => Adherence::summarize($monthExpected, $monthLogged)['rate'] ?? 0,
             ];
         }
 
@@ -184,10 +190,17 @@ class DashboardController extends BaseApiController
             ]);
 
         // ── Bottom overview metrics ──────────────────────────────────
-        // Overall adherence (all logs to date)
-        $allTotal = MedicationLog::count();
-        $allTaken = MedicationLog::whereIn('status', ['taken', 'late'])->count();
-        $overallAdherence = $allTotal > 0 ? round(($allTaken / $allTotal) * 100, 1) : null;
+        // Overall adherence to date — days taken ÷ days expected, across every
+        // patient in scope, from the earliest plan or log onward.
+        $earliest = collect([
+            TreatmentPlan::min('start_date'),
+            MedicationLog::min('scheduled_date'),
+        ])->filter()->min();
+        $overallFrom = $earliest ? CarbonImmutable::parse($earliest) : $todayDate;
+
+        $overallLogged = Adherence::loggedDaySets($scopePatientIds, $overallFrom, $todayDate);
+        $overallExpected = Adherence::expectedDaySets($scopePatientIds, $overallFrom, $todayDate, $overallLogged);
+        $overallAdherence = Adherence::summarize($overallExpected, $overallLogged)['rate'];
 
         // Treatment success = completed (non-interrupted) / all concluded plans
         $concluded = TreatmentPlan::whereIn('status', ['completed', 'discontinued', 'interrupted'])->count();
@@ -231,16 +244,36 @@ class DashboardController extends BaseApiController
             ->where('severity', 'severe')
             ->count();
 
-        // Low-adherence patients (last 30 days of medication logs)
-        $thirtyDaysAgo = CarbonImmutable::today()->subDays(30)->toDateString();
-        $lowAdherence = MedicationLog::query()
-            ->select('patient_id')
-            ->whereIn('patient_id', $activePlanPatientIds)
-            ->whereDate('scheduled_date', '>=', $thirtyDaysAgo)
-            ->groupBy('patient_id')
-            ->havingRaw("SUM(CASE WHEN status IN ('taken','late') THEN 1 ELSE 0 END) / COUNT(*) < 0.8")
-            ->get()
-            ->count();
+        // Low-adherence patients: fewer than 80% of the days they were expected to
+        // take a dose in the last 30 days. Day-based, so a patient who simply
+        // stopped logging is flagged instead of looking perfectly adherent.
+        $windowEnd = CarbonImmutable::today();
+        $windowStart = $windowEnd->subDays(29);
+        $ids = collect($activePlanPatientIds)->map(fn ($id) => (int) $id)->values()->all();
+        $lowAdherence = 0;
+
+        if ($ids !== []) {
+            $loggedSets = Adherence::loggedDaySets($ids, $windowStart, $windowEnd);
+            $expectedSets = Adherence::expectedDaySets($ids, $windowStart, $windowEnd, $loggedSets);
+
+            foreach ($expectedSets as $patientId => $days) {
+                $expected = count($days);
+                if ($expected === 0) {
+                    continue;
+                }
+
+                $takenDays = 0;
+                foreach (array_keys($days) as $date) {
+                    if (Adherence::countsAsTaken($loggedSets[$patientId][$date] ?? null)) {
+                        $takenDays++;
+                    }
+                }
+
+                if (($takenDays / $expected) < 0.8) {
+                    $lowAdherence++;
+                }
+            }
+        }
 
         return $severeSymptoms + $lowAdherence;
     }

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:mobile/main.dart';
+import 'package:mobile/models/medication.dart';
 import 'package:mobile/pages/calendar_page.dart';
 import 'package:mobile/providers/auth_provider.dart';
 import 'package:mobile/providers/medications_provider.dart';
@@ -183,6 +184,64 @@ void main() {
 
       expect(meds.takenCountInMonth(month), takenBefore + 1);
       expect(meds.missedCountInMonth(month), missedBefore - 1);
+    });
+  });
+
+  group('dose log API payload', () {
+    // These are the exact fields `GET /mobile/dose-logs` returns, so a change
+    // to the backend response shape fails here rather than on a patient's phone.
+    test('parses a logged dose', () {
+      final log = DoseLog.fromApiJson({
+        'id': 46,
+        'scheduled_date': '2026-09-22',
+        'scheduled_time': '07:00',
+        'taken_at': '2026-09-22T23:10:00+08:00',
+        'status': 'late',
+        'dose_quantity': '4 tablets',
+        'notes': 'Logged from alarm',
+        'medication_name': 'Rifampicin',
+        'verified': false,
+      }, medicationName: MedicationsProvider.medicineFullName);
+
+      expect(log.id, '46');
+      expect(log.verified, isFalse);
+      expect(log.notes, 'Logged from alarm');
+      // The app shows the regimen as one "Drug Intake", never a drug name.
+      expect(log.medicationName, MedicationsProvider.medicineFullName);
+      // Same instant as the server sent, whatever timezone the phone is in.
+      expect(log.timestamp.toUtc().toIso8601String(), startsWith('2026-09-22T15:10'));
+    });
+
+    test('a verified dose is marked as such', () {
+      final log = DoseLog.fromApiJson({
+        'id': 45,
+        'scheduled_date': '2026-09-20',
+        'scheduled_time': '07:00',
+        'taken_at': '2026-09-20T07:12:00+08:00',
+        'status': 'taken',
+        'verified': true,
+      });
+
+      expect(log.verified, isTrue);
+      expect(log.medicationName, 'Drug Intake');
+    });
+
+    test('a missed dose falls back to the time it was scheduled', () {
+      // A missed dose has no taken_at, so the calendar must place it on its
+      // scheduled day rather than dropping it.
+      final log = DoseLog.fromApiJson({
+        'id': 12,
+        'scheduled_date': '2026-09-21',
+        'scheduled_time': '07:00',
+        'taken_at': null,
+        'status': 'missed',
+        'notes': 'No dose recorded',
+        'verified': false,
+      });
+
+      expect(MedicationsProvider.dayKey(log.timestamp), '2026-09-21');
+      expect(log.timestamp.hour, 7);
+      expect(log.verified, isFalse);
     });
   });
 

@@ -158,6 +158,14 @@ class DoseLog {
   final String medicationName;
   final DateTime timestamp;
   final bool verified;
+
+  /// The backend's outcome for the day: `taken`, `late`, `missed` or `skipped`.
+  ///
+  /// Null for doses that only exist on this phone (and for the demo history),
+  /// which count as taken. A `missed` entry is the system recording that no dose
+  /// was taken — it must not be shown as a logged dose.
+  final String? status;
+
   final String? photoUrl;
   final String? videoUrl;
   final String? notes;
@@ -168,10 +176,14 @@ class DoseLog {
     required this.medicationName,
     required this.timestamp,
     required this.verified,
+    this.status,
     this.photoUrl,
     this.videoUrl,
     this.notes,
   });
+
+  /// True when the backend recorded that this day's dose was not taken.
+  bool get isMissed => status == 'missed';
 
   String get formattedDate {
     final months = [
@@ -192,12 +204,49 @@ class DoseLog {
     return '${months[timestamp.month - 1]} ${timestamp.day}, $hour:$minute $amPm';
   }
 
+  /// Builds a log from the backend's `/mobile/dose-logs` payload.
+  ///
+  /// [medicationName] overrides the server's medicine name on purpose: the app
+  /// presents the regimen as a single "Drug Intake" and never a drug name.
+  factory DoseLog.fromApiJson(
+    Map<String, dynamic> json, {
+    String? medicationName,
+  }) {
+    final takenAt = json['taken_at'] as String?;
+    final date = json['scheduled_date'] as String? ?? '';
+    final time = json['scheduled_time'] as String? ?? '';
+
+    // A missed dose has no `taken_at`, so fall back to when it was scheduled.
+    DateTime timestamp;
+    if (takenAt != null && takenAt.isNotEmpty) {
+      timestamp = DateTime.parse(takenAt).toLocal();
+    } else if (date.isNotEmpty) {
+      timestamp = DateTime.parse(
+        '$date ${time.length == 5 ? '$time:00' : time}',
+      );
+    } else {
+      timestamp = DateTime.now();
+    }
+
+    return DoseLog(
+      id: '${json['id']}',
+      medicationId: '${json['treatment_plan_medication_id'] ?? ''}',
+      medicationName:
+          medicationName ?? (json['medication_name'] as String?) ?? 'Drug Intake',
+      timestamp: timestamp,
+      verified: json['verified'] as bool? ?? false,
+      status: json['status'] as String?,
+      notes: json['notes'] as String?,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'medicationId': medicationId,
         'medicationName': medicationName,
         'timestamp': timestamp.toIso8601String(),
         'verified': verified,
+        'status': status,
         'photoUrl': photoUrl,
         'videoUrl': videoUrl,
         'notes': notes,
@@ -209,6 +258,7 @@ class DoseLog {
         medicationName: json['medicationName'] as String,
         timestamp: DateTime.parse(json['timestamp'] as String),
         verified: json['verified'] as bool? ?? false,
+        status: json['status'] as String?,
         photoUrl: json['photoUrl'] as String?,
         videoUrl: json['videoUrl'] as String?,
         notes: json['notes'] as String?,

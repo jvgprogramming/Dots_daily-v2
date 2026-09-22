@@ -14,6 +14,17 @@ class ApiException implements Exception {
 }
 
 class ApiService {
+  /// Private so there can only ever be one client: the auth token lives on the
+  /// instance, so a second instance would authenticate nothing and quietly drop
+  /// every dose write. Use [shared].
+  ApiService._();
+
+  /// The instance every provider talks to.
+  ///
+  /// Auth, dose logs and the regimen all share one token, so they must share one
+  /// client — otherwise a dose logged from the app would be sent unauthenticated.
+  static final ApiService shared = ApiService._();
+
   /// Default backend URL based on the current platform. Only used when
   /// `API_BASE_URL` is not supplied via `--dart-define`.
   /// - Android emulator uses 10.0.2.2 (special alias for host machine's localhost).

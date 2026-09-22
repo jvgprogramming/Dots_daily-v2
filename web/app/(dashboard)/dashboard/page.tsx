@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import {
   Card,
   CardContent,
@@ -78,8 +79,10 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadStats = async () => {
-    setLoading(true);
+  // `quiet` is what the background poll uses: it updates the numbers in place
+  // rather than flashing the loading skeleton every 30 seconds.
+  const loadStats = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError("");
     try {
       const res = await getDashboardStats();
@@ -87,13 +90,16 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard data");
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadStats();
   }, []);
+
+  // A dose logged on a patient's phone shows up here without anyone refreshing.
+  useAutoRefresh(() => loadStats(true));
 
   const handleRefresh = async () => {
     setRefreshing(true);

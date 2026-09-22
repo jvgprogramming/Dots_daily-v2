@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import {
   Card,
   CardContent,
@@ -170,6 +171,9 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReports();
   }, [loadReports]);
+
+  // Dose confirmations arriving from patients show up without a manual refresh.
+  useAutoRefresh(loadReports);
 
   useEffect(() => {
     getPatientList()

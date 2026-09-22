@@ -465,7 +465,7 @@ export interface DailyMonitoring {
 }
 
 // ── Monitoring ──
-export type AdherenceStatus = "taken" | "missed" | "late" | "not_recorded";
+export type AdherenceStatus = "taken" | "pending" | "missed" | "late" | "not_recorded";
 
 export interface AdherenceDay {
   date: string;
@@ -473,6 +473,10 @@ export interface AdherenceDay {
   taken: number;
   missed: number;
   late: number;
+  /** Doses taken but not yet confirmed by a DOTS observer — "not verified". */
+  pending: number;
+  /** Doses taken and confirmed by a DOTS observer. */
+  verified: number;
   daily_monitoring_recorded: boolean;
 }
 
@@ -549,10 +553,16 @@ export interface PatientMonitoringData {
   monitoring_entries: MonitoringEntry[];
   summary: {
     adherence_rate: number | null;
+    /** Days a dose was expected — the denominator behind adherence_rate. */
+    scheduled_days: number;
+    /** Days a dose was actually taken. */
+    days_taken: number;
     total_doses: number;
     taken: number;
     missed: number;
     late: number;
+    verified: number;
+    pending: number;
     not_recorded_days: number;
     monitoring_entries_count: number;
   };
@@ -636,6 +646,10 @@ export interface ReportOverview {
   missed: number;
   late: number;
   adherence_rate: number | null;
+  /** Days a dose was expected — the denominator behind adherence_rate. */
+  scheduled_days: number;
+  /** Days a dose was actually taken. */
+  days_taken: number;
   doses_with_proof: number;
   proof_upload_rate: number | null;
   patients_with_logs: number;
@@ -650,6 +664,8 @@ export interface ReportTrendPoint {
   taken: number;
   late: number;
   missed: number;
+  /** Patients expected to take a dose that day. */
+  expected: number;
   rate: number | null;
 }
 
@@ -661,6 +677,8 @@ export interface ReportPatientRow {
   taken: number;
   missed: number;
   late: number;
+  scheduled_days: number;
+  days_taken: number;
   adherence_rate: number | null;
   last_dose_date: string | null;
   proof_uploads: number;

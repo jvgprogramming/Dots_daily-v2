@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -22,6 +23,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  RefreshCw,
   Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -130,7 +132,7 @@ export default function MonitoringPage() {
   const [anchorDate, setAnchorDate] = useState(todayISO);
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "taken" | "missed" | "late" | "not_recorded">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "taken" | "pending" | "missed" | "late" | "not_recorded">("all");
 
   // ── Load patients (registered only — drafts have no treatment yet) ──
   const loadPatients = useCallback(async (search: string) => {
@@ -167,9 +169,11 @@ export default function MonitoringPage() {
   }, [anchorDate, view]);
 
   // ── Fetch monitoring data ──
-  const fetchMonitoring = useCallback(async () => {
+  // `quiet` is what the background poll uses, so new doses land in the calendar
+  // without the grid dropping back to a loading state every 30 seconds.
+  const fetchMonitoring = useCallback(async (quiet = false) => {
     if (!selectedPatientId) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     setError("");
     try {
       const res = await getPatientMonitoring({
@@ -181,13 +185,16 @@ export default function MonitoringPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load monitoring data");
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [selectedPatientId, range.start, range.end]);
 
   useEffect(() => {
     fetchMonitoring();
   }, [fetchMonitoring]);
+
+  // Keeps the calendar current while it sits open on a clinic screen.
+  useAutoRefresh(() => fetchMonitoring(true));
 
   // ── Lookup maps for the calendar ──
   const adherenceByDate = useMemo(
@@ -235,6 +242,15 @@ export default function MonitoringPage() {
             Track treatment adherence, progress, and risk for each patient.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchMonitoring()}
+          disabled={loading || !selectedPatientId}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
@@ -266,7 +282,7 @@ export default function MonitoringPage() {
             </button>
           ))}
           <span className="text-xs text-text-tertiary font-medium ml-2">Adherence:</span>
-          {(["all", "taken", "missed", "late", "not_recorded"] as const).map((s) => (
+          {(["all", "taken", "pending", "missed", "late", "not_recorded"] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -361,7 +377,9 @@ export default function MonitoringPage() {
               icon={TrendingUp}
               label="Adherence Rate"
               value={summary?.adherence_rate != null ? `${summary.adherence_rate}%` : "—"}
-              sub={`${summary?.taken ?? 0} taken + ${summary?.late ?? 0} late of ${summary?.total_doses ?? 0} doses`}
+              sub={`${summary?.days_taken ?? 0} of ${summary?.scheduled_days ?? 0} expected days taken${
+                (summary?.pending ?? 0) > 0 ? ` · ${summary?.pending ?? 0} awaiting verification` : ""
+              }`}
               tone={summary?.adherence_rate != null && summary.adherence_rate < 80 ? "danger" : summary?.adherence_rate != null && summary.adherence_rate < 90 ? "warning" : "success"}
             />
             <SummaryCard

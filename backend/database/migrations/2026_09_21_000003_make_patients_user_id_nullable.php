@@ -14,11 +14,21 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // SQLite (the test suite's in-memory database) has no MODIFY COLUMN and
+        // no need for this: every patient it creates is created with a user.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE `patients` MODIFY `user_id` BIGINT UNSIGNED NULL');
     }
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement('ALTER TABLE `patients` MODIFY `user_id` BIGINT UNSIGNED NOT NULL');
     }
 };

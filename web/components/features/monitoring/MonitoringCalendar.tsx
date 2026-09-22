@@ -21,11 +21,14 @@ import type {
 } from "@/lib/types";
 
 // ─── Adherence status derivation & colors ───
-type DayStatus = "taken" | "missed" | "late" | "not_recorded" | "none";
+type DayStatus = "taken" | "pending" | "late" | "missed" | "not_recorded" | "none";
 
 function dayStatus(day: AdherenceDay | undefined): DayStatus {
   if (!day) return "none";
   if (day.missed > 0) return "missed";
+  // Taken but not yet confirmed by a DOTS observer — the same state the
+  // patient's app shows as a "not verified" day.
+  if (day.pending > 0) return "pending";
   if (day.late > 0) return "late";
   if (day.taken > 0) return "taken";
   return "not_recorded";
@@ -33,6 +36,7 @@ function dayStatus(day: AdherenceDay | undefined): DayStatus {
 
 const STATUS_STYLES: Record<DayStatus, string> = {
   taken: "bg-success-bg text-success-text border-success/30 hover:border-success",
+  pending: "bg-info-bg text-info-text border-info/30 hover:border-info",
   late: "bg-warning-bg text-warning-text border-warning/30 hover:border-warning",
   missed: "bg-danger-bg text-danger-text border-danger/30 hover:border-danger",
   not_recorded: "bg-bg-subtle text-text-tertiary border-border-light hover:border-border-strong",
@@ -41,6 +45,7 @@ const STATUS_STYLES: Record<DayStatus, string> = {
 
 const STATUS_LABELS: Record<DayStatus, string> = {
   taken: "Taken",
+  pending: "Pending verification",
   late: "Late",
   missed: "Missed",
   not_recorded: "Not recorded",
@@ -174,7 +179,7 @@ export function MonitoringCalendar({
       {/* ── Legend ── */}
       <div className="flex flex-wrap items-center gap-4 border-t border-border-light px-4 py-3">
         <span className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Legend:</span>
-        {(["taken", "late", "missed", "not_recorded"] as const).map((s) => (
+        {(["taken", "pending", "late", "missed", "not_recorded"] as const).map((s) => (
           <span key={s} className="flex items-center gap-1.5 text-xs text-text-secondary">
             <span className={`h-3 w-3 rounded-[4px] border ${STATUS_STYLES[s]}`} />
             {STATUS_LABELS[s]}
@@ -223,7 +228,7 @@ export function DayDetailPanel({
               year: "numeric",
             })}
           </p>
-          <Badge variant={status === "taken" ? "success" : status === "missed" ? "danger" : status === "late" ? "warning" : "default"} size="sm">
+          <Badge variant={status === "taken" ? "success" : status === "missed" ? "danger" : status === "pending" ? "info" : status === "late" ? "warning" : "default"} size="sm">
             {STATUS_LABELS[status]}
           </Badge>
         </div>
@@ -260,6 +265,12 @@ export function DayDetailPanel({
                 <span className="text-text-tertiary">Missed</span>
                 <span className="text-danger-text">{adherenceDay.missed}</span>
               </div>
+              {adherenceDay.pending > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-text-tertiary">Awaiting verification</span>
+                  <span className="text-info-text">{adherenceDay.pending}</span>
+                </div>
+              )}
               {plan && plan.medications.length > 0 && (
                 <div className="pt-2 mt-2 border-t border-border-light/60">
                   <p className="text-[11px] text-text-tertiary mb-1">Regimen</p>

@@ -41,7 +41,9 @@ changing LAN IP. If you prefer the LAN IP (`ipconfig` → Wi-Fi IPv4, was
 `192.168.254.123`), pass `--dart-define=API_BASE_URL=http://<lan-ip>:8000/api/v1`
 and allow inbound TCP 8000 through the firewall.
 
-Seeded login: `admin@dotsdaily.com` / `password`.
+Seeded logins: `patient@dotsdaily.com` / `password` (use this one — the admin
+account has no patient profile, so it cannot log doses) and
+`admin@dotsdaily.com` / `password` (web admin).
 
 **Branding (do not change):** every colour comes from `mobile/lib/theme/app_theme.dart`
 → `AppColors` ("Healthcare Green"): `primary #16A34A`, `primaryDark #15803D`,
@@ -50,14 +52,18 @@ Seeded login: `admin@dotsdaily.com` / `password`.
 no hardcoded hex.
 
 **State management:** `package:provider`, two providers in `main.dart`:
-`AuthProvider` (real API) and `MedicationsProvider` (mock-backed; owns the single
-regimen, the reminder, and dose logs).
+`AuthProvider` (real API) and `MedicationsProvider` (owns the single regimen, the
+reminder and dose logs; hydrated from the backend after login — see §1.6).
 
 **Bottom nav is now 5 tabs:** Home · **Reminder** · **Calendar** · Chat · Symptoms.
 (There is no "Alarms" or "Meds" tab any more.)
 
-**Everything except auth is still mock data** generated in
-`MedicationsProvider._initMockData()`. Nothing is persisted — see §4.
+**Dose logs are now live, not mock.** After login the app pulls the patient's
+regimen and dose history from the backend and pushes every confirmed dose back to
+`medication_logs`, so a dose logged on the phone appears in the admin web app
+(see §1.6). The mock history in `MedicationsProvider._initMockData()` still seeds
+the provider, but is replaced once that first sync succeeds, and remains the
+offline fallback if the server cannot be reached.
 
 ---
 
@@ -152,6 +158,42 @@ multi-alarm CRUD screen was wrong.
     of overflowing.
   - Calendar day tiles use `FittedBox(scaleDown)` so they survive large text.
 
+### 1.6 Dose logs now write to the backend
+
+The app used to keep every dose in memory. It now completes the loop:
+alarm → "I took my dose" → a `medication_logs` row → the very same row the admin
+web app reads for its adherence reports and monitoring calendar.
+
+- **Backend (new):** `MobileDoseLogController` plus three routes inside the
+  `mobile` + `auth:sanctum` group in `routes/api.php`:
+  - `GET /mobile/regimen` — the active plan, its prescribed medicines, the
+    `primary_treatment_plan_medication_id` a daily intake is logged against, and
+    `can_log_doses` (false when the patient has no plan yet).
+  - `GET /mobile/dose-logs` — the patient's history, newest day first.
+  - `POST /mobile/dose-logs` — one combined daily intake, idempotent per
+    patient + medicine + day.
+- **Idempotency** is backed by a new unique index
+  (`medication_logs_patient_medicine_day_unique`, migration `2026_09_22_000001`),
+  so a double tap or a retried offline sync updates that day's row instead of
+  adding a phantom dose to the adherence counts.
+- **"Verified" still has no column of its own.** A row counts as verified once a
+  DOTS observer confirmed it (`observed_by`), which is exactly the calendar's
+  green/amber split — so a patient's own confirmation stays pending until an
+  admin verifies it, matching the pre-existing behaviour where both the alarm and
+  the backfill flow already logged `verified: false`.
+- **`late` vs `taken` is decided server-side** — more than 2 hours past the
+  scheduled time is `late`.
+- **Mobile:** `ApiService.shared` is now one shared instance, so
+  `MedicationsProvider` and `AuthProvider` use the same token.
+  `MedicationsProvider.refresh()` (called once after login from `main.dart`)
+  hydrates the regimen and history. `addDoseLog`/`logDoseOn` still update the UI
+  synchronously, then persist; a failed write is queued and the calendar shows a
+  Retry banner rather than failing silently.
+- **Demo patient:** `patient@dotsdaily.com` / `password`, seeded by
+  `DemoPatientSeeder` with an active Category 1 plan (2HRZE — four drugs at
+  07:00) and 45 days of history ending yesterday, deliberately leaving today open
+  so the dose you log is the one you watch appear on the web.
+
 ---
 
 ## 2. Verification state
@@ -233,14 +275,17 @@ There is **no committed layout test**. To re-create the scan used for §1.5:
 
 Ordered by how much they'd annoy a real user:
 
-1. **Nothing is persisted.** Dose logs, the reminder, and the backfilled doses
-   live in memory only — they vanish on app restart. This is the biggest gap:
-   a patient logging doses would lose them. Persist locally
-   (`shared_preferences`/`sqflite`) or wire the backend.
-2. **Backend calendar endpoint.** `docs/HANDOFF-CALENDAR-MODULE.md` §5 specifies
-   `GET /mobile/calendar?month=YYYY-MM` returning the patient's `medication_logs`
-   (resolve `$request->user()->patient`), plus `ApiService.fetchCalendarMonth()`
-   and hydration in the provider with mock data as offline fallback.
+1. **The reminder is still device-local.** Dose logs now persist (§1.6), but the
+   reminder time and its on/off state live in memory only, so they reset on
+   restart and never reach `treatment_plan_medication.preferred_time`. A dose
+   therefore records whatever time the phone's reminder happens to show.
+2. **Offline doses are queued but in memory only.** A dose logged while the
+   server is unreachable is kept on the phone and retried on the next `refresh()`,
+   with the calendar showing a Retry banner — but the queue is not persisted, so
+   it is lost if the app is killed before syncing.
+3. **Proof photos are not uploaded.** `medication_logs.proof_photo` exists and the
+   reports page renders proof uploads, but the app never captures or sends one,
+   and there is no upload endpoint.
 3. **Reminder permissions UX.** Exact-alarm and notification permissions are
    requested but never explained; if denied, the alarm silently falls back to
    inexact scheduling.
@@ -266,7 +311,7 @@ flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
 ```
 
 Manual pass:
-1. Log in (`admin@dotsdaily.com` / `password`).
+1. Log in as the patient (`patient@dotsdaily.com` / `password`) — not the admin.
 2. Confirm 5 tabs: Home · Reminder · Calendar · Chat · Symptoms.
 3. **Reminder** → change the time → Save → no crash, confirmation snackbar.
 4. **Reminder → "See how your alarm works"** → "Send a real alarm in 10 seconds"

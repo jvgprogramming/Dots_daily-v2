@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Auth\MobileAuthController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\MedicationInventoryController;
+use App\Http\Controllers\API\MobileDoseLogController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
@@ -104,6 +105,13 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/profile', [MobileAuthController::class, 'profile']);
             Route::post('/logout', [MobileAuthController::class, 'logout']);
+
+            // Dose logging: the patient's regimen + their daily intake history.
+            // Writes land in `medication_logs`, which the admin web app already
+            // reads for its adherence reports and monitoring calendar.
+            Route::get('/regimen', [MobileDoseLogController::class, 'regimen']);
+            Route::get('/dose-logs', [MobileDoseLogController::class, 'index']);
+            Route::post('/dose-logs', [MobileDoseLogController::class, 'store']);
         });
 
     });
