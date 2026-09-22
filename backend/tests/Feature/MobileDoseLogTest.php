@@ -33,7 +33,43 @@ class MobileDoseLogTest extends TestCase
             ->assertJsonPath('data.primary_treatment_plan_medication_id', $pivot->id)
             ->assertJsonPath('data.reminder_time', '07:00')
             ->assertJsonPath('data.medications.0.medication_id', $pivot->medication_id)
-            ->assertJsonPath('data.treatment_plan.status', 'active');
+            ->assertJsonPath('data.treatment_plan.status', 'active')
+            // The full-course figure the admin dashboard reports too.
+            ->assertJsonPath('data.adherence.rate', fn ($rate) => $rate !== null)
+            ->assertJsonPath('data.adherence.scheduled_days', fn ($days) => $days > 0)
+            // Monthly anchors from start_date → expected_end_date, same as the hub.
+            ->assertJsonPath('data.next_follow_up', fn ($date) => $date !== null)
+            ->assertJsonPath(
+                'data.next_follow_up_status',
+                // With a monthly anchor the next visit is usually inside the
+                // 14-day "due soon" window, but which side it lands on can
+                // depend on month lengths — any derived status is valid here.
+                fn ($status) => in_array($status, ['scheduled', 'due', 'overdue'], true),
+            );
+    }
+
+    public function test_the_regimen_reports_a_rescheduled_follow_up(): void
+    {
+        [$user, , $plan] = $this->patientWithRegimen();
+
+        // The plan's month-1 anchor is moved three weeks out — the app must
+        // show the rescheduled date, exactly like the admin treatments hub.
+        \App\Models\FollowUpReschedule::create([
+            'treatment_plan_id' => $plan->id,
+            'patient_id' => $plan->patient_id,
+            'original_date' => \Carbon\Carbon::parse($plan->start_date)->addMonth()->toDateString(),
+            'new_date' => now()->addDays(21)->toDateString(),
+            'rescheduled_at' => now()->toDateString(),
+            'reason' => 'Clinic closed',
+            'rescheduled_by' => User::factory()->create(['role' => 'admin'])->id,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/mobile/regimen')
+            ->assertOk()
+            ->assertJsonPath('data.next_follow_up', now()->addDays(21)->toDateString())
+            ->assertJsonPath('data.next_follow_up_status', 'scheduled');
     }
 
     public function test_logging_a_dose_writes_a_medication_log(): void

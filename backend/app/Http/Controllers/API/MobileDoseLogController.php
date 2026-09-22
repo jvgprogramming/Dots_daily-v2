@@ -6,6 +6,8 @@ use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
+use App\Support\Adherence;
+use App\Support\FollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +55,12 @@ class MobileDoseLogController extends BaseApiController
         $medications = $this->regimenMedications($plan);
         $primary = $medications->first();
 
+        // Full-course adherence (plan start → scheduled end, future days
+        // included) and the next follow-up — both identical in definition to
+        // the admin dashboard, reports and treatments hub.
+        $adherence = $plan ? Adherence::planWindowSummary([$patient->id])['summary'] : null;
+        $followUp = $plan ? FollowUps::nextFor($plan) : null;
+
         return $this->success(
             data: [
                 'patient' => [
@@ -83,6 +91,20 @@ class MobileDoseLogController extends BaseApiController
                 'primary_treatment_plan_medication_id' => $primary?->id,
                 'reminder_time' => $this->hhmm($primary?->preferred_time),
                 'can_log_doses' => $primary !== null,
+                // The same figures the admin side reports, so the patient and
+                // the clinic never disagree: adherence over the full scheduled
+                // course (start → scheduled end), and the derived follow-up
+                // schedule the treatments hub shows.
+                'adherence' => $plan ? [
+                    'scheduled_days' => $adherence['expected'],
+                    'days_taken' => $adherence['taken'],
+                    'rate' => $adherence['rate'],
+                ] : null,
+                'treatment_end_date' => $plan
+                    ? ($plan->actual_end_date?->toDateString() ?? $plan->expected_end_date?->toDateString())
+                    : null,
+                'next_follow_up' => $followUp['date'] ?? null,
+                'next_follow_up_status' => $followUp['status'] ?? 'none',
             ],
             message: $primary
                 ? 'Regimen retrieved successfully.'
@@ -116,10 +138,10 @@ class MobileDoseLogController extends BaseApiController
             ->orderByDesc('id');
 
         if (isset($data['from'])) {
-            $query->where('scheduled_date', '>=', $data['from']);
+            $query->whereDate('scheduled_date', '>=', $data['from']);
         }
         if (isset($data['to'])) {
-            $query->where('scheduled_date', '<=', $data['to']);
+            $query->whereDate('scheduled_date', '<=', $data['to']);
         }
 
         $logs = $query->limit(self::MAX_HISTORY)->get();

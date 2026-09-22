@@ -217,11 +217,13 @@ void main() {
 const _adminEmail = 'admin@dotsdaily.com';
 const _adminPassword = 'password';
 
-/// The adherence rate the admin monitoring calendar shows for [patientId].
+/// The headline adherence rate the admin reports page shows for [patientId].
 ///
-/// Calls exactly what the web page calls — an admin login, then the monitoring
+/// Calls exactly what the web page calls — an admin login, then the reports
 /// endpoint — on its own HTTP client, so it can hold the admin token without
-/// clobbering the patient session on [ApiService.shared].
+/// clobbering the patient session on [ApiService.shared]. The reports overview
+/// is the surface judged on the same full-course basis as the app (plan start
+/// → scheduled end); the monitoring calendar stays a range cut.
 Future<double?> _adminAdherenceRate(int patientId) async {
   const headers = {
     'Accept': 'application/json',
@@ -237,24 +239,17 @@ Future<double?> _adminAdherenceRate(int patientId) async {
   final adminToken =
       (jsonDecode(login.body)['data'] as Map<String, dynamic>)['token'] as String;
 
-  final today = DateTime.now();
-  final from = today.subtract(const Duration(days: 400));
   final response = await http.get(
-    Uri.parse('$base/patients/monitoring?patient_id=$patientId'
-        '&from=${_isoDate(from)}&to=${_isoDate(today)}'),
+    Uri.parse('$base/reports/medication-adherence?patient_id=$patientId'),
     headers: {...headers, 'Authorization': 'Bearer $adminToken'},
   );
 
-  final summary = ((jsonDecode(response.body) as Map<String, dynamic>)['data']
-      as Map<String, dynamic>)['summary'] as Map<String, dynamic>;
-  final rate = summary['adherence_rate'];
+  final overview = ((jsonDecode(response.body) as Map<String, dynamic>)['data']
+      as Map<String, dynamic>)['overview'] as Map<String, dynamic>;
+  final rate = overview['adherence_rate'];
 
   return rate == null ? null : (rate as num).toDouble();
 }
-
-String _isoDate(DateTime day) => '${day.year.toString().padLeft(4, '0')}-'
-    '${day.month.toString().padLeft(2, '0')}-'
-    '${day.day.toString().padLeft(2, '0')}';
 
 /// The raw dose rows the app hydrates from, newest first.
 Future<List<Map<String, dynamic>>> _doseRows() async {

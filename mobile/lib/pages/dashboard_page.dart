@@ -6,8 +6,16 @@ import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'alarm_ringing_page.dart';
 
-class DashboardPage extends StatelessWidget {
-  final ValueChanged<String>? onViewChange;
+/// `February 16, 2026`-style date for the follow-up card.
+String _formatFollowUpDate(DateTime date) {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December',
+  ];
+  return '${months[date.month - 1]} ${date.day}, ${date.year}';
+}
+
+class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onViewChange;
   final ValueChanged<Map<String, String>>? onTriggerAlarm;
 
   const DashboardPage({super.key, this.onViewChange, this.onTriggerAlarm});
@@ -254,7 +262,9 @@ class DashboardPage extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${meds.treatmentDays} of 180 days logged',
+                                  meds.totalScheduledDays != null
+                                      ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
+                                      : '${meds.treatmentDays} days taken',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.8),
                                     fontSize: 11,
@@ -298,19 +308,20 @@ class DashboardPage extends StatelessWidget {
                                         fontSize: 36,
                                         fontWeight: FontWeight.bold,
                                       ),
+                                    ),                                Text(
+                                  meds.totalScheduledDays != null
+                                      ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
+                                      : '${meds.treatmentDays} days taken',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(
+                                      alpha: 0.8,
                                     ),
-                                    Text(
-                                      '${meds.treatmentDays} of 180 days logged',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.8,
-                                        ),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
+                                    fontSize: 11,
+                                  ),
                                 ),
-                              ),
+                              ],
+                            ),
+                          ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -426,16 +437,22 @@ class DashboardPage extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'February 16, 2026',
-                        style: TextStyle(
+                      Text(
+                        meds.nextFollowUpDate != null
+                            ? _formatFollowUpDate(meds.nextFollowUpDate!)
+                            : 'No follow-up scheduled',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'Keep your review appointments on schedule.',
+                        meds.nextFollowUpStatus == 'overdue'
+                            ? 'A follow-up is overdue — contact your clinic.'
+                            : meds.nextFollowUpStatus == 'due'
+                                ? 'Your check-up is coming up soon.'
+                                : 'Keep your review appointments on schedule.',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 12,

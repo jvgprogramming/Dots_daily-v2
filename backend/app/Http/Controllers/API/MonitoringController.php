@@ -52,7 +52,8 @@ class MonitoringController extends BaseApiController
         // ── Medication logs in range ──
         $logs = MedicationLog::query()
             ->where('patient_id', $patient->id)
-            ->whereBetween('scheduled_date', [$from->toDateString(), $to->toDateString()])
+            ->whereDate('scheduled_date', '>=', $from->toDateString())
+            ->whereDate('scheduled_date', '<=', $to->toDateString())
             ->get();
 
         // ── Daily monitoring dates in range ──

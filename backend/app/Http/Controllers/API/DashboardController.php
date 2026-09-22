@@ -190,17 +190,12 @@ class DashboardController extends BaseApiController
             ]);
 
         // ── Bottom overview metrics ──────────────────────────────────
-        // Overall adherence to date — days taken ÷ days expected, across every
-        // patient in scope, from the earliest plan or log onward.
-        $earliest = collect([
-            TreatmentPlan::min('start_date'),
-            MedicationLog::min('scheduled_date'),
-        ])->filter()->min();
-        $overallFrom = $earliest ? CarbonImmutable::parse($earliest) : $todayDate;
-
-        $overallLogged = Adherence::loggedDaySets($scopePatientIds, $overallFrom, $todayDate);
-        $overallExpected = Adherence::expectedDaySets($scopePatientIds, $overallFrom, $todayDate, $overallLogged);
-        $overallAdherence = Adherence::summarize($overallExpected, $overallLogged)['rate'];
+        // Overall adherence across every patient in scope, judged over each
+        // patient's full scheduled course — plan start → scheduled end, future
+        // days included (see App\Support\Adherence::planWindowSummary). A course
+        // of TB treatment is months long, so "from first log to today" would
+        // flatter patients who joined late and say nothing about the road ahead.
+        $overallAdherence = Adherence::planWindowSummary($scopePatientIds)['summary']['rate'];
 
         // Treatment success = completed (non-interrupted) / all concluded plans
         $concluded = TreatmentPlan::whereIn('status', ['completed', 'discontinued', 'interrupted'])->count();

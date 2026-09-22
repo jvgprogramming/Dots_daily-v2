@@ -637,6 +637,8 @@ export interface ReportMedicationLog {
   proof_url: string | null;
   notes: string | null;
   observed_by_name: string | null;
+  /** Confirmed by a DOTS observer (admin) — the green/pending split the calendars draw. */
+  verified: boolean;
   created_at: string | null;
 }
 

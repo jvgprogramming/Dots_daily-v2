@@ -54,22 +54,46 @@ class AdherenceConsistencyTest extends TestCase
         );
     }
 
-    public function test_the_monitoring_calendar_and_the_reports_agree(): void
+    public function test_the_monitoring_calendar_and_the_reports_agree_within_the_window(): void
     {
         [$patient] = $this->patientWithHistory(takenDays: 6);
         Sanctum::actingAs($this->admin());
 
         $monitoring = $this->getJson($this->monitoringUrl($patient))->json('data.summary');
-        $reports = $this->getJson($this->reportsUrl($patient))->json('data.overview');
 
         $this->assertEquals(60.0, $monitoring['adherence_rate']);
-        $this->assertEquals(
-            $monitoring['adherence_rate'],
-            $reports['adherence_rate'],
-            'the monitoring calendar and the reports must not disagree about the same patient',
+        $this->assertEquals(6, $monitoring['days_taken']);
+        $this->assertEquals(self::PLAN_DAYS, $monitoring['scheduled_days']);
+    }
+
+    /**
+     * The headline figures are judged over each patient's full scheduled course
+     * (start → scheduled end, future days included), NOT the queried date
+     * range — so the reports' rate differs from a range cut by design. The
+     * number that must agree everywhere is the full-course figure.
+     */
+    public function test_the_reports_rate_covers_the_full_treatment_window(): void
+    {
+        // 6 taken of 10 elapsed days; the plan itself runs for 6 months, so the
+        // full-course denominator is far larger than the 10 elapsed days.
+        [$patient] = $this->patientWithHistory(takenDays: 6);
+        Sanctum::actingAs($this->admin());
+
+        $reports = $this->getJson($this->reportsUrl($patient))->json('data.overview');
+
+        $this->assertEquals(6, $reports['days_taken']);
+        $this->assertGreaterThan(
+            self::PLAN_DAYS,
+            $reports['scheduled_days'],
+            'the denominator must span the whole scheduled course, not just the queried range',
         );
-        $this->assertEquals($monitoring['scheduled_days'], $reports['scheduled_days']);
-        $this->assertEquals($monitoring['days_taken'], $reports['days_taken']);
+        $this->assertEquals(
+            round(6 / $reports['scheduled_days'] * 100, 1),
+            $reports['adherence_rate'],
+        );
+
+        // The queried from/to still drives everything else (trend, logs, proofs).
+        $this->assertSame(6, $reports['total_doses']);
     }
 
     public function test_a_day_recorded_as_missed_counts_against_adherence(): void
