@@ -538,6 +538,28 @@ export interface MonitoringPlanMedication {
   preferred_time: string | null;
 }
 
+// ── Calendar dose detail (right-side panel) ──
+export type DoseLogStatus = "taken" | "late" | "missed" | "pending" | string;
+export type ProofStatus = "provided" | "none";
+
+export interface DoseLog {
+  id: number;
+  medication_id: number | null;
+  medication_name: string;
+  strength: string | null;
+  dosage: string | null;
+  dose_quantity: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  taken_at: string | null;
+  status: DoseLogStatus;
+  proof_status: ProofStatus;
+  proof_url: string | null;
+  patient_notes: string | null;
+  plan_medication_notes: string | null;
+  observed_by_name: string | null;
+}
+
 export interface MonitoringTreatmentPlan {
   id: number;
   plan_name: string;
@@ -587,6 +609,11 @@ export interface PatientMonitoringData {
   };
   treatment_plan: MonitoringTreatmentPlan | null;
   adherence_by_date: AdherenceDay[];
+  /** Dose-level logs for the selected calendar date (when `date` param sent). */
+  dose_logs: DoseLog[];
+  /** Recent medication history for the selected patient (History tab). */
+  recent_history: DoseLog[];
+  selected_date: string | null;
   monitoring_entries: MonitoringEntry[];
   summary: {
     adherence_rate: number | null;
@@ -845,6 +872,77 @@ export interface GlobalSearchData {
     monitoring_entries: number;
     all: number;
   };
+}
+
+// ── Settings ──
+export type SettingsGroup = "facility" | "clinical" | "notifications" | "reports" | "security";
+export type StaffRole = "admin" | "clinician" | "nurse" | "staff";
+export type SettingsModule = "patients" | "treatments" | "monitoring" | "reports" | "settings";
+
+export interface SettingEntry {
+  value: string;
+  updated_at: string | null;
+  updated_by_name: string | null;
+}
+
+export interface SettingsData {
+  settings: Record<SettingsGroup, Record<string, SettingEntry>>;
+  modules: SettingsModule[];
+}
+
+export interface StaffUser {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: StaffRole;
+  permissions: SettingsModule[] | null;
+  is_active: boolean;
+  email_verified_at: string | null;
+  last_login_at: string | null;
+  created_at: string | null;
+}
+
+export interface CreateStaffUserPayload {
+  name: string;
+  email: string;
+  phone?: string;
+  password: string;
+  role: StaffRole;
+  permissions?: SettingsModule[];
+  is_active?: boolean;
+}
+
+export interface UpdateStaffUserPayload {
+  name?: string;
+  phone?: string;
+  password?: string;
+  role?: StaffRole;
+  permissions?: SettingsModule[];
+  is_active?: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  user_name: string;
+  action: string;
+  description: string | null;
+  ip_address: string | null;
+  created_at: string | null;
+}
+
+export interface LoginActivityRow {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  last_login_at: string | null;
+  is_active: boolean;
+}
+
+export interface AuditData {
+  entries: AuditEntry[];
+  login_activity: LoginActivityRow[];
 }
 
 // ── Navigation ──

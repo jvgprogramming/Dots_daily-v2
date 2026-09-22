@@ -180,6 +180,7 @@ export default function MonitoringPage() {
         patient_id: selectedPatientId,
         from: range.start,
         to: range.end,
+        date: selectedDate ?? undefined,
       });
       if (res.data) setData(res.data);
     } catch (err: unknown) {
@@ -187,7 +188,7 @@ export default function MonitoringPage() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [selectedPatientId, range.start, range.end]);
+  }, [selectedPatientId, range.start, range.end, selectedDate]);
 
   useEffect(() => {
     fetchMonitoring();
@@ -475,9 +476,10 @@ export default function MonitoringPage() {
             {selectedDate ? (
               <DayDetailPanel
                 date={selectedDate}
-                adherenceDay={selectedDay}
+                doseLogs={data?.dose_logs ?? []}
                 monitoringEntry={selectedMonitoring}
-                plan={plan}
+                recentHistory={data?.recent_history ?? []}
+                loadingDoseDetail={loading}
                 onClose={() => setSelectedDate(null)}
               />
             ) : (

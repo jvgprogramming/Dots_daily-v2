@@ -12,6 +12,7 @@ use App\Http\Controllers\API\MobileDoseLogController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
+use App\Http\Controllers\API\SettingsController;
 use App\Http\Controllers\API\TreatmentsController;
 use Illuminate\Support\Facades\Route;
 
@@ -64,6 +65,17 @@ Route::prefix('v1')->group(function () {
 
         // Global search (Admin)
         Route::get('/search', [SearchController::class, 'index'])->middleware('role:admin');
+
+        // Settings (Admin) — system configuration control panel
+        Route::prefix('settings')->middleware('role:admin')->group(function () {
+            Route::get('/', [SettingsController::class, 'index']);
+            Route::put('/', [SettingsController::class, 'update']);
+            Route::get('audit', [SettingsController::class, 'audit']);
+            Route::get('users', [SettingsController::class, 'users']);
+            Route::post('users', [SettingsController::class, 'storeUser']);
+            Route::put('users/{user}', [SettingsController::class, 'updateUser']);
+            Route::delete('users/{user}', [SettingsController::class, 'destroyUser']);
+        });
 
         // Reports (Admin) — medication adherence + proof evidence from live logs
         Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');

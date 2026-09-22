@@ -9,6 +9,8 @@ use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Patient-centric treatment monitoring data for the admin monitoring calendar.
@@ -26,6 +28,7 @@ class MonitoringController extends BaseApiController
             'patient_id' => ['required', 'integer', 'exists:patients,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'required_with:from', 'after_or_equal:from'],
+            'date' => ['nullable', 'date'],
         ]);
 
         $patient = Patient::query()
@@ -63,6 +66,35 @@ class MonitoringController extends BaseApiController
             ->get();
 
         $monitoringByDate = $monitoring->keyBy(fn (DailyMonitoring $m) => $m->recorded_date->toDateString());
+
+        // ── Selected date for the calendar detail panel ──
+        $selectedDate = isset($data['date'])
+            ? CarbonImmutable::parse($data['date'])->toDateString()
+            : null;
+
+        $doseDetail = null;
+        if ($selectedDate !== null) {
+            $doseLogs = MedicationLog::query()
+                ->where('patient_id', $patient->id)
+                ->whereDate('scheduled_date', $selectedDate)
+                ->with(['treatmentPlanMedication.medication', 'observedBy'])
+                ->orderBy('scheduled_time')
+                ->get();
+
+            $doseDetail = $doseLogs->map(fn (MedicationLog $log) => $this->formatDoseLog($log))->values();
+        }
+
+        // ── Recent medication history for the History tab ──
+        $recentHistory = MedicationLog::query()
+            ->where('patient_id', $patient->id)
+            ->with(['treatmentPlanMedication.medication'])
+            ->orderByDesc('scheduled_date')
+            ->orderByDesc('scheduled_time')
+            ->orderByDesc('id')
+            ->limit(15)
+            ->get()
+            ->map(fn (MedicationLog $log) => $this->formatDoseLog($log))
+            ->values();
 
         // ── Adherence grouped by date ──
         $adherenceByDate = $logs
@@ -184,6 +216,9 @@ class MonitoringController extends BaseApiController
                 ]),
             ] : null,
             'adherence_by_date' => $adherenceByDate,
+            'selected_date' => $selectedDate,
+            'dose_logs' => $doseDetail ?? [],
+            'recent_history' => $recentHistory,
             'monitoring_entries' => $monitoring->map(fn (DailyMonitoring $m) => [
                 'id' => $m->id,
                 'recorded_date' => $m->recorded_date->toDateString(),
@@ -215,4 +250,50 @@ class MonitoringController extends BaseApiController
         ], message: 'Monitoring data retrieved successfully.');
     }
 
+    /**
+     * Uniform dose-log shape for the calendar detail panel (Medication,
+     * Notes, and History tabs). Reads the live medication_logs rows —
+     * no separate storage.
+     */
+    private function formatDoseLog(MedicationLog $log): array
+    {
+        $tpm = $log->treatmentPlanMedication;
+        $medication = $tpm?->medication;
+
+        return [
+            'id' => $log->id,
+            'medication_id' => $tpm?->medication_id,
+            'medication_name' => $medication?->name ?? 'Unknown medication',
+            'strength' => $medication?->strength,
+            'dosage' => $tpm?->dosage,
+            'dose_quantity' => $log->dose_quantity,
+            'scheduled_date' => $log->scheduled_date?->toDateString(),
+            'scheduled_time' => $log->scheduled_time,
+            'taken_at' => $log->taken_at?->toIso8601String(),
+            'status' => $log->status,
+            'proof_status' => $log->proof_photo ? 'provided' : 'none',
+            'proof_url' => $log->proof_photo ? $this->proofUrl($log->proof_photo) : null,
+            'patient_notes' => $log->notes,
+            'plan_medication_notes' => $tpm?->notes,
+            'observed_by_name' => $log->observedBy?->name,
+        ];
+    }
+
+    /**
+     * Resolve a proof photo path to a displayable URL (same rules as ReportsController).
+     */
+    private function proofUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+        if (Str::startsWith($path, 'storage/')) {
+            return rtrim(config('app.url'), '/') . '/' . ltrim($path, '/');
+        }
+
+        return Storage::disk('public')->url(ltrim($path, '/'));
+    }
 }
