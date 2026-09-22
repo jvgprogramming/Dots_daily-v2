@@ -538,6 +538,28 @@ export interface MonitoringPlanMedication {
   preferred_time: string | null;
 }
 
+// ── Calendar dose detail (right-side panel) ──
+export type DoseLogStatus = "taken" | "late" | "missed" | "pending" | string;
+export type ProofStatus = "provided" | "none";
+
+export interface DoseLog {
+  id: number;
+  medication_id: number | null;
+  medication_name: string;
+  strength: string | null;
+  dosage: string | null;
+  dose_quantity: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  taken_at: string | null;
+  status: DoseLogStatus;
+  proof_status: ProofStatus;
+  proof_url: string | null;
+  patient_notes: string | null;
+  plan_medication_notes: string | null;
+  observed_by_name: string | null;
+}
+
 export interface MonitoringTreatmentPlan {
   id: number;
   plan_name: string;
@@ -587,6 +609,11 @@ export interface PatientMonitoringData {
   };
   treatment_plan: MonitoringTreatmentPlan | null;
   adherence_by_date: AdherenceDay[];
+  /** Dose-level logs for the selected calendar date (when `date` param sent). */
+  dose_logs: DoseLog[];
+  /** Recent medication history for the selected patient (History tab). */
+  recent_history: DoseLog[];
+  selected_date: string | null;
   monitoring_entries: MonitoringEntry[];
   summary: {
     adherence_rate: number | null;
