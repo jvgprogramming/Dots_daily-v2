@@ -72,6 +72,42 @@ class MobileDoseLogTest extends TestCase
             ->assertJsonPath('data.next_follow_up_status', 'scheduled');
     }
 
+    public function test_a_follow_up_moved_twice_shows_the_latest_date(): void
+    {
+        [$user, , $plan] = $this->patientWithRegimen();
+
+        // The hub reschedules from the date it currently displays, so the
+        // second move quotes the first move's output. The schedule must follow
+        // the chain to its latest agreed date, not snap back to the anchor.
+        $anchor = \Carbon\Carbon::parse($plan->start_date)->addMonth()->toDateString();
+        $firstMove = now()->addDays(10)->toDateString();
+        $secondMove = now()->addDays(20)->toDateString();
+
+        \App\Models\FollowUpReschedule::create([
+            'treatment_plan_id' => $plan->id,
+            'patient_id' => $plan->patient_id,
+            'original_date' => $anchor,
+            'new_date' => $firstMove,
+            'rescheduled_at' => now()->toDateString(),
+            'rescheduled_by' => $this->admin()->id,
+        ]);
+        \App\Models\FollowUpReschedule::create([
+            'treatment_plan_id' => $plan->id,
+            'patient_id' => $plan->patient_id,
+            'original_date' => $firstMove,
+            'new_date' => $secondMove,
+            'rescheduled_at' => now()->toDateString(),
+            'rescheduled_by' => $this->admin()->id,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/mobile/regimen')
+            ->assertOk()
+            ->assertJsonPath('data.next_follow_up', $secondMove)
+            ->assertJsonPath('data.next_follow_up_status', 'scheduled');
+    }
+
     public function test_logging_a_dose_writes_a_medication_log(): void
     {
         [$user, $patient, , $pivot] = $this->patientWithRegimen();

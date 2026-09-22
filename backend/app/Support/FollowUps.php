@@ -63,7 +63,10 @@ final class FollowUps
         $anchors = [];
         for ($d = $start->copy(); $d->lte($end); $d = $d->addMonth()) {
             $key = $d->toDateString();
-            $effective = $overrides->has($key) ? CarbonImmutable::parse($overrides->get($key)) : $d;
+            // Resolve reschedule chains: the hub reschedules from the date it
+            // currently displays, so a follow-up moved twice quotes the first
+            // move's output, not the original anchor.
+            $effective = CarbonImmutable::parse(self::resolveChain($key, $overrides));
             $anchors[] = ['original' => $key, 'date' => $effective];
         }
         if ($anchors === []) {
@@ -102,7 +105,12 @@ final class FollowUps
     }
 
     /**
-     * Latest reschedule wins per original anchor date.
+     * Latest reschedule wins per quoted date.
+     *
+     * The map is keyed by the date a reschedule row replaces — usually the
+     * plan's original anchor, but after a first reschedule it can be the
+     * previously rescheduled date the hub was displaying. Chains are resolved
+     * per anchor by {@see resolveChain()}.
      *
      * @param  iterable<int, FollowUpReschedule>  $reschedules
      * @return Collection<string, string>
@@ -115,5 +123,28 @@ final class FollowUps
             ->sortByDesc('id')
             ->groupBy(fn (FollowUpReschedule $r) => $r->original_date->toDateString())
             ->map(fn ($group) => $group->first()->new_date->toDateString());
+    }
+
+    /**
+     * Follow a reschedule chain to the date it currently resolves to.
+     *
+     * A follow-up moved from Sep 1 to Sep 15 and then again from Sep 15 to
+     * Sep 22 leaves two rows: Sep 1 → Sep 15 and Sep 15 → Sep 22. Walking the
+     * map from the anchor follows the quotes to the latest agreed date; the
+     * `$seen` guard keeps a pathological cycle of rows from looping forever.
+     *
+     * @param  Collection<string, string>  $overrides
+     */
+    private static function resolveChain(string $date, Collection $overrides): string
+    {
+        $current = $date;
+        $seen = [$date => true];
+
+        while (($next = $overrides->get($current)) !== null && ! isset($seen[$next])) {
+            $seen[$next] = true;
+            $current = $next;
+        }
+
+        return $current;
     }
 }

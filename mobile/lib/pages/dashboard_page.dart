@@ -31,8 +31,11 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
         '${_weekdayName(now.weekday)}, ${_monthName(now.month)} ${now.day}, ${now.year}';
     final todayAlarms = meds.upcomingAlarms.take(3).toList();
 
-    return SingleChildScrollView(
-      child: Column(
+    return RefreshIndicator(
+      onRefresh: () => meds.refresh(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
         children: [
           // Hero Section
           _buildHeroSection(context, user?.fullName ?? '', today, meds),
@@ -73,6 +76,7 @@ class DashboardPage extends StatelessWidget {  final ValueChanged<String>? onVie
             ),
           ),
         ],
+        ),
       ),
     );
   }
