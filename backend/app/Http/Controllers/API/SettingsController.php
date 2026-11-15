@@ -17,8 +17,8 @@ use Illuminate\Validation\ValidationException;
  *
  * One grouped key/value store (`settings` table) backs all sections:
  * facility profile, clinical rules, notification channels, report defaults,
- * and security policies. Users & Roles manages staff accounts with
- * per-module permissions. Audit data reads the existing activity_logs.
+ * and security policies. Users & Roles manages staff accounts; module access
+ * is a fixed preset per role. Audit data reads the existing activity_logs.
  */
 class SettingsController extends BaseApiController
 {
@@ -68,8 +68,8 @@ class SettingsController extends BaseApiController
         'security.audit_logging_enabled' => '1',
     ];
 
-    /** Modules available for per-user access control. */
-    public const MODULES = ['patients', 'treatments', 'monitoring', 'reports', 'settings'];
+    /** Modules a role can be granted. Presets are fixed — see defaultPermissions(). */
+    public const MODULES = ['patients', 'treatments', 'monitoring', 'medications', 'reports', 'settings'];
 
     // ─────────────────────────────────────────────────────────────────
     //  Settings
@@ -141,11 +141,11 @@ class SettingsController extends BaseApiController
     //  Users & Roles
     // ─────────────────────────────────────────────────────────────────
 
-    /** GET /settings/users — staff accounts (admins, clinicians, nurses, staff). */
+    /** GET /settings/users — staff accounts only (admins and staff). */
     public function users(Request $request): JsonResponse
     {
         $query = User::query()
-            ->whereIn('role', ['admin', 'clinician', 'nurse', 'staff'])
+            ->whereIn('role', ['admin', 'staff'])
             ->withCount([])
             ->orderBy('name');
 
@@ -169,9 +169,7 @@ class SettingsController extends BaseApiController
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
             'phone' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', 'string', Rule::in(['admin', 'clinician', 'nurse', 'staff'])],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['string', Rule::in(self::MODULES)],
+            'role' => ['required', 'string', Rule::in(['admin', 'staff'])],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -181,7 +179,8 @@ class SettingsController extends BaseApiController
             'phone' => $data['phone'] ?? null,
             'password' => Hash::make($data['password']),
             'role' => $data['role'],
-            'permissions' => $data['permissions'] ?? $this->defaultPermissions($data['role']),
+            // Module access follows the role preset; it is never hand-picked.
+            'permissions' => $this->defaultPermissions($data['role']),
             'is_active' => $data['is_active'] ?? true,
             'email_verified_at' => now(),
         ]);
@@ -191,7 +190,7 @@ class SettingsController extends BaseApiController
         return $this->success(data: ['user' => $this->formatUser($user)], message: 'User created successfully.');
     }
 
-    /** PUT /settings/users/{user} — update role, permissions, or status. */
+    /** PUT /settings/users/{user} — update role, profile, password, or status. */
     public function updateUser(Request $request, User $user): JsonResponse
     {
         if ($user->isPatient()) {
@@ -204,20 +203,23 @@ class SettingsController extends BaseApiController
             'name' => ['sometimes', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:20'],
             'password' => ['nullable', 'string', 'min:8'],
-            'role' => ['sometimes', 'string', Rule::in(['admin', 'clinician', 'nurse', 'staff'])],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['string', Rule::in(self::MODULES)],
+            'role' => ['sometimes', 'string', Rule::in(['admin', 'staff'])],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $updates = [];
-        foreach (['name', 'phone', 'role', 'permissions', 'is_active'] as $field) {
+        foreach (['name', 'phone', 'role', 'is_active'] as $field) {
             if (array_key_exists($field, $data)) {
                 $updates[$field] = $data[$field];
             }
         }
         if (! empty($data['password'])) {
             $updates['password'] = Hash::make($data['password']);
+        }
+
+        // Keep module access in step with the role preset whenever it changes.
+        if (isset($updates['role'])) {
+            $updates['permissions'] = $this->defaultPermissions($updates['role']);
         }
 
         // Guard: never demote/deactivate the last active admin
@@ -303,7 +305,7 @@ class SettingsController extends BaseApiController
 
         // Login activity summary from the users table
         $loginActivity = User::query()
-            ->whereIn('role', ['admin', 'clinician', 'nurse', 'staff'])
+            ->whereIn('role', ['admin', 'staff'])
             ->orderByDesc('last_login_at')
             ->limit(10)
             ->get()
@@ -342,14 +344,16 @@ class SettingsController extends BaseApiController
         ];
     }
 
-    /** Role → module access defaults (admins see everything). */
+    /**
+     * Role → module access presets. Admin sees everything; staff runs the
+     * clinical workflow but never opens System settings.
+     */
     private function defaultPermissions(string $role): array
     {
         return match ($role) {
             'admin' => self::MODULES,
-            'clinician' => ['patients', 'treatments', 'monitoring', 'reports'],
-            'nurse' => ['patients', 'monitoring'],
-            default => ['patients'],
+            'staff' => array_values(array_diff(self::MODULES, ['settings'])),
+            default => [],
         };
     }
 

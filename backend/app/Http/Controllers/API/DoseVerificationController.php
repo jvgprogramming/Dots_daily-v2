@@ -100,8 +100,8 @@ class DoseVerificationController extends BaseApiController
     }
 
     /**
-     * Nurses may only act on doses of the patients they registered. Anything
-     * else answers 404 so other patients' records are not revealed.
+     * Both portal roles may act on every patient's doses. An unreadable
+     * record answers 404 so its existence is not revealed.
      */
     private function ensureVisible(Request $request, MedicationLog $log): void
     {

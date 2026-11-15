@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 class MobileAuthController extends BaseApiController
 {
     /**
-     * Mobile login — allows both patients and admins.
+     * Mobile login — patient accounts only. Staff use the web portal.
      */
     public function login(LoginRequest $request): JsonResponse
     {
@@ -30,6 +30,13 @@ class MobileAuthController extends BaseApiController
         if (! $user->is_active) {
             return $this->error(
                 message: 'Account is deactivated. Contact an administrator.',
+                code: 403,
+            );
+        }
+
+        if (! $user->canUseMobile()) {
+            return $this->error(
+                message: 'This app is for patient accounts. Staff should sign in to the web portal.',
                 code: 403,
             );
         }

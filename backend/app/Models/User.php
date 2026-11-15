@@ -94,17 +94,25 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->role === 'patient';
     }
 
-    public function isNurse(): bool
+    public function isStaff(): bool
     {
-        return $this->role === 'nurse';
+        return $this->role === 'staff';
     }
 
     /** Roles allowed to sign in to the web portal. */
-    public const PORTAL_ROLES = ['admin', 'nurse'];
+    public const PORTAL_ROLES = ['admin', 'staff'];
+
+    /** Roles allowed to sign in to the patient mobile app. */
+    public const MOBILE_ROLES = ['patient'];
 
     public function canUsePortal(): bool
     {
         return in_array($this->role, self::PORTAL_ROLES, true);
+    }
+
+    public function canUseMobile(): bool
+    {
+        return in_array($this->role, self::MOBILE_ROLES, true);
     }
 
     /**

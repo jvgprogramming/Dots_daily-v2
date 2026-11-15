@@ -62,7 +62,8 @@ class AuthController extends BaseApiController
             );
         }
 
-        // Only staff roles may use the web portal (admins and nurses).
+        // Only portal roles may sign in here (admins and staff). Patient
+        // accounts belong to the mobile app.
         if (! $user->canUsePortal()) {
             return $this->error(
                 message: 'Access denied. This portal is for authorized hospital staff only.',

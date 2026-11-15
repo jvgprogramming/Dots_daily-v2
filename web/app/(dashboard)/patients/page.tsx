@@ -99,8 +99,8 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 export default function PatientsPage() {
-  // Nurses see only the patients they registered (the API scopes the list);
-  // deleting records and changing sign-in details stay with administrators.
+  // Admin and staff both see every patient; deleting records and changing
+  // sign-in details stay with administrators.
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
@@ -313,13 +313,9 @@ export default function PatientsPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="page-title">
-            {isAdmin ? "Patients" : "My patients"}
-          </h1>
+          <h1 className="page-title">Patients</h1>
           <p className="page-lede">
-            {isAdmin
-              ? "Manage patient registrations and profiles."
-              : "Patients you registered. Only you and administrators can see these records."}
+            Manage patient registrations and profiles.
           </p>
         </div>
         <Button onClick={openAddModal}>

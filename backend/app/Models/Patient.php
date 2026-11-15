@@ -86,17 +86,13 @@ class Patient extends Model
 
     /**
      * The single rule for who may see a patient record in the staff portal:
-     * admins see everyone, a nurse sees only the patients they registered,
-     * and any other role sees nothing.
+     * both portal roles (admin and staff) see every patient; patients and
+     * any other role see nothing here.
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->isStaff()) {
             return $query;
-        }
-
-        if ($user->isNurse()) {
-            return $query->where('patients.registered_by', $user->id);
         }
 
         return $query->whereRaw('1 = 0');
@@ -104,8 +100,7 @@ class Patient extends Model
 
     public function isVisibleTo(User $user): bool
     {
-        return $user->isAdmin()
-            || ($user->isNurse() && (int) $this->registered_by === (int) $user->id);
+        return $user->isAdmin() || $user->isStaff();
     }
 
     public function medicationLogs(): HasMany

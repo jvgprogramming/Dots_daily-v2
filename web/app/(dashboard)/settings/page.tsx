@@ -4,7 +4,7 @@
  * Settings — the admin system control panel.
  *
  * System configuration and operational controls only: facility profile,
- * staff users & role permissions, clinical rules, notification channels,
+ * staff users & fixed role access, clinical rules, notification channels,
  * security & audit, and report defaults. No patient data lives here.
  */
 
@@ -22,7 +22,6 @@ import {
   SlidersHorizontal,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,8 +65,6 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; descr
 
 const ROLE_META: Record<StaffRole, { label: string; variant: "primary" | "success" | "warning" | "default" }> = {
   admin: { label: "Admin", variant: "primary" },
-  clinician: { label: "Clinician", variant: "success" },
-  nurse: { label: "Nurse", variant: "warning" },
   staff: { label: "Staff", variant: "default" },
 };
 
@@ -75,11 +72,25 @@ const MODULE_LABELS: Record<SettingsModule, string> = {
   patients: "Patients",
   treatments: "Treatments",
   monitoring: "Monitoring",
+  medications: "Medication",
   reports: "Reports",
   settings: "Settings",
 };
 
-const ALL_MODULES: SettingsModule[] = ["patients", "treatments", "monitoring", "reports", "settings"];
+const ALL_MODULES: SettingsModule[] = [
+  "patients",
+  "treatments",
+  "monitoring",
+  "medications",
+  "reports",
+  "settings",
+];
+
+/** Module access is a fixed preset per role, not a per-user checklist. */
+const ROLE_MODULES: Record<StaffRole, SettingsModule[]> = {
+  admin: ALL_MODULES,
+  staff: ALL_MODULES.filter((m) => m !== "settings"),
+};
 
 const SELECT_CLASSES =
   "flex h-10 w-full rounded-[10px] border border-border-default bg-bg-card px-3 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500";
@@ -874,16 +885,9 @@ function UserFormModal({
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<StaffRole>(user?.role ?? "staff");
-  const [permissions, setPermissions] = useState<SettingsModule[]>(
-    user?.permissions ?? ALL_MODULES
-  );
   const [isActive, setIsActive] = useState(user?.is_active ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const toggleModule = (m: SettingsModule) => {
-    setPermissions((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
-  };
 
   const handleSave = async () => {
     setError("");
@@ -894,7 +898,6 @@ function UserFormModal({
           name,
           phone: phone || undefined,
           role,
-          permissions,
           is_active: isActive,
         };
         if (password) payload.password = password;
@@ -908,7 +911,6 @@ function UserFormModal({
           phone: phone || undefined,
           password,
           role,
-          permissions,
           is_active: isActive,
         });
         if (res.success) onSaved(`User ${name} created.`);
@@ -928,7 +930,7 @@ function UserFormModal({
       open
       onClose={() => !saving && onClose()}
       title={isEdit ? "Edit User" : "Add User"}
-      description={isEdit ? user?.email : "Create a staff account with role-based module access."}
+      description={isEdit ? user?.email : "Create a staff account. Module access follows the role."}
       size="lg"
     >
       <div className="space-y-4">
@@ -945,7 +947,10 @@ function UserFormModal({
           <SettingField label={isEdit ? "New password (optional)" : "Password"} hint={isEdit ? "Leave blank to keep current." : "Minimum 8 characters."}>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </SettingField>
-          <SettingField label="Role">
+          <SettingField
+            label="Role"
+            hint={role === "admin" ? "Full access, including users and system settings." : "Clinical workflow only — no system settings."}
+          >
             <select className={SELECT_CLASSES} value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
               {(Object.keys(ROLE_META) as StaffRole[]).map((r) => (
                 <option key={r} value={r}>
@@ -963,26 +968,22 @@ function UserFormModal({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-text-secondary">Module access</label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ALL_MODULES.map((m) => {
-              const on = permissions.includes(m);
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => toggleModule(m)}
-                  className={`flex items-center justify-between rounded-[8px] border px-3 py-2 text-sm transition-all ${
-                    on
-                      ? "border-primary-300 bg-primary-100/70 text-primary-900"
-                      : "border-border-light text-text-tertiary hover:border-border-strong"
-                  }`}
-                >
-                  {MODULE_LABELS[m]}
-                  {on ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                </button>
-              );
-            })}
+          <label className="mb-1.5 block text-xs font-medium text-text-secondary">
+            Module access
+          </label>
+          <p className="mb-2 text-[11px] text-text-tertiary">
+            Fixed by role — change the role above to change access.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {ROLE_MODULES[role].map((m) => (
+              <span
+                key={m}
+                className="flex items-center gap-1 rounded-[8px] border border-primary-300 bg-primary-100/70 px-2 py-1 text-[12px] text-primary-900"
+              >
+                <Check className="h-3 w-3" />
+                {MODULE_LABELS[m]}
+              </span>
+            ))}
           </div>
         </div>
 

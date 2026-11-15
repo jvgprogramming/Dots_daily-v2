@@ -80,23 +80,22 @@ Route::prefix('v1')->group(function () {
             Route::delete('users/{user}', [SettingsController::class, 'destroyUser']);
         });
 
-        // Reports (Admin) — medication adherence + proof evidence from live logs
-        Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');
+        // Reports (Admin + Staff) — medication adherence + proof evidence from live logs
+        Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin,staff');
 
-        // Dose verification (Admin + Nurse) — confirm a patient's logged intake by setting
+        // Dose verification (Admin + Staff) — confirm a patient's logged intake by setting
         // `medication_logs.observed_by`, the flag the calendars read for verified/pending.
-        // Nurses may only verify doses of patients they registered (checked in the controller).
-        Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin,nurse');
-        Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin,nurse');
+        Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin,staff');
+        Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin,staff');
 
-        // Treatments hub (Admin) — records, follow-up schedule, reschedule
-        Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin');
-        Route::put('/treatments/{plan}', [TreatmentsController::class, 'updateTreatment'])->middleware('role:admin');
+        // Treatments hub (Admin + Staff) — records, follow-up schedule, reschedule
+        Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin,staff');
+        Route::put('/treatments/{plan}', [TreatmentsController::class, 'updateTreatment'])->middleware('role:admin,staff');
         Route::post('/treatments/{plan}/reschedule-follow-up', [TreatmentsController::class, 'rescheduleFollowUp'])
-            ->middleware('role:admin');
+            ->middleware('role:admin,staff');
 
-        // Medication inventory (Admin)
-        Route::prefix('medications-inventory')->middleware('role:admin')->group(function () {
+        // Medication inventory (Admin + Staff)
+        Route::prefix('medications-inventory')->middleware('role:admin,staff')->group(function () {
             Route::get('/', [MedicationInventoryController::class, 'index']);
             Route::get('summary', [MedicationInventoryController::class, 'summary']);
             Route::post('/', [MedicationInventoryController::class, 'store']);
@@ -105,10 +104,9 @@ Route::prefix('v1')->group(function () {
             Route::delete('{medication}', [MedicationInventoryController::class, 'destroy']);
         });
 
-        // Patient Routes (Admin + Nurse)
-        // Nurses work only with the patients they registered: every query is
-        // scoped with Patient::visibleTo() and single records 404 otherwise.
-        Route::prefix('patients')->middleware('role:admin,nurse')->group(function () {
+        // Patient Routes (Admin + Staff)
+        // Both portal roles see every patient; deletion stays admin-only.
+        Route::prefix('patients')->middleware('role:admin,staff')->group(function () {
             Route::get('/', [PatientController::class, 'index']);
             Route::get('/list', [PatientController::class, 'list']);
             // Static segments must be registered before the {patient} wildcard route

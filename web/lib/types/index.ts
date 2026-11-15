@@ -25,7 +25,7 @@ export interface AuthUser {
   name: string;
   email: string;
   phone: string | null;
-  role: "admin" | "nurse" | "patient";
+  role: "admin" | "staff" | "patient";
   profile_photo_url: string | null;
   is_active: boolean;
   email_verified_at: string | null;
@@ -876,8 +876,14 @@ export interface GlobalSearchData {
 
 // ── Settings ──
 export type SettingsGroup = "facility" | "clinical" | "notifications" | "reports" | "security";
-export type StaffRole = "admin" | "clinician" | "nurse" | "staff";
-export type SettingsModule = "patients" | "treatments" | "monitoring" | "reports" | "settings";
+export type StaffRole = "admin" | "staff";
+export type SettingsModule =
+  | "patients"
+  | "treatments"
+  | "monitoring"
+  | "medications"
+  | "reports"
+  | "settings";
 
 export interface SettingEntry {
   value: string;
@@ -909,7 +915,6 @@ export interface CreateStaffUserPayload {
   phone?: string;
   password: string;
   role: StaffRole;
-  permissions?: SettingsModule[];
   is_active?: boolean;
 }
 
@@ -918,7 +923,6 @@ export interface UpdateStaffUserPayload {
   phone?: string;
   password?: string;
   role?: StaffRole;
-  permissions?: SettingsModule[];
   is_active?: boolean;
 }
 

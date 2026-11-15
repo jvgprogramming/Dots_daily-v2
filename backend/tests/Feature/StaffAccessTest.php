@@ -14,24 +14,24 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Nurses use the staff portal to track the patients they registered, and
- * nothing more: no other nurse's patients, no admin modules, and no way to
- * give themselves more access than an administrator grants.
+ * Staff run the clinical workflow in the portal — every patient, treatments,
+ * monitoring, inventory, and reports — but never System settings or user
+ * management. Patients only use the mobile app.
  */
-class NurseAccessTest extends TestCase
+class StaffAccessTest extends TestCase
 {
     use RefreshDatabase;
 
     // ── Signing in ──────────────────────────────────────────────────
 
-    public function test_a_nurse_can_sign_in_to_the_portal_with_an_expiring_token(): void
+    public function test_a_staff_member_can_sign_in_to_the_portal_with_an_expiring_token(): void
     {
-        $this->nurse(['email' => 'nurse@dotsdaily.com', 'password' => Hash::make('secret-pass')]);
+        $this->staff(['email' => 'staff@dotsdaily.com', 'password' => Hash::make('secret-pass')]);
 
         $this->postJson('/api/v1/login', [
-            'email' => 'nurse@dotsdaily.com',
+            'email' => 'staff@dotsdaily.com',
             'password' => 'secret-pass',
-        ])->assertOk()->assertJsonPath('data.user.role', 'nurse');
+        ])->assertOk()->assertJsonPath('data.user.role', 'staff');
 
         $this->assertDatabaseCount('personal_access_tokens', 1);
         $this->assertNotNull(\DB::table('personal_access_tokens')->value('expires_at'));
@@ -53,9 +53,24 @@ class NurseAccessTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
-    public function test_a_deactivated_nurse_cannot_sign_in(): void
+    public function test_a_staff_member_cannot_sign_in_to_the_mobile_app(): void
     {
-        $this->nurse([
+        $this->staff([
+            'email' => 'staff@dotsdaily.com',
+            'password' => Hash::make('secret-pass'),
+        ]);
+
+        $this->postJson('/api/v1/mobile/login', [
+            'email' => 'staff@dotsdaily.com',
+            'password' => 'secret-pass',
+        ])->assertStatus(403);
+
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_a_deactivated_staff_member_cannot_sign_in(): void
+    {
+        $this->staff([
             'email' => 'off@dotsdaily.com',
             'password' => Hash::make('secret-pass'),
             'is_active' => false,
@@ -69,45 +84,42 @@ class NurseAccessTest extends TestCase
 
     public function test_repeated_failed_sign_ins_are_throttled(): void
     {
-        $this->nurse(['email' => 'nurse@dotsdaily.com']);
+        $this->staff(['email' => 'staff@dotsdaily.com']);
 
         for ($i = 0; $i < 5; $i++) {
             $this->postJson('/api/v1/login', [
-                'email' => 'nurse@dotsdaily.com',
+                'email' => 'staff@dotsdaily.com',
                 'password' => 'wrong-password',
             ])->assertStatus(422);
         }
 
         $this->postJson('/api/v1/login', [
-            'email' => 'nurse@dotsdaily.com',
+            'email' => 'staff@dotsdaily.com',
             'password' => 'wrong-password',
         ])->assertStatus(429);
     }
 
-    // ── Seeing only their own patients ─────────────────────────────
+    // ── Every patient is visible ────────────────────────────────────
 
-    public function test_a_nurse_lists_only_the_patients_they_registered(): void
+    public function test_staff_see_every_patient_regardless_of_who_registered_them(): void
     {
-        $nurse = $this->nurse();
-        $mine = $this->patientRegisteredBy($nurse);
-        $theirs = $this->patientRegisteredBy($this->nurse());
+        $staff = $this->staff();
+        $mine = $this->patientRegisteredBy($staff);
+        $theirs = $this->patientRegisteredBy($this->staff());
         $adminOwned = $this->patientRegisteredBy($this->admin());
 
-        Sanctum::actingAs($nurse);
+        Sanctum::actingAs($staff);
 
         $ids = collect($this->getJson('/api/v1/patients')->assertOk()->json('data'))->pluck('id');
-        $this->assertEquals([$mine->id], $ids->all());
+        $this->assertEqualsCanonicalizing([$mine->id, $theirs->id, $adminOwned->id], $ids->all());
 
         $listIds = collect($this->getJson('/api/v1/patients/list')->assertOk()->json('data'))->pluck('id');
-        $this->assertEquals([$mine->id], $listIds->all());
-
-        $this->assertNotContains($theirs->id, $ids);
-        $this->assertNotContains($adminOwned->id, $ids);
+        $this->assertEqualsCanonicalizing([$mine->id, $theirs->id, $adminOwned->id], $listIds->all());
     }
 
     public function test_an_admin_still_sees_every_patient(): void
     {
-        $this->patientRegisteredBy($this->nurse());
+        $this->patientRegisteredBy($this->staff());
         $this->patientRegisteredBy($this->admin());
 
         Sanctum::actingAs($this->admin());
@@ -115,35 +127,21 @@ class NurseAccessTest extends TestCase
         $this->assertCount(2, $this->getJson('/api/v1/patients')->assertOk()->json('data'));
     }
 
-    public function test_a_nurse_can_open_their_own_patient_and_monitoring_calendar(): void
+    public function test_a_staff_member_can_open_any_patient_and_monitoring_calendar(): void
     {
-        $nurse = $this->nurse();
-        $patient = $this->patientRegisteredBy($nurse);
-        Sanctum::actingAs($nurse);
+        $patient = $this->patientRegisteredBy($this->admin());
+        Sanctum::actingAs($this->staff());
 
         $this->getJson("/api/v1/patients/{$patient->id}")->assertOk();
         $this->getJson('/api/v1/patients/monitoring?patient_id='.$patient->id)->assertOk();
     }
 
-    public function test_another_patients_record_reads_as_not_found(): void
+    // ── Editing ─────────────────────────────────────────────────────
+
+    public function test_a_staff_member_can_register_and_update_patients(): void
     {
-        $other = $this->patientRegisteredBy($this->admin());
-        Sanctum::actingAs($this->nurse());
-
-        $this->getJson("/api/v1/patients/{$other->id}")->assertNotFound();
-        $this->getJson('/api/v1/patients/monitoring?patient_id='.$other->id)->assertNotFound();
-        $this->putJson("/api/v1/patients/{$other->id}", ['occupation' => 'Changed'])->assertNotFound();
-
-        // An id that does not exist answers the same way, so nothing leaks.
-        $this->getJson('/api/v1/patients/monitoring?patient_id=999999')->assertNotFound();
-
-        $this->assertDatabaseMissing('patients', ['id' => $other->id, 'occupation' => 'Changed']);
-    }
-
-    public function test_a_patient_registered_by_a_nurse_belongs_to_that_nurse(): void
-    {
-        $nurse = $this->nurse();
-        Sanctum::actingAs($nurse);
+        $staff = $this->staff();
+        Sanctum::actingAs($staff);
 
         $id = $this->postJson('/api/v1/patients', [
             'status' => 'draft',
@@ -155,29 +153,17 @@ class NurseAccessTest extends TestCase
             'password' => 'patient-pass-1',
         ])->assertCreated()->json('data.patient.id');
 
-        $this->assertDatabaseHas('patients', ['id' => $id, 'registered_by' => $nurse->id]);
-        $this->getJson("/api/v1/patients/{$id}")->assertOk();
+        $this->assertDatabaseHas('patients', ['id' => $id, 'registered_by' => $staff->id]);
+
+        $this->putJson("/api/v1/patients/{$id}", ['occupation' => 'Farmer'])->assertOk();
+        $this->assertDatabaseHas('patients', ['id' => $id, 'occupation' => 'Farmer']);
     }
 
-    // ── Editing ─────────────────────────────────────────────────────
-
-    public function test_a_nurse_can_update_their_patients_details(): void
+    public function test_a_staff_member_cannot_change_a_patients_sign_in_credentials(): void
     {
-        $nurse = $this->nurse();
-        $patient = $this->patientRegisteredBy($nurse);
-        Sanctum::actingAs($nurse);
-
-        $this->putJson("/api/v1/patients/{$patient->id}", ['occupation' => 'Farmer'])->assertOk();
-
-        $this->assertDatabaseHas('patients', ['id' => $patient->id, 'occupation' => 'Farmer']);
-    }
-
-    public function test_a_nurse_cannot_change_a_patients_sign_in_credentials(): void
-    {
-        $nurse = $this->nurse();
-        $patient = $this->patientRegisteredBy($nurse);
+        $patient = $this->patientRegisteredBy($this->staff());
         $originalHash = $patient->user->password;
-        Sanctum::actingAs($nurse);
+        Sanctum::actingAs($this->staff());
 
         $this->putJson("/api/v1/patients/{$patient->id}", ['password' => 'new-password-123'])
             ->assertForbidden();
@@ -188,22 +174,35 @@ class NurseAccessTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'takeover@example.com']);
     }
 
-    public function test_a_nurse_cannot_delete_a_patient(): void
+    public function test_a_staff_member_cannot_delete_a_patient(): void
     {
-        $nurse = $this->nurse();
-        $patient = $this->patientRegisteredBy($nurse);
-        Sanctum::actingAs($nurse);
+        $patient = $this->patientRegisteredBy($this->staff());
+        Sanctum::actingAs($this->staff());
 
         $this->deleteJson("/api/v1/patients/{$patient->id}")->assertForbidden();
 
         $this->assertNotSoftDeleted('patients', ['id' => $patient->id]);
     }
 
-    // ── Admin-only modules ──────────────────────────────────────────
+    // ── Module access ───────────────────────────────────────────────
 
-    public function test_a_nurse_is_refused_every_admin_module(): void
+    public function test_staff_can_open_the_clinical_modules(): void
     {
-        Sanctum::actingAs($this->nurse());
+        Sanctum::actingAs($this->staff());
+
+        foreach ([
+            ['GET', '/api/v1/reports/medication-adherence'],
+            ['GET', '/api/v1/treatments'],
+            ['GET', '/api/v1/medications-inventory'],
+            ['GET', '/api/v1/medications-inventory/summary'],
+        ] as [$method, $uri]) {
+            $this->json($method, $uri)->assertOk();
+        }
+    }
+
+    public function test_staff_are_refused_the_admin_only_modules(): void
+    {
+        Sanctum::actingAs($this->staff());
 
         foreach ([
             ['GET', '/api/v1/dashboard/stats'],
@@ -212,18 +211,15 @@ class NurseAccessTest extends TestCase
             ['PUT', '/api/v1/settings'],
             ['GET', '/api/v1/settings/users'],
             ['GET', '/api/v1/settings/audit'],
-            ['GET', '/api/v1/reports/medication-adherence'],
-            ['GET', '/api/v1/treatments'],
-            ['GET', '/api/v1/medications-inventory'],
         ] as [$method, $uri]) {
             $this->json($method, $uri)->assertForbidden();
         }
     }
 
-    public function test_a_nurse_cannot_create_or_promote_staff_accounts(): void
+    public function test_a_staff_member_cannot_create_or_promote_staff_accounts(): void
     {
-        $nurse = $this->nurse();
-        Sanctum::actingAs($nurse);
+        $staff = $this->staff();
+        Sanctum::actingAs($staff);
 
         $this->postJson('/api/v1/settings/users', [
             'name' => 'Sneaky Admin',
@@ -232,62 +228,52 @@ class NurseAccessTest extends TestCase
             'role' => 'admin',
         ])->assertForbidden();
 
-        $this->putJson("/api/v1/settings/users/{$nurse->id}", ['role' => 'admin'])->assertForbidden();
+        $this->putJson("/api/v1/settings/users/{$staff->id}", ['role' => 'admin'])->assertForbidden();
 
         $this->assertDatabaseMissing('users', ['email' => 'sneaky@example.com']);
-        $this->assertSame('nurse', $nurse->fresh()->role);
+        $this->assertSame('staff', $staff->fresh()->role);
     }
 
     // ── Dose verification ───────────────────────────────────────────
 
-    public function test_a_nurse_can_verify_their_patients_dose_and_it_is_audited(): void
+    public function test_a_staff_member_can_verify_a_dose_and_it_is_audited(): void
     {
-        $nurse = $this->nurse();
-        $log = $this->pendingLogFor($this->patientRegisteredBy($nurse));
-        Sanctum::actingAs($nurse);
+        $staff = $this->staff();
+        $log = $this->pendingLogFor($this->patientRegisteredBy($this->admin()));
+        Sanctum::actingAs($staff);
 
         $this->postJson("/api/v1/medication-logs/{$log->id}/verify")->assertOk();
-        $this->assertDatabaseHas('medication_logs', ['id' => $log->id, 'observed_by' => $nurse->id]);
+        $this->assertDatabaseHas('medication_logs', ['id' => $log->id, 'observed_by' => $staff->id]);
         $this->assertDatabaseHas('activity_logs', [
-            'user_id' => $nurse->id,
+            'user_id' => $staff->id,
             'action' => 'dose.verified',
             'subject_id' => $log->id,
         ]);
 
         $this->postJson("/api/v1/medication-logs/{$log->id}/unverify")->assertOk();
-        $this->assertDatabaseHas('activity_logs', ['user_id' => $nurse->id, 'action' => 'dose.unverified']);
-    }
-
-    public function test_a_nurse_cannot_verify_another_patients_dose(): void
-    {
-        $log = $this->pendingLogFor($this->patientRegisteredBy($this->admin()));
-        Sanctum::actingAs($this->nurse());
-
-        $this->postJson("/api/v1/medication-logs/{$log->id}/verify")->assertNotFound();
-
-        $this->assertDatabaseHas('medication_logs', ['id' => $log->id, 'observed_by' => null]);
+        $this->assertDatabaseHas('activity_logs', ['user_id' => $staff->id, 'action' => 'dose.unverified']);
     }
 
     // ── Losing access ───────────────────────────────────────────────
 
-    public function test_deactivating_a_nurse_ends_their_sessions(): void
+    public function test_deactivating_a_staff_member_ends_their_sessions(): void
     {
-        $nurse = $this->nurse();
-        $nurse->createToken('auth-token');
+        $staff = $this->staff();
+        $staff->createToken('auth-token');
         Sanctum::actingAs($this->admin());
 
-        $this->putJson("/api/v1/settings/users/{$nurse->id}", ['is_active' => false])->assertOk();
+        $this->putJson("/api/v1/settings/users/{$staff->id}", ['is_active' => false])->assertOk();
 
-        $this->assertSame(0, $nurse->tokens()->count());
+        $this->assertSame(0, $staff->tokens()->count());
     }
 
     public function test_a_deactivated_account_is_refused_even_with_a_live_session(): void
     {
-        $nurse = $this->nurse();
-        $this->patientRegisteredBy($nurse);
-        $nurse->forceFill(['is_active' => false])->save();
+        $staff = $this->staff();
+        $this->patientRegisteredBy($staff);
+        $staff->forceFill(['is_active' => false])->save();
 
-        Sanctum::actingAs($nurse->fresh());
+        Sanctum::actingAs($staff->fresh());
 
         $this->getJson('/api/v1/patients')->assertForbidden();
     }
@@ -301,9 +287,9 @@ class NurseAccessTest extends TestCase
         return $this->adminUser ??= User::factory()->create(['role' => 'admin']);
     }
 
-    private function nurse(array $attributes = []): User
+    private function staff(array $attributes = []): User
     {
-        return User::factory()->create(array_merge(['role' => 'nurse'], $attributes));
+        return User::factory()->create(array_merge(['role' => 'staff'], $attributes));
     }
 
     private function patientRegisteredBy(User $staff): Patient

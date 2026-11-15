@@ -33,7 +33,7 @@ class MonitoringController extends BaseApiController
         ]);
 
         $patient = Patient::query()
-            ->visibleTo($request->user()) // another nurse's patient reads as not found
+            ->visibleTo($request->user()) // non-portal roles read every patient as not found
             ->withCount([
                 'treatmentPlans as active_treatments_count' => fn ($q) => $q->where('status', 'active'),
             ])
