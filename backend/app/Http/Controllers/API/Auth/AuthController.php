@@ -43,9 +43,15 @@ class AuthController extends BaseApiController
     {
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'email' => ['No account found with that email address.'],
+            ]);
+        }
+
+        if (! Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['Incorrect password. Please try again.'],
             ]);
         }
 

@@ -1,10 +1,27 @@
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/store/auth";
+import { ApiError } from "@/lib/services/api";
 import { Loader2, Eye, EyeOff, User, Lock } from "lucide-react";
+
+/** Pull the field-level validation text out of a failed API call. */
+function resolveErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return (
+      err.errors?.email?.[0] ??
+      err.errors?.password?.[0] ??
+      err.message ??
+      "Unable to sign in. Please try again."
+    );
+  }
+
+  return err instanceof Error && err.message
+    ? err.message
+    : "Unable to sign in. Please try again.";
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -16,6 +33,13 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Auto-dismiss the message after 5 seconds so it never lingers on screen.
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(""), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -26,11 +50,7 @@ function LoginForm() {
       const redirectTo = searchParams.get("redirect") || "/dashboard";
       router.push(redirectTo);
     } catch (err: unknown) {
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "Invalid username or password."
-      );
+      setError(resolveErrorMessage(err));
     } finally {
       setLoading(false);
     }
