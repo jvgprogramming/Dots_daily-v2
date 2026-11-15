@@ -55,7 +55,7 @@ export function Pagination({
         page === "..." ? (
           <span
             key={`ellipsis-${i}`}
-            className="flex h-10 w-10 items-center justify-center text-sm text-text-muted"
+            className="flex h-8 w-8 items-center justify-center text-[13px] text-text-muted"
           >
             ...
           </span>
@@ -64,9 +64,9 @@ export function Pagination({
             key={page}
             onClick={() => onPageChange(page)}
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-[8px] text-sm font-medium transition-all duration-200",
+              "flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-medium transition-colors duration-150",
               page === currentPage
-                ? "bg-primary-500 text-white shadow-sm"
+                ? "bg-primary-900 text-white"
                 : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
             )}
           >

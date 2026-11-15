@@ -118,15 +118,15 @@ function SummaryCard({
     danger: "text-danger-text",
   };
   return (
-    <div className="rounded-[12px] border border-border-light bg-bg-card p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="h-4 w-4 text-text-tertiary" />
-        <p className="text-xs font-medium uppercase tracking-wider text-text-tertiary">
-          {label}
-        </p>
+    <div className="stat-card">
+      <div className="stat-card__head">
+        <p className="stat-card__label">{label}</p>
+        <span className="stat-indicator" data-live="true">
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </span>
       </div>
-      <p className={`text-2xl font-bold ${tones[tone]}`}>{value}</p>
-      {sub && <p className="text-xs text-text-tertiary mt-0.5">{sub}</p>}
+      <p className={`stat-card__value stat-card__value--sm ${tones[tone]}`}>{value}</p>
+      {sub && <p className="stat-card__foot">{sub}</p>}
     </div>
   );
 }
@@ -487,10 +487,10 @@ export default function TreatmentsPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-text-primary">
+          <h1 className="page-title">
             Treatments
           </h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <p className="page-lede">
             Treatment records, follow-up schedule, and adherence across all
             patients.
           </p>
@@ -525,7 +525,7 @@ export default function TreatmentsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
             placeholder="Search patients by name…"
-            className="pl-9 h-10 rounded-[8px]"
+            className="pl-9 h-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -535,9 +535,9 @@ export default function TreatmentsPage() {
             <button
               key={chip.key}
               onClick={() => setStatusFilter(chip.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-150 ${
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
                 statusFilter === chip.key
-                  ? "bg-primary-500 text-white"
+                  ? "bg-primary-900 text-white"
                   : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
@@ -548,7 +548,7 @@ export default function TreatmentsPage() {
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {loading && !data ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-[12px]" />
@@ -604,7 +604,7 @@ export default function TreatmentsPage() {
       {/* ── Follow-up Schedule ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">Follow-up Schedule</h2>
+          <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-text-primary">Follow-up Schedule</h2>
           {followUps.length > 0 && (
             <Badge variant="primary" size="sm">
               {followUps.length} upcoming
@@ -627,7 +627,7 @@ export default function TreatmentsPage() {
               return (
                 <div
                   key={f.id}
-                  className="rounded-[12px] border border-border-light bg-bg-card p-4"
+                  className="rounded-[14px] border border-border-light bg-bg-card p-4"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -674,7 +674,7 @@ export default function TreatmentsPage() {
       {/* ── Treatment Records / History ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">
+          <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-text-primary">
             Treatment Records
           </h2>
           {records.length > 0 && (

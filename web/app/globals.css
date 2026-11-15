@@ -2,81 +2,279 @@
 
 @theme inline {
   --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-  --font-display: var(--font-fraunces), "Fraunces", Georgia, serif;
+  --font-display: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
 
-  /* ── Primary: Healthcare Green (from login theme, base) ── */
-  --color-primary-50: #f0fdf4;
-  --color-primary-100: #dcfce7;
-  --color-primary-200: #bbf7d0;
-  --color-primary-300: #86efac;
-  --color-primary-400: #4ade80;
-  --color-primary-500: #22c55e;
-  --color-primary-600: #16a34a;
-  --color-primary-700: #15803d;
-  --color-primary-800: #166534;
-  --color-primary-900: #14532d;
-  --color-primary-950: #052e16;
+  /* ── Botanical green scale — forest → emerald → sage ── */
+  --color-primary-50: #f2f7f4;
+  --color-primary-100: #e7f1ea;
+  --color-primary-200: #cfe4d8;
+  --color-primary-300: #a9d3be;
+  --color-primary-400: #77b99a;
+  --color-primary-500: #18865b;
+  --color-primary-600: #147350;
+  --color-primary-700: #0e5d41;
+  --color-primary-800: #0b4934;
+  --color-primary-900: #064e32;
+  --color-primary-950: #032b1c;
 
-  /* ── Neutral Canvas ── */
-  --color-bg-main: #f5f6f8;
+  /* ── Canvas & surfaces ── */
+  --color-bg-main: #eceeef;
   --color-bg-card: #ffffff;
-  --color-bg-subtle: #edf0f3;
+  --color-bg-subtle: #f7f8f7;
   --color-bg-sidebar: #ffffff;
 
-  /* ── Borders ── */
-  --color-border-light: #e8ecf0;
-  --color-border-default: #d6dce3;
-  --color-border-strong: #bcc4ce;
+  /* ── Hairline borders ── */
+  --color-border-light: #e7eae7;
+  --color-border-default: #dce2dd;
+  --color-border-strong: #c4cec7;
 
-  /* ── Text ── */
-  --color-text-primary: #1a1d23;
-  --color-text-secondary: #6b7280;
-  --color-text-tertiary: #9ca3af;
-  --color-text-muted: #b0b8c4;
+  /* ── Ink ── */
+  --color-text-primary: #171d19;
+  --color-text-body: #4c564f;
+  --color-text-secondary: #87918a;
+  --color-text-tertiary: #9aa39c;
+  --color-text-muted: #b4bcb6;
 
-  /* ── Semantic (reserved for status, alerts, progress, badges) ── */
-  --color-success: #22c55e;
-  --color-success-bg: #ecfdf5;
-  --color-success-text: #166534;
-  --color-warning: #f59e0b;
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #92400e;
-  --color-danger: #ef4444;
-  --color-danger-bg: #fef2f2;
-  --color-danger-text: #991b1b;
-  --color-info: #3b82f6;
-  --color-info-bg: #eff6ff;
-  --color-info-text: #1e40af;
+  /* ── Status (used sparingly, mapped into the green system) ── */
+  --color-success: #18865b;
+  --color-success-bg: #e7f1ea;
+  --color-success-text: #064e32;
+  --color-warning: #a9761c;
+  --color-warning-bg: #faf3e6;
+  --color-warning-text: #7c5713;
+  --color-danger: #b4402f;
+  --color-danger-bg: #fbefec;
+  --color-danger-text: #8c3226;
+  --color-info: #0b4934;
+  --color-info-bg: #eef4f0;
+  --color-info-text: #0b4934;
 
-  /* ── Shadows (very subtle, modern) ── */
-  --shadow-xs: 0 0 0 1px rgb(0 0 0 / 0.02);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 0 0 1px rgb(0 0 0 / 0.02);
-  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.03);
-  --shadow-dropdown: 0 4px 16px 0 rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.03);
-  --shadow-modal: 0 16px 48px 0 rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.04);
-  --shadow-elevated: 0 8px 24px 0 rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.03);
+  /* ── Shadows — barely-there, for depth cues only ── */
+  --shadow-xs: 0 1px 1px 0 rgb(23 29 25 / 0.03);
+  --shadow-sm: 0 1px 2px 0 rgb(23 29 25 / 0.04);
+  --shadow-card: 0 1px 2px 0 rgb(23 29 25 / 0.035), 0 1px 1px 0 rgb(23 29 25 / 0.02);
+  --shadow-card-hover: 0 2px 6px -2px rgb(23 29 25 / 0.06), 0 0 0 1px rgb(23 29 25 / 0.03);
+  --shadow-dropdown: 0 16px 36px -20px rgb(23 29 25 / 0.28), 0 0 0 1px rgb(23 29 25 / 0.05);
+  --shadow-modal: 0 32px 72px -32px rgb(23 29 25 / 0.4), 0 0 0 1px rgb(23 29 25 / 0.06);
+  --shadow-elevated: 0 20px 44px -28px rgb(23 29 25 / 0.3), 0 0 0 1px rgb(23 29 25 / 0.04);
 
-  /* ── Border Radius (Intentional, not over-rounded) ── */
+  /* ── Radii ── */
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
   --radius-full: 9999px;
 }
 
-/* ── Base Styles ── */
+/* ── Base ── */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-main);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  font-feature-settings: "cv02", "cv03", "cv04";
+  text-rendering: optimizeLegibility;
 }
 
-/* ── Custom Scrollbar ── */
+/* ── Editorial type utilities ── */
+@layer components {
+  .page-title {
+    font-size: 26px;
+    line-height: 1.12;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--color-text-primary);
+  }
+
+  .page-lede {
+    margin-top: 7px;
+    max-width: 68ch;
+    font-size: 13px;
+    line-height: 1.62;
+    color: var(--color-text-secondary);
+  }
+
+  .section-title {
+    font-size: 14px;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    color: var(--color-text-primary);
+  }
+
+  .eyebrow {
+    font-size: 10px;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+
+  .meta {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+
+  .metric {
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
+  }
+
+  .metric-sm {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
+  }
+}
+
+/* ── Stat / index cards ──────────────────────────────────────────────
+   One anatomy for every statistics card: label, value, optional footnote.
+   `min-height` on the label reserves the two-line case so values line up
+   across a row instead of stepping down when a label wraps. */
+@layer components {
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100%;
+    padding: 20px;
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .stat-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .stat-card__label {
+    min-width: 0;
+    min-height: 2.5em;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    overflow-wrap: break-word;
+  }
+
+  .stat-card__value {
+    margin-top: 12px;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .stat-card__value--sm {
+    font-size: 26px;
+  }
+
+  .stat-card__foot {
+    margin-top: 12px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+
+  /* Status indicator: the static outline icon on tablet and up. */
+  .stat-indicator {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-top: -1px;
+    color: var(--color-primary-400);
+  }
+
+  .stat-indicator::after {
+    content: "";
+    display: none;
+    box-sizing: border-box;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid rgb(24 134 91 / 0.2);
+    border-top-color: var(--color-primary-600);
+    border-radius: var(--radius-full);
+  }
+
+  /* Mobile only: swap the static status icon for a compact throbber.
+     The 16px box is unchanged, so nothing reflows when it swaps. */
+  @media (max-width: 767px) {
+    .stat-indicator[data-live="true"] > svg {
+      display: none;
+    }
+
+    .stat-indicator[data-live="true"]::after {
+      display: block;
+      animation: stat-throb 1.15s linear infinite;
+    }
+
+    .stat-card {
+      padding: 14px;
+    }
+
+    .stat-card__value {
+      margin-top: 10px;
+      font-size: 26px;
+    }
+
+    .stat-card__value--sm {
+      font-size: 22px;
+    }
+
+    .stat-card__foot {
+      margin-top: 10px;
+    }
+  }
+
+  @keyframes stat-throb {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Reduced motion: keep the indicator, drop the spin. */
+  @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+    .stat-indicator[data-live="true"]::after {
+      animation: none;
+      border-color: rgb(20 115 80 / 0.35);
+      border-top-color: var(--color-primary-600);
+    }
+  }
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Scrollbars ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -85,21 +283,19 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d2d6dc;
+  background: #d3d9d5;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #aeb8b1;
 }
 
-/* ── Focus Styles ── */
 *:focus-visible {
-  outline: 2px solid var(--color-primary-600);
+  outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-/* ── Selection ── */
 ::selection {
   background-color: var(--color-primary-100);
   color: var(--color-primary-900);
@@ -111,108 +307,37 @@ body {
   scrollbar-color: transparent transparent;
 }
 .sidebar-scroll:hover {
-  scrollbar-color: #d2d6dc transparent;
+  scrollbar-color: #d3d9d5 transparent;
 }
 
-/* ── Login background and glass card decorations ── */
-.login-bg {
-  background: linear-gradient(145deg, #064e21 0%, #15803d 45%, #16a34a 100%);
+/* ── Auth canvas: quiet off-white paper with a soft sage wash ── */
+.auth-canvas {
+  background-color: #eef1ef;
+  background-image: radial-gradient(
+      120% 90% at 50% -10%,
+      #f7faf8 0%,
+      rgba(247, 250, 248, 0) 62%
+    ),
+    linear-gradient(180deg, #f0f3f1 0%, #eceeef 100%);
 }
 
-.glass-card {
-  background: rgba(255,255,255,0.82);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255,255,255,0.5);
-  box-shadow: 0 24px 64px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.9);
-  border-radius: 16px;
+.auth-panel {
+  background-color: #ffffff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgb(23 29 25 / 0.04), 0 24px 60px -40px rgb(23 29 25 / 0.35);
 }
 
-.ecg-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 12px;
-  width: 100%;
-  height: 48px;
-  pointer-events: none;
-}
-
-.small-cross {
-  width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center; box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-}
-
-/* Input focus: underline-only fields with green focus border */
+/* Underline fields — Swiss form treatment */
 .login-input {
   border: 0;
   border-bottom: 1px solid var(--color-border-default);
   border-radius: 0;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.18s ease;
 }
 .login-input:focus {
   outline: none;
   box-shadow: none;
   border-radius: 0;
-  border-bottom-color: var(--color-success-text, #166534);
+  border-bottom-color: var(--color-primary-900);
 }
-
-/* Bubble icon styling */
-.bubble {
-  pointer-events: none;
-  display: block;
-  z-index: 0;
-}
-.bubble svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  opacity: 0.12;
-  transform-origin: center;
-}
-.bubble .icon-fill {
-  fill: rgba(255,255,255,0.12);
-}
-.bubble .icon-stroke {
-  stroke: rgba(255,255,255,0.14);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-}
-
-/* Bubble positions (fine-tuned to match design) */
-.bubble {
-  position: absolute;
-  border-radius: 9999px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.07);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  pointer-events: none;
-  display: block;
-  z-index: 0;
-  transform: translateZ(0);
-  animation: floatSlow 8s ease-in-out infinite;
-  opacity: 0.55;
-}
-
-@keyframes floatSlow {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
-}
-
-.bubble-a { width: 320px; height: 320px; left: 24px; top: 8px; }
-.bubble-b { width: 220px; height: 220px; right: 48px; top: 96px; }
-.bubble-c { width: 200px; height: 200px; left: 16px; bottom: 80px; }
-.bubble-d { width: 420px; height: 420px; right: 6%; bottom: 12px; }
-
-/* Slight stagger on animation durations for variety */
-.bubble-a { animation-duration: 10s; }
-.bubble-b { animation-duration: 12s; animation-delay: 0.6s; }
-.bubble-c { animation-duration: 9s; animation-delay: 0.9s; }
-.bubble-d { animation-duration: 14s; animation-delay: 0.2s; }
-
-/* Put glass card above decorations */
-.glass-card { position: relative; z-index: 20; }
-.ecg-line { z-index: 5; }

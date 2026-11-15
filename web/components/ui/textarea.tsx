@@ -12,8 +12,8 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <textarea
         className={cn(
-          "flex min-h-[100px] w-full rounded-[10px] border bg-bg-card px-4 py-3 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500",
+          "flex min-h-[100px] w-full rounded-[8px] border bg-bg-card px-3 py-2.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted transition-colors duration-150",
+          "focus:outline-none focus:ring-[3px] focus:ring-primary-500/[0.12] focus:border-primary-600",
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-bg-subtle",
           "resize-y",
           error

@@ -27,10 +27,10 @@ export function Tooltip({
   };
 
   const animationVariants = {
-    top: { initial: { opacity: 0, y: 4 }, animate: { opacity: 1, y: 0 } },
-    bottom: { initial: { opacity: 0, y: -4 }, animate: { opacity: 1, y: 0 } },
-    left: { initial: { opacity: 0, x: 4 }, animate: { opacity: 1, x: 0 } },
-    right: { initial: { opacity: 0, x: -4 }, animate: { opacity: 1, x: 0 } },
+    top: { initial: { opacity: 0, y: 3 }, animate: { opacity: 1, y: 0 } },
+    bottom: { initial: { opacity: 0, y: -3 }, animate: { opacity: 1, y: 0 } },
+    left: { initial: { opacity: 0, x: 3 }, animate: { opacity: 1, x: 0 } },
+    right: { initial: { opacity: 0, x: -3 }, animate: { opacity: 1, x: 0 } },
   };
 
   return (
@@ -48,13 +48,13 @@ export function Tooltip({
             initial={animationVariants[side].initial}
             animate={animationVariants[side].animate}
             exit={animationVariants[side].initial}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.12 }}
             className={cn(
               "absolute z-50 pointer-events-none",
               sideStyles[side]
             )}
           >
-            <div className="whitespace-nowrap rounded-[8px] bg-zinc-900 px-3 py-1.5 text-xs text-white shadow-lg">
+            <div className="whitespace-nowrap rounded-[6px] bg-text-primary px-2.5 py-1 text-[11px] font-medium text-white shadow-dropdown">
               {content}
             </div>
           </motion.div>

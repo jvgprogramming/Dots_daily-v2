@@ -22,7 +22,7 @@ export function Breadcrumb({
   const SeparatorIcon = separator === "chevron" ? ChevronRight : Slash;
 
   return (
-    <nav className={cn("flex items-center gap-1.5 text-sm", className)}>
+    <nav className={cn("flex items-center gap-1.5 text-[12px]", className)}>
       {items.map((item, i) => {
         const isLast = i === items.length - 1;
         return (

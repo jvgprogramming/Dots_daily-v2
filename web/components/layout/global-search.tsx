@@ -114,7 +114,7 @@ export function GlobalSearch() {
           aria-expanded={showDropdown}
           aria-controls="global-search-results"
           placeholder="Search anything… patients, medications, treatments"
-          className="pl-9 h-9 rounded-[8px] bg-bg-subtle border-border-light text-sm placeholder:text-text-tertiary pr-12"
+          className="h-9 rounded-[8px] border-transparent bg-bg-subtle pl-9 pr-12 text-[13px] placeholder:text-text-tertiary hover:border-border-light focus:bg-bg-card"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -173,10 +173,10 @@ export function GlobalSearch() {
                               onMouseEnter={() => setActiveIndex(i)}
                               onClick={() => selectItem(item)}
                               className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                                i === activeIndex ? "bg-primary-50" : ""
+                                i === activeIndex ? "bg-primary-100/50" : ""
                               }`}
                             >
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-primary-50 text-primary-700">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-primary-100/60 text-primary-800">
                                 <Icon className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1">

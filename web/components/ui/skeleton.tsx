@@ -7,7 +7,7 @@ function Skeleton({
   return (
     <div
       className={cn(
-        "animate-pulse rounded-[8px] bg-border-light",
+        "animate-pulse rounded-[6px] bg-[#eff2f0]",
         className
       )}
       {...props}
@@ -19,7 +19,7 @@ function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "rounded-[16px] border border-border-light bg-bg-card p-6 shadow-card",
+        "rounded-[14px] border border-border-light bg-bg-card p-5 shadow-card",
         className
       )}
       {...props}

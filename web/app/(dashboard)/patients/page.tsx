@@ -307,10 +307,10 @@ export default function PatientsPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-text-primary">
+          <h1 className="page-title">
             Patients
           </h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <p className="page-lede">
             Manage patient registrations and profiles.
           </p>
         </div>
@@ -327,7 +327,7 @@ export default function PatientsPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <Input
               placeholder="Search by name, email, phone, or health ID..."
-              className="pl-9 h-10 rounded-[8px]"
+              className="pl-9 h-9"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -345,9 +345,9 @@ export default function PatientsPage() {
               <button
                 key={opt.value}
                 onClick={() => handleGenderChange(opt.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-[6px] transition-all duration-150 ${
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 ${
                   genderFilter === opt.value
-                    ? "bg-primary-500 text-white"
+                    ? "bg-primary-900 text-white"
                     : "bg-bg-subtle text-text-secondary hover:bg-border-light"
                 }`}
               >
@@ -384,27 +384,27 @@ export default function PatientsPage() {
       ) : patients && patients.data.length > 0 ? (
         <>
           {/* ── Table ── */}
-          <div className="rounded-[12px] border border-border-light bg-bg-card overflow-hidden">
+          <div className="rounded-[14px] border border-border-light bg-bg-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border-light bg-bg-subtle/50">
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
                       Patient
                     </th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary hidden sm:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden sm:table-cell">
                       Contact
                     </th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary hidden md:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden md:table-cell">
                       Gender
                     </th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden lg:table-cell">
                       Health ID
                     </th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-text-tertiary hidden lg:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden lg:table-cell">
                       Registered
                     </th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
                       Actions
                     </th>
                   </tr>
@@ -423,7 +423,7 @@ export default function PatientsPage() {
                       >
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-primary-50 text-primary-600 text-sm font-semibold">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-primary-100/60 text-primary-800 text-[12px] font-semibold">
                               {patient.user?.name?.charAt(0)?.toUpperCase() || "?"}
                             </div>
                             <div className="min-w-0">
@@ -478,7 +478,7 @@ export default function PatientsPage() {
                             {patient.status === "draft" && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); resumeDraft(patient); }}
-                                className="flex h-8 items-center justify-center rounded-[6px] px-2 text-xs font-medium text-primary-600 hover:bg-primary-50 transition-all"
+                                className="flex h-8 items-center justify-center rounded-[6px] px-2 text-xs font-medium text-primary-700 hover:bg-primary-100/60 transition-colors"
                                 title="Resume draft registration"
                               >
                                 Resume

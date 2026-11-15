@@ -28,7 +28,7 @@ export function Table<T>({
 }: TableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-border-light text-sm text-text-muted">
+      <div className="flex h-32 items-center justify-center rounded-[12px] border border-dashed border-border-light text-[13px] text-text-muted">
         {emptyMessage}
       </div>
     );
@@ -43,7 +43,7 @@ export function Table<T>({
               <th
                 key={col.key}
                 className={cn(
-                  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted",
+                  "px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary",
                   col.className
                 )}
               >
@@ -58,15 +58,15 @@ export function Table<T>({
               key={keyExtractor(item)}
               onClick={() => onRowClick?.(item)}
               className={cn(
-                "border-b border-border-light/50 transition-colors",
-                "hover:bg-bg-subtle",
+                "border-b border-border-light/70 transition-colors last:border-b-0",
+                "hover:bg-bg-subtle/70",
                 onRowClick && "cursor-pointer"
               )}
             >
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className={cn("px-4 py-3 text-sm text-text-secondary", col.className)}
+                  className={cn("px-4 py-3 text-[13px] text-text-body", col.className)}
                 >
                   {col.cell
                     ? col.cell(item)

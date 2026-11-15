@@ -99,13 +99,15 @@ function SummaryCard({
     danger: "text-danger-text",
   };
   return (
-    <div className="rounded-[12px] border border-border-light bg-bg-card p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="h-4 w-4 text-text-tertiary" />
-        <p className="text-xs font-medium uppercase tracking-wider text-text-tertiary">{label}</p>
+    <div className="stat-card">
+      <div className="stat-card__head">
+        <p className="stat-card__label">{label}</p>
+        <span className="stat-indicator" data-live="true">
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </span>
       </div>
-      <p className={`text-2xl font-bold ${tones[tone]}`}>{value}</p>
-      {sub && <p className="text-xs text-text-tertiary mt-0.5">{sub}</p>}
+      <p className={`stat-card__value stat-card__value--sm ${tones[tone]}`}>{value}</p>
+      {sub && <p className="stat-card__foot">{sub}</p>}
     </div>
   );
 }
@@ -238,8 +240,8 @@ export default function MonitoringPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-text-primary">Daily Monitoring</h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <h1 className="page-title">Daily Monitoring</h1>
+          <p className="page-lede">
             Track treatment adherence, progress, and risk for each patient.
           </p>
         </div>
@@ -263,7 +265,7 @@ export default function MonitoringPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <Input
               placeholder="Search patients by name or email..."
-              className="pl-9 h-10 rounded-[8px]"
+              className="pl-9 h-9"
               value={patientSearch}
               onChange={(e) => setPatientSearch(e.target.value)}
             />
@@ -275,8 +277,8 @@ export default function MonitoringPage() {
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-[6px] transition-all duration-150 ${
-                view === v ? "bg-primary-500 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 ${
+                view === v ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
               {v === "month" ? "Month" : "Week"}
@@ -287,8 +289,8 @@ export default function MonitoringPage() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-[6px] transition-all duration-150 capitalize ${
-                statusFilter === s ? "bg-primary-500 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 capitalize ${
+                statusFilter === s ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
               {s.replace("_", " ")}
@@ -316,11 +318,11 @@ export default function MonitoringPage() {
                 }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm whitespace-nowrap transition-all duration-150 ${
                   active
-                    ? "bg-primary-50 border-primary-300 text-primary-700"
+                    ? "bg-primary-100/70 border-primary-300 text-primary-900"
                     : "bg-bg-card border-border-light text-text-secondary hover:border-border-strong"
                 }`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-primary-500 text-white" : "bg-bg-subtle text-text-tertiary"}`}>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-tertiary"}`}>
                   {name.charAt(0).toUpperCase()}
                 </span>
                 {name}
@@ -339,7 +341,7 @@ export default function MonitoringPage() {
         />
       ) : loading && !data ? (
         <div className="space-y-4">
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-[12px]" />)}
           </div>
           <Skeleton className="h-80 rounded-[12px]" />
@@ -373,7 +375,7 @@ export default function MonitoringPage() {
           )}
 
           {/* ── Summary cards ── */}
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               icon={TrendingUp}
               label="Adherence Rate"
@@ -407,13 +409,13 @@ export default function MonitoringPage() {
 
           {/* ── Treatment timeline ── */}
           {progress && (
-            <div className="rounded-[12px] border border-border-light bg-bg-card p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Pill className="h-4 w-4 text-text-tertiary" />
+            <div className="rounded-[14px] border border-border-light bg-bg-card p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Pill className="h-4 w-4 shrink-0 text-text-tertiary" />
                   <p className="text-sm font-semibold text-text-primary">Treatment Timeline</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={progress.status === "active" ? "success" : progress.status === "completed" ? "primary" : "default"} size="sm">
                     {progress.status.charAt(0).toUpperCase() + progress.status.slice(1)}
                   </Badge>
@@ -483,7 +485,7 @@ export default function MonitoringPage() {
                 onClose={() => setSelectedDate(null)}
               />
             ) : (
-              <div className="rounded-[12px] border border-dashed border-border-light bg-bg-card/50 p-6 flex flex-col items-center justify-center text-center">
+              <div className="rounded-[14px] border border-dashed border-border-light bg-bg-card/60 p-6 flex flex-col items-center justify-center text-center">
                 <CalendarDays className="h-5 w-5 text-text-tertiary mb-2" />
                 <p className="text-sm text-text-secondary font-medium">Select a date</p>
                 <p className="text-xs text-text-tertiary mt-1">

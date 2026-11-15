@@ -130,12 +130,14 @@ function SummaryCard({
     danger: "text-danger-text",
   };
   return (
-    <div className="rounded-[12px] border border-border-light bg-bg-card p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="h-4 w-4 text-text-tertiary" />
-        <p className="text-xs font-medium uppercase tracking-wider text-text-tertiary">{label}</p>
+    <div className="stat-card">
+      <div className="stat-card__head">
+        <p className="stat-card__label">{label}</p>
+        <span className="stat-indicator" data-live="true">
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </span>
       </div>
-      <p className={`text-2xl font-bold ${tones[tone]}`}>{value}</p>
+      <p className={`stat-card__value stat-card__value--sm ${tones[tone]}`}>{value}</p>
     </div>
   );
 }
@@ -411,8 +413,8 @@ export default function MedicationsPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-text-primary">Medication</h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <h1 className="page-title">Medication</h1>
+          <p className="page-lede">
             Register medicines and track inventory, storage, and expiry.
           </p>
         </div>
@@ -425,7 +427,7 @@ export default function MedicationsPage() {
       {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
       {/* ── Summary cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <SummaryCard icon={Pill} label="Total Medicines" value={summary?.total_medicines ?? "—"} />
         <SummaryCard icon={CheckCircle2} label="In Stock" value={summary?.in_stock ?? "—"} tone="success" />
         <SummaryCard icon={AlertTriangle} label="Low Stock" value={summary?.low_stock ?? "—"} tone="warning" />
@@ -447,7 +449,7 @@ export default function MedicationsPage() {
                 onClick={() => setStorageFilter(storageFilter === key ? "" : key)}
                 className={`inline-flex items-center gap-2 rounded-[8px] border px-3 py-1.5 text-xs font-medium transition-colors ${
                   storageFilter === key
-                    ? "border-primary-300 bg-primary-50 text-primary-700"
+                    ? "border-primary-300 bg-primary-100/70 text-primary-900"
                     : "border-border-light bg-bg-card text-text-secondary hover:bg-bg-subtle"
                 }`}
               >
@@ -466,7 +468,7 @@ export default function MedicationsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
           <Input
             placeholder="Search medicines by name or generic name…"
-            className="pl-9 h-10 rounded-[8px]"
+            className="pl-9 h-9"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />

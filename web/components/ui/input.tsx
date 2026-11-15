@@ -14,11 +14,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         type={type}
         value={value === null ? "" : value}
         className={cn(
-          "flex h-11 w-full rounded-[10px] border bg-bg-card px-4 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500",
+          "flex h-9 w-full rounded-[8px] border bg-bg-card px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted transition-colors duration-150",
+          "focus:outline-none focus:ring-[3px] focus:ring-primary-500/[0.12] focus:border-primary-600",
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-bg-subtle",
           error
-            ? "border-danger/50 focus:border-danger focus:ring-danger/20"
+            ? "border-danger/50 focus:border-danger focus:ring-danger/15"
             : "border-border-default hover:border-border-strong",
           className
         )}

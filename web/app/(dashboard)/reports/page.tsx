@@ -468,10 +468,10 @@ export default function ReportsPage() {
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[36px] font-bold tracking-tight text-text-primary">
+          <h1 className="page-title">
             Reports & Analytics
           </h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <p className="page-lede">
             Medication adherence reported from patient dose confirmations in the
             mobile app.
           </p>
@@ -538,9 +538,9 @@ export default function ReportsPage() {
               <button
                 key={f.key}
                 onClick={() => setAdherenceFilter(f.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-150 ${
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
                   adherenceFilter === f.key
-                    ? "bg-primary-500 text-white"
+                    ? "bg-primary-900 text-white"
                     : "bg-bg-subtle text-text-secondary hover:bg-border-light"
                 }`}
               >
@@ -558,15 +558,12 @@ export default function ReportsPage() {
       </Card>
 
       {/* ── Summary cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
         {loading &&
           summaryCards.map((c) => (
-            <div
-              key={c.title}
-              className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card"
-            >
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="mt-3 h-8 w-14" />
+            <div key={c.title} className="stat-card">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="mt-4 h-7 w-14" />
               <Skeleton className="mt-3 h-3 w-20" />
             </div>
           ))}
@@ -575,21 +572,16 @@ export default function ReportsPage() {
           summaryCards.map((c) => {
             const Icon = c.icon;
             return (
-              <div
-                key={c.title}
-                className="rounded-[16px] border border-border-light bg-bg-card p-5 shadow-card"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm text-text-secondary">{c.title}</p>
-                    <p className="text-[26px] font-bold leading-none text-text-primary">
-                      {c.value}
-                    </p>
-                  </div>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-bg-subtle">
-                    <Icon className="h-[18px] w-[18px] text-text-tertiary" />
-                  </div>
+              <div key={c.title} className="stat-card">
+                <div className="stat-card__head">
+                  <p className="stat-card__label">{c.title}</p>
+                  <span className="stat-indicator" data-live="true">
+                    <Icon className="h-[15px] w-[15px]" strokeWidth={1.75} />
+                  </span>
                 </div>
+                <p className="stat-card__value stat-card__value--sm text-text-primary">
+                  {c.value}
+                </p>
                 {c.progress !== undefined ? (
                   <Progress
                     value={c.progress}
@@ -601,7 +593,7 @@ export default function ReportsPage() {
                   <div className="mt-3" />
                 )}
                 {c.hint && (
-                  <p className="mt-1 text-xs text-text-tertiary">{c.hint}</p>
+                  <p className="stat-card__foot">{c.hint}</p>
                 )}
               </div>
             );
@@ -616,9 +608,6 @@ export default function ReportsPage() {
             <CardDescription>
               Taken, late, and missed doses per day with adherence rate
             </CardDescription>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-primary-50">
-            <Pill className="h-[18px] w-[18px] text-primary-500" />
           </div>
         </CardHeader>
         <CardContent>
@@ -636,12 +625,12 @@ export default function ReportsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e8ecf0" vertical={false} />
+                  <CartesianGrid strokeDasharray="2 5" stroke="#e7eae7" vertical={false} />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    tick={{ fill: "#87918a", fontSize: 11 }}
                     interval="preserveStartEnd"
                     minTickGap={24}
                   />
@@ -650,7 +639,7 @@ export default function ReportsPage() {
                     axisLine={false}
                     tickLine={false}
                     allowDecimals={false}
-                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    tick={{ fill: "#87918a", fontSize: 11 }}
                   />
                   <YAxis
                     yAxisId="rate"
@@ -658,17 +647,17 @@ export default function ReportsPage() {
                     domain={[0, 100]}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    tick={{ fill: "#87918a", fontSize: 11 }}
                     tickFormatter={(v) => `${v}%`}
                   />
                   <RechartsTooltip content={<TrendTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: "#87918a" }} />
                   <Bar
                     yAxisId="doses"
                     dataKey="taken"
                     name="Taken"
                     stackId="doses"
-                    fill="#16a34a"
+                    fill="#18865b"
                     radius={[0, 0, 0, 0]}
                   />
                   <Bar
@@ -676,14 +665,14 @@ export default function ReportsPage() {
                     dataKey="late"
                     name="Late"
                     stackId="doses"
-                    fill="#f59e0b"
+                    fill="#a9761c"
                   />
                   <Bar
                     yAxisId="doses"
                     dataKey="missed"
                     name="Missed"
                     stackId="doses"
-                    fill="#ef4444"
+                    fill="#b4402f"
                     radius={[4, 4, 0, 0]}
                   />
                   <Line
@@ -691,8 +680,8 @@ export default function ReportsPage() {
                     type="monotone"
                     dataKey="rate"
                     name="Adherence %"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
+                    stroke="#064e32"
+                    strokeWidth={1.75}
                     dot={false}
                     connectNulls
                   />

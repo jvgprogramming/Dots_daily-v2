@@ -1,6 +1,5 @@
 import { ReactNode, Suspense } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { GuestGuard } from "@/components/auth/guest-guard";
 
 export const metadata: Metadata = {
@@ -22,8 +21,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </div>
     }>
       <GuestGuard>
-        <div className="login-bg relative min-h-screen flex items-center justify-center overflow-hidden">
-          <div className="w-full flex items-center justify-center">{children}</div>
+        <div className="auth-canvas relative flex min-h-screen items-center justify-center overflow-hidden">
+          <div className="flex w-full items-center justify-center">{children}</div>
         </div>
       </GuestGuard>
     </Suspense>

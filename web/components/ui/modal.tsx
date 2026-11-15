@@ -57,8 +57,8 @@ export function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            transition={{ duration: 0.18 }}
+            className="absolute inset-0 bg-[#0d1612]/40"
             onClick={(e) => {
               if (e.target === overlayRef.current) onClose();
             }}
@@ -66,12 +66,12 @@ export function Modal({
 
           {/* Panel */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
             className={cn(
-              "relative w-full rounded-[20px] border border-border-light bg-bg-card shadow-modal",
+              "relative w-full rounded-[16px] border border-border-light bg-bg-card shadow-modal",
               sizeClasses[size],
               className
             )}
@@ -79,21 +79,21 @@ export function Modal({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-[8px] text-text-tertiary transition-colors hover:bg-bg-subtle hover:text-text-primary"
+              className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-subtle hover:text-text-primary"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
 
             {/* Header */}
             {(title || description) && (
-              <div className="p-6 pb-2">
+              <div className="px-6 pb-1 pt-6">
                 {title && (
-                  <h2 className="text-[18px] font-semibold text-text-primary">
+                  <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-text-primary">
                     {title}
                   </h2>
                 )}
                 {description && (
-                  <p className="mt-1 text-[14px] text-text-secondary">
+                  <p className="mt-1 pr-8 text-[13px] leading-relaxed text-text-secondary">
                     {description}
                   </p>
                 )}

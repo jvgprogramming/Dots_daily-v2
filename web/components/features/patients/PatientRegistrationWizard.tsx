@@ -149,7 +149,7 @@ function RadioRow({
           key={opt.value}
           className={`flex items-center gap-2.5 rounded-[10px] border px-3.5 py-2.5 cursor-pointer transition-all duration-150 ${
             value === opt.value
-              ? "border-primary-400 bg-primary-50/60"
+              ? "border-primary-600 bg-primary-100/50"
               : "border-border-default hover:border-border-strong bg-bg-card"
           }`}
         >
@@ -406,7 +406,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                 active
                   ? "bg-primary-500 text-white"
                   : done
-                  ? "bg-primary-50 text-primary-600 cursor-pointer"
+                  ? "bg-primary-100/60 text-primary-800 cursor-pointer"
                   : "bg-bg-subtle text-text-tertiary"
               }`}
             >

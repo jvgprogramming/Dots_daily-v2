@@ -5,28 +5,28 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ButtonHTMLAttributes, forwardRef } from "react";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-[13px] font-medium tracking-[-0.005em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         primary:
-          "bg-primary-500 text-white shadow-sm hover:bg-primary-600 hover:shadow-md active:scale-[0.98] focus-visible:ring-primary-500",
+          "bg-primary-900 text-white shadow-xs hover:bg-primary-800 focus-visible:ring-primary-900/30",
         destructive:
-          "bg-danger text-white shadow-sm hover:bg-danger/90 hover:shadow-md active:scale-[0.98] focus-visible:ring-danger",
+          "bg-danger text-white shadow-xs hover:bg-danger/90 focus-visible:ring-danger/30",
         outline:
-          "border border-border-default bg-bg-card text-text-primary hover:bg-bg-subtle hover:border-border-strong active:scale-[0.98] focus-visible:ring-primary-500",
+          "border border-border-default bg-bg-card text-text-primary hover:border-border-strong hover:bg-bg-subtle focus-visible:ring-primary-500/30",
         secondary:
-          "bg-bg-subtle text-text-primary hover:bg-border-light active:scale-[0.98] focus-visible:ring-primary-500",
+          "bg-bg-subtle text-text-primary border border-transparent hover:bg-primary-100/70 hover:text-primary-900",
         ghost:
-          "text-text-secondary hover:bg-bg-subtle hover:text-text-primary active:scale-[0.98] focus-visible:ring-primary-500",
-        link: "text-primary-600 underline-offset-4 hover:underline hover:text-primary-700 focus-visible:ring-primary-500",
+          "text-text-secondary hover:bg-bg-subtle hover:text-text-primary",
+        link: "text-primary-700 underline-offset-4 hover:underline hover:text-primary-900",
       },
       size: {
-        default: "h-10 px-5 py-2",
-        sm: "h-9 rounded-[8px] px-4 text-xs",
-        lg: "h-12 rounded-[10px] px-8 text-base",
-        xl: "h-14 rounded-[12px] px-10 text-base",
-        icon: "h-10 w-10 rounded-[10px]",
+        default: "h-9 px-4",
+        sm: "h-8 rounded-[8px] px-3 text-[12px]",
+        lg: "h-11 rounded-[10px] px-6 text-[14px]",
+        xl: "h-12 rounded-[12px] px-7 text-[14px]",
+        icon: "h-9 w-9 rounded-[8px]",
       },
     },
     defaultVariants: {

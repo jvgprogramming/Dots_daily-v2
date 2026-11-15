@@ -31,14 +31,14 @@ export function Progress({
     <div className={cn("flex items-center gap-3", className)}>
       <div
         className={cn(
-          "flex-1 overflow-hidden rounded-full bg-bg-subtle",
-          size === "sm" ? "h-1.5" : "h-2.5"
+          "flex-1 overflow-hidden rounded-full bg-[#edf0ee]",
+          size === "sm" ? "h-1" : "h-1.5"
         )}
       >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${clampedValue}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
           className={cn(
             "h-full rounded-full",
             variantStyles[variant]
@@ -46,7 +46,7 @@ export function Progress({
         />
       </div>
       {showLabel && (
-        <span className="text-xs font-medium text-text-secondary min-w-[2.5rem] text-right">
+        <span className="min-w-[2.5rem] text-right text-[11px] font-medium text-text-secondary num">
           {Math.round(clampedValue)}%
         </span>
       )}

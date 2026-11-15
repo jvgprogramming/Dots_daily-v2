@@ -228,8 +228,8 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* ── Page Header ── */}
       <div>
-        <h1 className="text-[28px] font-bold tracking-tight text-text-primary">Settings</h1>
-        <p className="mt-1 text-sm text-text-secondary">
+        <h1 className="page-title">Settings</h1>
+        <p className="page-lede">
           System configuration and operational controls for the clinic.
         </p>
       </div>
@@ -256,7 +256,7 @@ export default function SettingsPage() {
                 onClick={() => setSection(s.key)}
                 className={`flex w-full items-center gap-2.5 rounded-[8px] px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 ${
                   active
-                    ? "bg-primary-50 text-primary-700"
+                    ? "bg-primary-100/70 text-primary-900"
                     : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
                 }`}
               >
@@ -974,7 +974,7 @@ function UserFormModal({
                   onClick={() => toggleModule(m)}
                   className={`flex items-center justify-between rounded-[8px] border px-3 py-2 text-sm transition-all ${
                     on
-                      ? "border-primary-300 bg-primary-50 text-primary-700"
+                      ? "border-primary-300 bg-primary-100/70 text-primary-900"
                       : "border-border-light text-text-tertiary hover:border-border-strong"
                   }`}
                 >
@@ -1035,8 +1035,8 @@ function AuditSection() {
           <button
             key={t}
             onClick={() => setType(t)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-              type === t ? "bg-primary-500 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+            className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all ${
+              type === t ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
             }`}
           >
             {t === "all" ? "All" : t === "logins" ? "Logins" : "Changes"}
@@ -1073,7 +1073,7 @@ function AuditSection() {
 
       {!loading && (data?.login_activity.length ?? 0) > 0 && (
         <div className="mt-5 border-t border-border-light pt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">Recent staff logins</p>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">Recent staff logins</p>
           <div className="space-y-1">
             {data?.login_activity.map((l) => (
               <div key={l.id} className="flex items-center justify-between text-sm">

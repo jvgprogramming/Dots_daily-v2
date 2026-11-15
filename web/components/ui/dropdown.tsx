@@ -68,7 +68,7 @@ export function Dropdown({
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.15 }}
             className={cn(
-              "absolute top-full z-50 mt-1 min-w-[200px] overflow-hidden rounded-[12px] border border-border-light bg-bg-card py-1 shadow-dropdown",
+              "absolute top-full z-50 mt-1 min-w-[200px] overflow-hidden rounded-[10px] border border-border-light bg-bg-card p-1 shadow-dropdown",
               align === "right" ? "right-0" : "left-0"
             )}
           >
@@ -77,10 +77,10 @@ export function Dropdown({
                 key={item.value}
                 onClick={() => handleSelect(item.value)}
                 className={cn(
-                  "flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors",
                   item.danger
-                    ? "text-danger hover:bg-red-50"
-                    : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
+                    ? "text-danger hover:bg-danger-bg"
+                    : "text-text-body hover:bg-bg-subtle hover:text-text-primary"
                 )}
               >
                 {item.icon && <span className="h-4 w-4">{item.icon}</span>}

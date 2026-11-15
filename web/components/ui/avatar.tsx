@@ -5,14 +5,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { HTMLAttributes, forwardRef } from "react";
 
 const avatarVariants = cva(
-  "inline-flex items-center justify-center overflow-hidden rounded-full font-medium text-white shrink-0",
+  "inline-flex items-center justify-center overflow-hidden rounded-full font-medium shrink-0 bg-primary-100 text-primary-900",
   {
     variants: {
       size: {
-        sm: "h-8 w-8 text-xs",
-        default: "h-10 w-10 text-sm",
-        lg: "h-12 w-12 text-base",
-        xl: "h-16 w-16 text-xl",
+        sm: "h-7 w-7 text-[11px]",
+        default: "h-9 w-9 text-[12px]",
+        lg: "h-11 w-11 text-[13px]",
+        xl: "h-14 w-14 text-[16px]",
       },
     },
     defaultVariants: {
@@ -31,17 +31,6 @@ interface AvatarProps
 
 const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, size, src, alt, fallback, ...props }, ref) => {
-    const gradientColors = [
-      "bg-gradient-to-br from-primary-400 to-primary-600",
-      "bg-gradient-to-br from-violet-400 to-violet-600",
-      "bg-gradient-to-br from-amber-400 to-amber-600",
-      "bg-gradient-to-br from-rose-400 to-rose-600",
-      "bg-gradient-to-br from-cyan-400 to-cyan-600",
-    ];
-
-    const gradientIndex =
-      fallback ? fallback.charCodeAt(0) % gradientColors.length : 0;
-
     return (
       <div
         ref={ref}
@@ -62,7 +51,6 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
         <span
           className={cn(
             "flex h-full w-full items-center justify-center",
-            gradientColors[gradientIndex],
             src ? "hidden" : ""
           )}
         >

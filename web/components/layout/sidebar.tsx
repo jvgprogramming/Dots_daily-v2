@@ -44,9 +44,7 @@ const navGroups = [
   },
   {
     title: "Insights",
-    items: [
-      { label: "Reports", href: "/reports", icon: BarChart3 },
-    ],
+    items: [{ label: "Reports", href: "/reports", icon: BarChart3 }],
   },
   {
     title: "System",
@@ -77,10 +75,10 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border-light bg-bg-sidebar">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r border-border-light bg-bg-sidebar md:w-64">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-border-light px-6">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] bg-primary-700 ring-1 ring-black/5">
+        <div className="flex h-16 items-center justify-center gap-3 md:justify-start md:px-5">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[9px] bg-primary-900">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/imports/image-2.png"
@@ -91,24 +89,31 @@ export function Sidebar() {
               }}
             />
           </div>
-          <div className="flex flex-col">
-            <span className="text-[15px] font-semibold leading-tight text-text-primary">
+          <div className="hidden flex-col gap-0.5 md:flex">
+            <span className="text-[13.5px] font-semibold leading-none tracking-[-0.015em] text-text-primary">
               DOTS Daily
             </span>
-            <span className="text-[11px] text-text-tertiary">TB DOTS Center</span>
+            <span className="text-[10px] font-medium uppercase leading-none tracking-[0.1em] text-text-secondary">
+              TB DOTS Center
+            </span>
           </div>
         </div>
 
+        <div className="mx-3 h-px bg-border-light md:mx-5" />
+
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-6" style={{ scrollbarWidth: "thin", scrollbarColor: "transparent transparent" }}>
+        <nav
+          className="flex-1 overflow-y-auto px-2 py-5 md:px-3"
+          style={{ scrollbarWidth: "thin", scrollbarColor: "transparent transparent" }}
+        >
           {navGroups.map((group, i) => (
-            <div key={i} className="mb-7 last:mb-0">
+            <div key={i} className="mb-3 last:mb-0 md:mb-6">
               {group.title && (
-                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                <p className="mb-2 hidden px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-text-secondary md:block">
                   {group.title}
                 </p>
               )}
-              <ul className="space-y-0.5">
+              <ul className="space-y-px">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
@@ -117,24 +122,24 @@ export function Sidebar() {
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        title={item.label}
+                        aria-label={item.label}
                         className={cn(
-                          "group relative flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                          "group flex items-center justify-center gap-2.5 rounded-[7px] px-0 py-2.5 text-[13px] transition-colors duration-150 md:justify-start md:px-2.5 md:py-2",
                           isActive
-                            ? "bg-primary-50 text-primary-700"
-                            : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
+                            ? "bg-primary-100/70 font-medium text-primary-900"
+                            : "font-normal text-text-body hover:bg-bg-subtle hover:text-text-primary"
                         )}
                       >
-                        {/* Left accent bar */}
-                        {isActive && (
-                          <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary-500" />
-                        )}
                         <Icon
                           className={cn(
-                            "h-4 w-4 shrink-0",
-                            isActive ? "text-primary-600" : "text-text-tertiary group-hover:text-text-secondary"
+                            "h-[15px] w-[15px] shrink-0 stroke-[1.75]",
+                            isActive
+                              ? "text-primary-800"
+                              : "text-text-tertiary group-hover:text-text-body"
                           )}
                         />
-                        <span>{item.label}</span>
+                        <span className="hidden md:inline">{item.label}</span>
                       </Link>
                     </li>
                   );
@@ -148,10 +153,12 @@ export function Sidebar() {
         <div className="border-t border-border-light p-3">
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-sm font-medium text-text-tertiary transition-all duration-150 hover:bg-bg-subtle hover:text-danger"
+            title="Logout"
+            aria-label="Logout"
+            className="flex w-full items-center justify-center gap-2.5 rounded-[7px] px-0 py-2.5 text-[13px] text-text-secondary transition-colors duration-150 hover:bg-danger-bg/60 hover:text-danger-text md:justify-start md:px-2.5 md:py-2"
           >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
+            <LogOut className="h-[15px] w-[15px] stroke-[1.75]" />
+            <span className="hidden md:inline">Logout</span>
           </button>
         </div>
       </aside>
@@ -165,28 +172,28 @@ export function Sidebar() {
         size="sm"
       >
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-[10px] bg-bg-subtle p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-text-tertiary shrink-0" />
+          <div className="flex items-start gap-3 rounded-[10px] border border-border-light bg-bg-subtle p-3.5">
+            <AlertCircle className="mt-px h-4 w-4 shrink-0 text-text-tertiary" />
             <div>
-              <p className="text-sm text-text-secondary">
+              <p className="text-[12.5px] leading-relaxed text-text-secondary">
                 You will be redirected to the sign-in page and will need to
                 enter your credentials again to access the dashboard.
               </p>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-2">
             <button
               onClick={() => setShowLogoutModal(false)}
               disabled={loggingOut}
-              className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-border-default bg-bg-card px-5 py-2.5 text-sm font-medium text-text-primary transition-all duration-200 hover:bg-bg-subtle active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] border border-border-default bg-bg-card px-4 text-[13px] font-medium text-text-primary transition-colors hover:bg-bg-subtle disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-danger px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-danger/90 active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] bg-danger px-4 text-[13px] font-medium text-white transition-colors hover:bg-danger/90 disabled:opacity-50"
             >
               {loggingOut ? (
                 <>
