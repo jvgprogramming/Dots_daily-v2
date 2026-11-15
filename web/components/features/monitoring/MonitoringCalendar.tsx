@@ -19,6 +19,8 @@ import {
   Pill,
   StickyNote,
   History,
+  ShieldCheck,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -112,7 +114,7 @@ export function MonitoringCalendar({
   const end = plan?.actual_end_date ?? plan?.expected_end_date ?? null;
 
   return (
-    <div className="matte-surface rounded-[12px] border">
+    <div className="matte-surface rounded-[16px] border">
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">
         <div className="flex items-center gap-2">
@@ -139,7 +141,7 @@ export function MonitoringCalendar({
       {/* ── Weekday labels ── */}
       <div className="grid grid-cols-7 border-b border-border-light bg-bg-subtle/40">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+          <div key={d} className="px-2 py-2 text-center text-[12px] font-semibold text-text-tertiary">
             {d}
           </div>
         ))}
@@ -187,7 +189,7 @@ export function MonitoringCalendar({
 
       {/* ── Legend ── */}
       <div className="flex flex-wrap items-center gap-4 border-t border-border-light px-4 py-3">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Legend:</span>
+        <span className="text-[12px] font-medium text-text-tertiary">Legend:</span>
         {(["taken", "pending", "late", "missed", "not_recorded"] as const).map((s) => (
           <span key={s} className="flex items-center gap-1.5 text-xs text-text-secondary">
             <span className={`h-3 w-3 rounded-[4px] border ${STATUS_STYLES[s]}`} />
@@ -254,7 +256,7 @@ function LabelValue({ label, value }: { label: string; value: React.ReactNode })
 function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[10px] border border-border-light bg-bg-subtle/40 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-2">{title}</p>
+      <p className="text-[12px] font-semibold text-text-tertiary mb-2">{title}</p>
       <div className="space-y-1.5">{children}</div>
     </div>
   );
@@ -267,6 +269,7 @@ export function DayDetailPanel({
   recentHistory,
   loadingDoseDetail = false,
   onClose,
+  onToggleVerify,
 }: {
   date: string;
   /** Dose-level logs for this date (from the monitoring API `date` param). */
@@ -276,8 +279,25 @@ export function DayDetailPanel({
   recentHistory: DoseLog[];
   loadingDoseDetail?: boolean;
   onClose: () => void;
+  /** Confirm (or undo) an observed dose. Omit to show the panel read-only. */
+  onToggleVerify?: (log: DoseLog) => Promise<void>;
 }) {
   const [tab, setTab] = useState<PanelTab>("medication");
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
+  const [verifyError, setVerifyError] = useState("");
+
+  const toggleVerify = async (log: DoseLog) => {
+    if (!onToggleVerify) return;
+    setVerifyingId(log.id);
+    setVerifyError("");
+    try {
+      await onToggleVerify(log);
+    } catch (err: unknown) {
+      setVerifyError(err instanceof Error ? err.message : "Could not update the verification.");
+    } finally {
+      setVerifyingId(null);
+    }
+  };
 
   const history = useMemo(() => {
     // Keep it short: exclude the selected date's own rows — those are in Tab 1.
@@ -288,7 +308,7 @@ export function DayDetailPanel({
     <motion.div
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
-      className="matte-surface flex flex-col rounded-[12px] border"
+      className="matte-surface flex flex-col rounded-[16px] border"
     >
       {/* ── Header: selected date ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">
@@ -333,6 +353,12 @@ export function DayDetailPanel({
 
       {/* ── Tab body ── */}
       <div className="p-4 space-y-3 overflow-y-auto">
+        {verifyError && (
+          <p role="alert" className="rounded-[8px] bg-danger-bg px-3 py-2 text-[12.5px] text-danger-text">
+            {verifyError}
+          </p>
+        )}
+
         {/* ═══ TAB 1: MEDICATION ═══ */}
         {tab === "medication" &&
           (loadingDoseDetail ? (
@@ -374,6 +400,28 @@ export function DayDetailPanel({
                     )}
                     {log.observed_by_name && (
                       <LabelValue label="Observed by" value={log.observed_by_name} />
+                    )}
+                    {onToggleVerify && (log.status === "taken" || log.status === "late") && (
+                      <div className="flex justify-end pt-1.5">
+                        <Button
+                          size="sm"
+                          variant={log.observed_by_name ? "ghost" : "primary"}
+                          disabled={verifyingId === log.id}
+                          onClick={() => toggleVerify(log)}
+                        >
+                          {log.observed_by_name ? (
+                            <>
+                              <Undo2 />
+                              Remove verification
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck />
+                              Verify dose
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     )}
                     <LabelValue
                       label="Proof"

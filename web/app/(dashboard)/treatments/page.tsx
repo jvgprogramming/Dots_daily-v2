@@ -627,7 +627,7 @@ export default function TreatmentsPage() {
               return (
                 <div
                   key={f.id}
-                  className="matte-surface rounded-[14px] border p-4"
+                  className="matte-surface rounded-[16px] border p-4"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>

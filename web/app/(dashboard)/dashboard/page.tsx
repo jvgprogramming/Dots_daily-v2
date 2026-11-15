@@ -35,6 +35,9 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { getDashboardStats } from "@/lib/services/dashboard";
 import type {
@@ -55,14 +58,14 @@ const CustomTooltip = ({
 }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-[8px] border border-border-light bg-bg-card px-3 py-2.5 shadow-dropdown">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
-          {label}
-        </p>
+      <div className="min-w-[140px] rounded-[10px] border border-border-light bg-bg-card px-3 py-2.5 shadow-dropdown">
+        {label !== undefined && label !== "" && (
+          <p className="text-[12px] font-semibold text-text-primary">{label}</p>
+        )}
         {payload.map((entry, i: number) => (
-          <p key={i} className="mt-1 flex items-baseline gap-2 text-[12px] text-text-body">
+          <p key={i} className="mt-1 flex items-baseline gap-3 text-[12px] text-text-secondary">
             {entry.name}
-            <span className="ml-auto font-medium tabular-nums text-text-primary">
+            <span className="ml-auto font-semibold tabular-nums text-text-primary">
               {entry.value}
             </span>
           </p>
@@ -76,13 +79,28 @@ const CustomTooltip = ({
 // ─── Stat icon mapping (matches backend stat order) ───
 const STAT_ICONS = [Users, Pill, Activity, AlertTriangle, Package];
 
-// Phase dots are held to the botanical palette regardless of backend classes.
+// Phase colours are held to the brand palette regardless of backend classes.
 const PHASE_DOT: Record<string, string> = {
-  Intensive: "bg-brand-action",
-  Continuation: "bg-primary-400",
+  Intensive: "bg-primary-900",
+  Continuation: "bg-primary-300",
   Completed: "bg-primary-500",
-  Interrupted: "bg-danger/60",
+  Interrupted: "bg-danger",
 };
+const PHASE_FILL: Record<string, string> = {
+  Intensive: "var(--color-primary-900)",
+  Continuation: "var(--color-primary-300)",
+  Completed: "var(--color-primary-500)",
+  Interrupted: "var(--color-danger)",
+};
+
+/** Two-letter initials for the patient list tile. */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardStatsData | null>(null);
@@ -130,10 +148,18 @@ export default function DashboardPage() {
   const pct = (v: number | null | undefined) => Math.max(0, Math.min(100, v ?? 0));
   const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v}%`);
 
+  const noTreatments = treatmentDistribution.every((t) => t.count === 0);
+
+  const trendColors: Record<string, string> = {
+    up: "text-primary-600",
+    down: "text-danger",
+    neutral: "text-text-secondary",
+  };
+
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       {/* ── Page Header ── */}
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-lede">
@@ -147,7 +173,7 @@ export default function DashboardPage() {
           disabled={refreshing || loading}
         >
           <RefreshCw
-            className={`h-3.5 w-3.5 mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+            className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
           />
           Refresh
         </Button>
@@ -159,44 +185,39 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* ── KPI Row (compact metric cards) ── */}
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
+      {/* ── KPI Row ── */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
         {loading &&
           Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="stat-card">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="mt-4 h-7 w-16" />
-              <Skeleton className="mt-3 h-3 w-24" />
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="mt-5 h-7 w-16" />
+              <Skeleton className="mt-4 h-3 w-24" />
             </div>
           ))}
 
         {!loading &&
           stats.map((stat, i) => {
             const Icon = STAT_ICONS[i] ?? Activity;
-            const trendColors: Record<string, string> = {
-              up: "text-primary-600",
-              down: "text-danger",
-              neutral: "text-text-secondary",
-            };
             return (
               <div key={stat.title} className="stat-card">
                 <div className="stat-card__head">
                   <p className="stat-card__label">{stat.title}</p>
                   <span className="stat-indicator" data-live="true">
-                    <Icon className="h-[15px] w-[15px]" strokeWidth={1.75} />
+                    <Icon strokeWidth={1.9} />
                   </span>
                 </div>
                 <p className="stat-card__value">{stat.value}</p>
                 <div className="mt-3 flex items-center gap-1">
                   <span
-                    className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${trendColors[stat.trend]}`}
+                    className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${trendColors[stat.trend]}`}
                   >
-                    {stat.trend === "up" && <ArrowUpRight className="h-3 w-3" />}
+                    {stat.trend === "up" && <ArrowUpRight className="h-3.5 w-3.5" />}
                     {stat.change}
                   </span>
                 </div>
                 {stat.change_note && (
-                  <p className="mt-1 text-[10.5px] leading-tight text-text-secondary">
+                  <p className="mt-1 text-[11.5px] leading-snug text-text-secondary">
                     {stat.change_note}
                   </p>
                 )}
@@ -205,200 +226,190 @@ export default function DashboardPage() {
           })}
       </div>
 
-      {/* ── Charts Row (2-up, wider left chart) ── */}
-      <div className="grid gap-5 lg:grid-cols-5">
-        {/* Adherence Trend - wider */}
-        <div className="lg:col-span-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Adherence Rate</CardTitle>
-              <CardDescription>
-                Monthly medication adherence trend
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[280px]">
-                {loading ? (
-                  <Skeleton className="h-full w-full" />
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={adherenceData}>
-                      <defs>
-                        <linearGradient
-                          id="adherenceGradient"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop offset="0%" stopColor="var(--color-primary-500)" stopOpacity={0.14} />
-                          <stop offset="100%" stopColor="var(--color-primary-500)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid
-                        strokeDasharray="2 5"
-                        stroke="var(--color-border-light)"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="month"
-                        axisLine={false}
-                        tickLine={false}
-                        tickMargin={10}
-                        tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tickMargin={6}
-                        tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
-                        domain={[0, 100]}
-                        tickFormatter={(v) => `${v}%`}
-                      />
-                      <RechartsTooltip
-                        content={<CustomTooltip />}
-                        cursor={{ stroke: "var(--color-border-strong)", strokeWidth: 1 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="rate"
-                        name="Adherence"
-                        stroke="var(--color-primary-900)"
-                        strokeWidth={1.75}
-                        fill="url(#adherenceGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Treatment Distribution - compact */}
-        <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Treatment Phases</CardTitle>
-              <CardDescription>Distribution by DOTS phase</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-1">
-              {treatmentDistribution.map((item) => (
-                <div key={item.phase}>
-                  <div className="mb-2 flex items-baseline justify-between text-[12.5px]">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          PHASE_DOT[item.phase] ?? item.color
-                        }`}
-                      />
-                      <span className="font-medium text-text-primary">
-                        {item.phase}
-                      </span>
-                    </div>
-                    <span className="text-[11px] tabular-nums text-text-secondary">
-                      {item.count}
-                    </span>
-                  </div>
-                  <Progress value={item.percentage} size="sm" />
-                </div>
-              ))}
-
-              {!loading && treatmentDistribution.every((t) => t.count === 0) && (
-                <p className="pt-2 text-center text-[12.5px] text-text-secondary">
-                  No treatment data yet
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* ── Activity & Quick Stats Row ── */}
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* Recent Patients List */}
-        <Card>
+      {/* ── Charts Row: adherence is the lead panel ── */}
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-5">
+        <Card className="border-transparent bg-brand-action text-white shadow-elevated lg:col-span-3">
           <CardHeader>
-            <CardTitle>Recent Patients</CardTitle>
-            <CardDescription>Latest patient registrations</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="space-y-3 px-5 py-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-9 w-full" />
-                ))}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-[16px] text-white">Adherence Rate</CardTitle>
+                <CardDescription className="text-white/70">
+                  Monthly medication adherence trend
+                </CardDescription>
               </div>
-            ) : recentPatients.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10">
-                <Users className="h-6 w-6 text-text-muted" strokeWidth={1.5} />
-                <p className="text-[12.5px] text-text-secondary">
-                  No recent registrations
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border-light">
-                {recentPatients.map((patient) => (
-                  <div
-                    key={patient.id}
-                    className="flex items-center gap-3 px-5 py-3 first:pt-0 last:pb-0"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-primary-100/60">
-                      <Users className="h-3.5 w-3.5 text-primary-800" strokeWidth={1.75} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-[12.5px] font-medium leading-tight text-text-primary">
-                        {patient.name}
-                      </p>
-                      <p className="mt-0.5 text-[10.5px] leading-tight text-text-secondary">
-                        {patient.date ?? "—"}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={patient.status === "draft" ? "warning" : "outline"}
-                      size="sm"
-                    >
-                      {patient.status === "draft" ? "Draft" : (patient.health_id_number ?? `#${patient.id}`)}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Patient Activity Chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Patient Activity</CardTitle>
-            <CardDescription>
-              New patients and follow-ups this week
-            </CardDescription>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/10 ring-1 ring-inset ring-white/15">
+                <HeartPulse className="h-[18px] w-[18px] text-white" strokeWidth={1.9} />
+              </span>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="h-[220px]">
+            <div className="h-[260px] sm:h-[290px]">
               {loading ? (
-                <Skeleton className="h-full w-full" />
+                <Skeleton className="h-full w-full bg-white/10" />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={patientActivity} barGap={4} barCategoryGap="28%">
-                    <CartesianGrid
-                      strokeDasharray="2 5"
-                      stroke="var(--color-border-light)"
-                      vertical={false}
-                    />
+                  <AreaChart data={adherenceData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="adherenceGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity={0.28} />
+                        <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="rgb(255 255 255 / 0.12)" vertical={false} />
                     <XAxis
-                      dataKey="day"
+                      dataKey="month"
                       axisLine={false}
                       tickLine={false}
                       tickMargin={10}
-                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
+                      tick={{ fill: "rgb(255 255 255 / 0.72)", fontSize: 11.5 }}
                     />
                     <YAxis
                       axisLine={false}
                       tickLine={false}
                       tickMargin={6}
-                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
+                      tick={{ fill: "rgb(255 255 255 / 0.72)", fontSize: 11.5 }}
+                      domain={[0, 100]}
+                      tickFormatter={(v) => `${v}%`}
+                    />
+                    <RechartsTooltip
+                      content={<CustomTooltip />}
+                      cursor={{ stroke: "rgb(255 255 255 / 0.35)", strokeWidth: 1 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="rate"
+                      name="Adherence"
+                      stroke="#ffffff"
+                      strokeWidth={2.25}
+                      fill="url(#adherenceGradient)"
+                      activeDot={{ r: 4.5, fill: "#ffffff", stroke: "var(--color-brand-action)", strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Treatment Distribution */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Treatment Phases</CardTitle>
+            <CardDescription>Distribution by DOTS phase</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex flex-col items-center gap-5">
+                <Skeleton className="h-[150px] w-[150px] rounded-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : noTreatments ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12">
+                <Activity className="h-6 w-6 text-text-muted" strokeWidth={1.6} />
+                <p className="text-[13px] text-text-secondary">No treatment data yet</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-5 sm:flex-row lg:flex-col xl:flex-row">
+                <div className="h-[160px] w-[160px] shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={treatmentDistribution}
+                        dataKey="count"
+                        nameKey="phase"
+                        innerRadius={52}
+                        outerRadius={76}
+                        paddingAngle={2}
+                        stroke="var(--color-bg-card)"
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      >
+                        {treatmentDistribution.map((item) => (
+                          <Cell
+                            key={item.phase}
+                            fill={PHASE_FILL[item.phase] ?? "var(--color-primary-400)"}
+                          />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <ul className="w-full flex-1 divide-y divide-border-light">
+                  {treatmentDistribution.map((item) => (
+                    <li
+                      key={item.phase}
+                      className="flex items-center gap-2.5 py-2.5 text-[13px] first:pt-0 last:pb-0"
+                    >
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-[3px] ${
+                          PHASE_DOT[item.phase] ?? item.color
+                        }`}
+                      />
+                      <span className="font-medium text-text-primary">{item.phase}</span>
+                      <span className="ml-auto font-semibold tabular-nums text-text-primary">
+                        {item.count}
+                      </span>
+                      <span className="w-11 text-right text-[12px] tabular-nums text-text-secondary">
+                        {item.percentage}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Activity & Recent Patients Row ── */}
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-3">
+        {/* Patient Activity Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Patient Activity</CardTitle>
+                <CardDescription>New patients and follow-ups this week</CardDescription>
+              </div>
+              <div className="flex items-center gap-4 text-[12px] text-text-secondary">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-primary-900" />
+                  New Patients
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-primary-300" />
+                  Follow-ups
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[240px]">
+              {loading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={patientActivity}
+                    barGap={4}
+                    barCategoryGap="30%"
+                    margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke="var(--color-border-light)" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      axisLine={false}
+                      tickLine={false}
+                      tickMargin={10}
+                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11.5 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickMargin={6}
+                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11.5 }}
                       allowDecimals={false}
                     />
                     <RechartsTooltip
@@ -409,15 +420,15 @@ export default function DashboardPage() {
                       dataKey="new"
                       name="New Patients"
                       fill="var(--color-primary-900)"
-                      radius={[3, 3, 0, 0]}
-                      maxBarSize={22}
+                      radius={[5, 5, 0, 0]}
+                      maxBarSize={20}
                     />
                     <Bar
                       dataKey="followups"
                       name="Follow-ups"
                       fill="var(--color-primary-300)"
-                      radius={[3, 3, 0, 0]}
-                      maxBarSize={22}
+                      radius={[5, 5, 0, 0]}
+                      maxBarSize={20}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -425,15 +436,64 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Recent Patients List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Patients</CardTitle>
+            <CardDescription>Latest patient registrations</CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-3 sm:px-0 sm:pb-3">
+            {loading ? (
+              <div className="space-y-3 px-5 sm:px-6">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : recentPatients.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10">
+                <Users className="h-6 w-6 text-text-muted" strokeWidth={1.6} />
+                <p className="text-[13px] text-text-secondary">No recent registrations</p>
+              </div>
+            ) : (
+              <ul>
+                {recentPatients.map((patient) => (
+                  <li
+                    key={patient.id}
+                    className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-bg-subtle sm:px-6"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[12px] font-semibold text-primary-800">
+                      {initials(patient.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold leading-tight text-text-primary">
+                        {patient.name}
+                      </p>
+                      <p className="mt-1 text-[11.5px] leading-tight text-text-secondary">
+                        {patient.date ?? "—"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={patient.status === "draft" ? "warning" : "outline"}
+                      size="sm"
+                    >
+                      {patient.status === "draft" ? "Draft" : (patient.health_id_number ?? `#${patient.id}`)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── Bottom row: System overview metrics ── */}
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         <div className="stat-card">
           <div className="stat-card__head">
             <p className="stat-card__label">Adherence Rate</p>
             <span className="stat-indicator" data-live="true">
-              <HeartPulse className="h-[15px] w-[15px]" strokeWidth={1.75} />
+              <HeartPulse strokeWidth={1.9} />
             </span>
           </div>
           <p className="stat-card__value stat-card__value--sm">
@@ -451,7 +511,7 @@ export default function DashboardPage() {
           <div className="stat-card__head">
             <p className="stat-card__label">Treatment Success</p>
             <span className="stat-indicator" data-live="true">
-              <TrendingUp className="h-[15px] w-[15px]" strokeWidth={1.75} />
+              <TrendingUp strokeWidth={1.9} />
             </span>
           </div>
           <p className="stat-card__value stat-card__value--sm">
@@ -469,7 +529,7 @@ export default function DashboardPage() {
           <div className="stat-card__head">
             <p className="stat-card__label">Follow-up Rate</p>
             <span className="stat-indicator" data-live="true">
-              <Activity className="h-[15px] w-[15px]" strokeWidth={1.75} />
+              <Activity strokeWidth={1.9} />
             </span>
           </div>
           <p className="stat-card__value stat-card__value--sm">

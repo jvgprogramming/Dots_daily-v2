@@ -1,0 +1,41 @@
+- generic [ref=f4e1]:
+  - alert [ref=f4e2]
+  - generic [ref=f4e3]:
+    - complementary [ref=f4e4]:
+      - generic [ref=f4e5]:
+        - img "Capiz Emmanuel Hospital logo" [ref=f4e7]
+        - generic [ref=f4e8]:
+          - generic [ref=f4e9]: DOTS Daily
+          - generic [ref=f4e10]: TB DOTS Center
+      - generic [ref=f4e11]:
+        - generic [ref=f4e12]:
+          - heading "Capiz Emmanuel Hospital" [level=2] [ref=f4e13]
+          - paragraph [ref=f4e14]: Tuberculosis treatment monitoring for the TB DOTS Center team.
+        - generic [ref=f4e16]:
+          - generic [ref=f4e17]: M
+          - generic [ref=f4e18]: T
+          - generic [ref=f4e19]: W
+          - generic [ref=f4e20]: T
+          - generic [ref=f4e21]: F
+          - generic [ref=f4e22]: S
+          - generic [ref=f4e23]: S
+        - list [ref=f4e108]:
+          - listitem [ref=f4e109]: Patient registration
+          - listitem [ref=f4e116]: Treatment phases
+          - listitem [ref=f4e121]: Daily dose monitoring
+          - listitem [ref=f4e125]: Reports
+      - paragraph [ref=f4e129]: For authorized DOTS Center staff only.
+    - main [ref=f4e133]:
+      - generic [ref=f4e136]:
+        - generic [ref=f4e137]:
+          - heading "Reset password" [level=1] [ref=f4e138]
+          - paragraph [ref=f4e139]: Enter your email and we'll send you a reset link
+        - generic [ref=f4e140]:
+          - generic [ref=f4e141]:
+            - text: Email
+            - textbox "Email" [active] [ref=f4e142]:
+              - /placeholder: admin@dotsdaily.com
+          - button "Send Reset Link" [ref=f4e143]
+        - link "Back to sign in" [ref=f4e145] [cursor=pointer]:
+          - /url: /login
+      - generic [ref=f4e148]: © 2026 Capiz Emmanuel Hospital

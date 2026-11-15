@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\API\BaseApiController;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
 use App\Http\Resources\PatientResource;
@@ -24,6 +23,7 @@ class PatientController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $query = Patient::query()
+            ->visibleTo($request->user())
             ->with(['user', 'registeredBy'])
             ->withCount(['treatmentPlans', 'medicationLogs', 'dailyMonitoring']);
 
@@ -37,11 +37,11 @@ class PatientController extends BaseApiController
             $query->where(function ($q) use ($search) {
                 $q->whereHas('user', function ($uq) use ($search) {
                     $uq->where('name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%")
-                      ->orWhere('phone', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
                 })
-                ->orWhere('health_id_number', 'like', "%{$search}%")
-                ->orWhere('occupation', 'like', "%{$search}%");
+                    ->orWhere('health_id_number', 'like', "%{$search}%")
+                    ->orWhere('occupation', 'like', "%{$search}%");
             });
         }
 
@@ -102,7 +102,7 @@ class PatientController extends BaseApiController
             );
         } catch (\Exception $e) {
             return $this->error(
-                message: 'Failed to register patient. ' . $e->getMessage(),
+                message: 'Failed to register patient. '.$e->getMessage(),
                 code: 500,
             );
         }
@@ -113,6 +113,8 @@ class PatientController extends BaseApiController
      */
     public function updateDraft(Request $request, Patient $patient, PatientRegistrationService $service): JsonResponse
     {
+        $this->ensureVisible($request, $patient);
+
         if ($patient->status !== 'draft') {
             return $this->error(message: 'Patient is not a draft.', code: 422);
         }
@@ -153,6 +155,8 @@ class PatientController extends BaseApiController
      */
     public function completeDraft(Request $request, Patient $patient, PatientRegistrationService $service): JsonResponse
     {
+        $this->ensureVisible($request, $patient);
+
         if ($patient->status !== 'draft') {
             return $this->error(message: 'Patient is not a draft.', code: 422);
         }
@@ -238,7 +242,7 @@ class PatientController extends BaseApiController
             );
         } catch (\Exception $e) {
             return $this->error(
-                message: 'Failed to complete registration. ' . $e->getMessage(),
+                message: 'Failed to complete registration. '.$e->getMessage(),
                 code: 500,
             );
         }
@@ -247,8 +251,10 @@ class PatientController extends BaseApiController
     /**
      * Display the specified patient with full details.
      */
-    public function show(Patient $patient): JsonResponse
+    public function show(Request $request, Patient $patient): JsonResponse
     {
+        $this->ensureVisible($request, $patient);
+
         $patient->load([
             'user',
             'registeredBy',
@@ -295,7 +301,21 @@ class PatientController extends BaseApiController
      */
     public function update(UpdatePatientRequest $request, Patient $patient): JsonResponse
     {
+        $this->ensureVisible($request, $patient);
+
         $data = $request->validated();
+
+        // A patient's sign-in email and password unlock their mobile account,
+        // so only an administrator may change them after registration.
+        if (! $request->user()->isAdmin()) {
+            $changesEmail = isset($data['email']) && $data['email'] !== $patient->user?->email;
+            if ($changesEmail || ! empty($data['password'])) {
+                return $this->error(
+                    message: "Only an administrator can change a patient's sign-in email or password.",
+                    code: 403,
+                );
+            }
+        }
 
         try {
             DB::beginTransaction();
@@ -307,12 +327,12 @@ class PatientController extends BaseApiController
                 'phone' => $data['phone'] ?? null,
             ], fn ($v) => $v !== null);
 
-            if (!empty($userData) && $patient->user) {
+            if (! empty($userData) && $patient->user) {
                 $patient->user->update($userData);
             }
 
             // Update password if provided
-            if (!empty($data['password']) && $patient->user) {
+            if (! empty($data['password']) && $patient->user) {
                 $patient->user->update([
                     'password' => Hash::make($data['password']),
                 ]);
@@ -338,7 +358,7 @@ class PatientController extends BaseApiController
                 'referred_by' => $data['referred_by'] ?? null,
             ], fn ($v) => $v !== null);
 
-            if (!empty($patientData)) {
+            if (! empty($patientData)) {
                 $patient->update($patientData);
             }
 
@@ -355,8 +375,9 @@ class PatientController extends BaseApiController
             );
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->error(
-                message: 'Failed to update patient. ' . $e->getMessage(),
+                message: 'Failed to update patient. '.$e->getMessage(),
                 code: 500,
             );
         }
@@ -383,7 +404,7 @@ class PatientController extends BaseApiController
     {
         $user = $request->user()->load('patient');
 
-        if (!$user->patient) {
+        if (! $user->patient) {
             return $this->error(message: 'Patient profile not found.', code: 404);
         }
 
@@ -412,13 +433,13 @@ class PatientController extends BaseApiController
      */
     public function list(Request $request): JsonResponse
     {
-        $query = Patient::query()->with('user');
+        $query = Patient::query()->visibleTo($request->user())->with('user');
 
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
                 $q->whereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"))
-                  ->orWhere('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%");
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%");
             });
         }
 
@@ -432,12 +453,21 @@ class PatientController extends BaseApiController
         return $this->success(
             data: $patients->map(fn ($p) => [
                 'id' => $p->id,
-                'name' => trim(($p->first_name ?? '') . ' ' . ($p->last_name ?? '')) ?: ($p->user?->name ?? 'Unnamed patient'),
+                'name' => trim(($p->first_name ?? '').' '.($p->last_name ?? '')) ?: ($p->user?->name ?? 'Unnamed patient'),
                 'email' => $p->user?->email,
                 'health_id_number' => $p->health_id_number,
                 'status' => $p->status ?? 'registered',
             ]),
             message: 'Patient list retrieved successfully.',
         );
+    }
+
+    /**
+     * Single-record guard: a record the user may not see answers 404, the
+     * same as a record that does not exist, so its existence is not leaked.
+     */
+    private function ensureVisible(Request $request, Patient $patient): void
+    {
+        abort_unless($patient->isVisibleTo($request->user()), 404, 'Patient not found.');
     }
 }

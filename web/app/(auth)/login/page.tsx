@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/store/auth";
 import { ApiError } from "@/lib/services/api";
-import { Loader2, Eye, EyeOff, User, Lock } from "lucide-react";
+import { safeRedirect } from "@/lib/access";
+import { Loader2, Eye, EyeOff, User, Lock, AlertCircle } from "lucide-react";
 
 /** Pull the field-level validation text out of a failed API call. */
 function resolveErrorMessage(err: unknown): string {
@@ -46,9 +47,8 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      await login({ email: username, password });
-      const redirectTo = searchParams.get("redirect") || "/dashboard";
-      router.push(redirectTo);
+      const user = await login({ email: username, password });
+      router.push(safeRedirect(user.role, searchParams.get("redirect")));
     } catch (err: unknown) {
       setError(resolveErrorMessage(err));
     } finally {
@@ -57,46 +57,22 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex w-full items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[420px]">
-        <div className="auth-panel px-8 pb-8 pt-9 sm:px-10">
-          {/* Logo */}
-          <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[12px] border border-border-light bg-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/imports/image-2.png"
-              alt="Capiz Emmanuel Hospital logo"
-              className="h-11 w-11 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </div>
-
-          {/* Hospital badge */}
-          <div className="mb-6 flex justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
-              Capiz Emmanuel Hospital –{" "}
-              <span className="text-primary-900">TB DOTS Center</span>
-            </span>
-          </div>
-
+    <div>
           {/* Heading */}
-          <h1 className="text-center text-[26px] font-semibold leading-tight tracking-[-0.025em] text-text-primary">
+          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.025em] text-text-primary">
             Welcome Back!
           </h1>
-          <p className="mt-2 text-center text-[10.5px] font-medium uppercase tracking-[0.16em] text-text-secondary">
+          <p className="mt-2 text-[14px] text-text-secondary">
             TB Treatment Monitoring · DOTS Daily
           </p>
 
-          <div className="my-7 h-px bg-border-light" />
-
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {error && (
               <div
                 role="alert"
-                className="rounded-[8px] border border-danger/20 bg-danger-bg px-3 py-2.5 text-[12.5px] leading-relaxed text-danger-text"
+                className="flex items-start gap-2.5 rounded-[10px] border border-danger/25 bg-danger-bg px-3.5 py-3 text-[13px] leading-relaxed text-danger-text"
               >
+                <AlertCircle className="mt-[2px] h-4 w-4 shrink-0" strokeWidth={2} />
                 {error}
               </div>
             )}
@@ -105,7 +81,7 @@ function LoginForm() {
             <div>
               <label
                 htmlFor="username"
-                className="mb-1.5 block text-[12px] font-medium tracking-[0.01em] text-text-body"
+                className="mb-1.5 block text-[13px] font-semibold text-text-primary"
               >
                 Username
               </label>
@@ -114,14 +90,14 @@ function LoginForm() {
                   id="username"
                   name="username"
                   autoComplete="username"
-                  className="login-input w-full bg-transparent py-2 pr-9 text-[13.5px] text-text-primary placeholder:text-text-muted focus:outline-none"
+                  className="login-input w-full bg-bg-card py-2 pl-10 pr-10 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
                   placeholder="admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   autoFocus
                 />
-                <User className="pointer-events-none absolute right-1 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-text-muted" strokeWidth={1.75} />
+                <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" strokeWidth={1.9} />
               </div>
             </div>
 
@@ -129,7 +105,7 @@ function LoginForm() {
             <div>
               <label
                 htmlFor="password"
-                className="mb-1.5 block text-[12px] font-medium tracking-[0.01em] text-text-body"
+                className="mb-1.5 block text-[13px] font-semibold text-text-primary"
               >
                 Password
               </label>
@@ -139,16 +115,17 @@ function LoginForm() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  className="login-input w-full bg-transparent py-2 pr-9 text-[13.5px] text-text-primary placeholder:text-text-muted focus:outline-none"
+                  className="login-input w-full bg-bg-card py-2 pl-10 pr-10 text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" strokeWidth={1.9} />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-text-muted transition-colors hover:text-text-body"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] p-1 text-text-muted transition-colors hover:text-text-body"
                   tabIndex={-1}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
@@ -165,7 +142,7 @@ function LoginForm() {
             <div className="-mt-1 flex justify-end">
               <Link
                 href="/forgot-password"
-                className="text-[12px] font-medium text-primary-700 transition-colors hover:text-primary-900"
+                className="text-[13px] font-semibold text-primary-700 transition-colors hover:text-primary-900"
               >
                 Forgot Password?
               </Link>
@@ -175,7 +152,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-[9px] bg-brand-action py-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-white transition-colors duration-150 hover:bg-brand-action-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 w-full rounded-[10px] bg-brand-action text-[14px] font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-action-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span className="inline-flex items-center justify-center gap-2">
@@ -187,8 +164,6 @@ function LoginForm() {
               )}
             </button>
           </form>
-        </div>
-      </div>
     </div>
   );
 }

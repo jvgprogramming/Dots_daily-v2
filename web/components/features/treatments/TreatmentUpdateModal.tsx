@@ -154,7 +154,7 @@ export function TreatmentUpdateModal({
       <div className="space-y-5">
         {/* ── Current regimen & phase ── */}
         <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+          <p className="text-[13.5px] font-semibold text-text-primary">
             Regimen & Phase
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -193,7 +193,7 @@ export function TreatmentUpdateModal({
 
         {/* ── Status ── */}
         <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+          <p className="text-[13.5px] font-semibold text-text-primary">
             Treatment Status
           </p>
           <div className="flex flex-wrap gap-2">
@@ -216,7 +216,7 @@ export function TreatmentUpdateModal({
 
         {/* ── Outcome ── */}
         <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+          <p className="text-[13.5px] font-semibold text-text-primary">
             Outcome
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -288,7 +288,7 @@ export function TreatmentUpdateModal({
         {/* ── Lab tests (append-only) ── */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+            <p className="text-[13.5px] font-semibold text-text-primary">
               New Lab Tests
             </p>
             <Button variant="outline" size="sm" onClick={addLabRow}>
@@ -393,7 +393,7 @@ export function TreatmentUpdateModal({
 
         {/* ── Progression notes ── */}
         <section className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+          <p className="text-[13.5px] font-semibold text-text-primary">
             Treatment Progression Notes
           </p>
           <textarea

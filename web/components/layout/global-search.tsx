@@ -157,7 +157,7 @@ export function GlobalSearch() {
               <div className="max-h-80 overflow-y-auto py-1">
                 {groups.map((group) => (
                   <div key={group.type}>
-                    <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                    <p className="px-4 pt-2 pb-1 text-[12px] font-semibold text-text-tertiary">
                       {group.label}
                     </p>
                     <ul>

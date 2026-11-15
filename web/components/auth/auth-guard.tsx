@@ -3,17 +3,25 @@
 import { useAuth } from "@/lib/store/auth";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
+import type { AuthUser } from "@/lib/types";
+import { canAccessPath, homePathFor, isPortalRole } from "@/lib/access";
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  /** Required role. If omitted, any authenticated user can access. */
-  allowedRoles?: Array<"admin" | "patient">;
+  /** Optional extra role restriction on top of the per-path access map. */
+  allowedRoles?: Array<AuthUser["role"]>;
 }
 
 export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  const roleAllowed =
+    !!user &&
+    isPortalRole(user.role) &&
+    (!allowedRoles || allowedRoles.length === 0 || allowedRoles.includes(user.role));
+  const pathAllowed = !!user && canAccessPath(user.role, pathname);
 
   useEffect(() => {
     if (loading) return;
@@ -24,13 +32,17 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
       return;
     }
 
-    // Role check — if the page restricts roles and the user doesn't match
-    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-      // Redirect to landing page — don't redirect back to /dashboard
-      // which would cause an infinite loop since dashboard also has role checks
-      router.replace("/");
+    // Not a staff account → back to sign-in
+    if (!isPortalRole(user.role)) {
+      router.replace("/login");
+      return;
     }
-  }, [user, loading, router, pathname, allowedRoles]);
+
+    // A page this role may not open → the role's own home page
+    if (!roleAllowed || !pathAllowed) {
+      router.replace(homePathFor(user.role));
+    }
+  }, [user, loading, router, pathname, roleAllowed, pathAllowed]);
 
   // Show nothing while checking auth (prevents flash of protected content)
   if (loading) {
@@ -50,16 +62,10 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
     );
   }
 
-  // Not authenticated → render nothing (redirect is in progress)
-  if (!user) {
+  // Redirect in progress → render nothing
+  if (!user || !roleAllowed || !pathAllowed) {
     return null;
   }
 
-  // Role check failed → render nothing (redirect is in progress)
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    return null;
-  }
-
-  // Authorized → render children
   return <>{children}</>;
 }

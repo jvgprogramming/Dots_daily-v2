@@ -18,6 +18,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/store/auth";
 import { Modal } from "@/components/ui/modal";
+import { canAccessPath } from "@/lib/access";
 
 const navGroups = [
   {
@@ -55,7 +56,15 @@ const navGroups = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+
+  // Only the pages this role may open; groups left empty are dropped.
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessPath(user?.role, item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -75,10 +84,10 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="matte-surface fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r md:w-64">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r border-border-light bg-bg-sidebar md:w-64">
         {/* Logo */}
-        <div className="flex h-16 items-center justify-center gap-3 md:justify-start md:px-5">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[9px] bg-brand-action">
+        <div className="flex h-[68px] items-center justify-center gap-3 md:justify-start md:px-5">
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[11px] bg-brand-action shadow-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/imports/image-2.png"
@@ -89,11 +98,11 @@ export function Sidebar() {
               }}
             />
           </div>
-          <div className="hidden flex-col gap-0.5 md:flex">
-            <span className="text-[13.5px] font-semibold leading-none tracking-[-0.015em] text-text-primary">
+          <div className="hidden flex-col gap-1 md:flex">
+            <span className="text-[15px] font-bold leading-none tracking-[-0.015em] text-text-primary">
               DOTS Daily
             </span>
-            <span className="text-[10px] font-medium uppercase leading-none tracking-[0.1em] text-text-secondary">
+            <span className="text-[11.5px] font-medium leading-none text-text-secondary">
               TB DOTS Center
             </span>
           </div>
@@ -103,17 +112,16 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav
-          className="flex-1 overflow-y-auto px-2 py-5 md:px-3"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "transparent transparent" }}
+          className="sidebar-scroll flex-1 overflow-y-auto px-2 py-5 md:px-3"
         >
-          {navGroups.map((group, i) => (
-            <div key={i} className="mb-3 last:mb-0 md:mb-6">
+          {visibleGroups.map((group, i) => (
+            <div key={i} className="mb-3 last:mb-0 md:mb-5">
               {group.title && (
-                <p className="mb-2 hidden px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-text-secondary md:block">
+                <p className="mb-1.5 hidden px-3 text-[11.5px] font-semibold text-text-tertiary md:block">
                   {group.title}
                 </p>
               )}
-              <ul className="space-y-px">
+              <ul className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
@@ -125,18 +133,18 @@ export function Sidebar() {
                         title={item.label}
                         aria-label={item.label}
                         className={cn(
-                          "group flex items-center justify-center gap-2.5 rounded-[7px] px-0 py-2.5 text-[13px] transition-colors duration-150 md:justify-start md:px-2.5 md:py-2",
+                          "group flex items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] transition-colors duration-150 md:justify-start md:px-3",
                           isActive
-                            ? "bg-primary-100/70 font-medium text-primary-900"
-                            : "font-normal text-text-body hover:bg-bg-subtle hover:text-text-primary"
+                            ? "bg-brand-action font-semibold text-white shadow-sm"
+                            : "font-medium text-text-body hover:bg-primary-50 hover:text-text-primary"
                         )}
                       >
                         <Icon
                           className={cn(
-                            "h-[15px] w-[15px] shrink-0 stroke-[1.75]",
+                            "h-[17px] w-[17px] shrink-0 stroke-[1.9]",
                             isActive
-                              ? "text-primary-800"
-                              : "text-text-tertiary group-hover:text-text-body"
+                              ? "text-white"
+                              : "text-text-tertiary group-hover:text-primary-700"
                           )}
                         />
                         <span className="hidden md:inline">{item.label}</span>
@@ -155,9 +163,9 @@ export function Sidebar() {
             onClick={() => setShowLogoutModal(true)}
             title="Logout"
             aria-label="Logout"
-            className="flex w-full items-center justify-center gap-2.5 rounded-[7px] px-0 py-2.5 text-[13px] text-text-secondary transition-colors duration-150 hover:bg-danger-bg/60 hover:text-danger-text md:justify-start md:px-2.5 md:py-2"
+            className="flex w-full items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] font-medium text-text-secondary transition-colors duration-150 hover:bg-danger-bg hover:text-danger-text md:justify-start md:px-3"
           >
-            <LogOut className="h-[15px] w-[15px] stroke-[1.75]" />
+            <LogOut className="h-[17px] w-[17px] stroke-[1.9]" />
             <span className="hidden md:inline">Logout</span>
           </button>
         </div>

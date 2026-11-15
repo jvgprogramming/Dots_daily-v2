@@ -9,6 +9,7 @@ use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -25,13 +26,14 @@ class MonitoringController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'patient_id' => ['required', 'integer', 'exists:patients,id'],
+            'patient_id' => ['required', 'integer'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'required_with:from', 'after_or_equal:from'],
             'date' => ['nullable', 'date'],
         ]);
 
         $patient = Patient::query()
+            ->visibleTo($request->user()) // another nurse's patient reads as not found
             ->withCount([
                 'treatmentPlans as active_treatments_count' => fn ($q) => $q->where('status', 'active'),
             ])
@@ -100,7 +102,7 @@ class MonitoringController extends BaseApiController
         $adherenceByDate = $logs
             ->groupBy(fn (MedicationLog $log) => $log->scheduled_date->toDateString())
             ->map(function ($dateLogs, $date) use ($monitoringByDate) {
-                /** @var \Illuminate\Support\Collection<int, MedicationLog> $dateLogs */
+                /** @var Collection<int, MedicationLog> $dateLogs */
                 return [
                     'date' => $date,
                     'total_doses' => $dateLogs->count(),
@@ -190,7 +192,7 @@ class MonitoringController extends BaseApiController
         return $this->success(data: [
             'patient' => [
                 'id' => $patient->id,
-                'name' => trim(($patient->first_name ?? '') . ' ' . ($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'),
+                'name' => trim(($patient->first_name ?? '').' '.($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'),
                 'first_name' => $patient->first_name,
                 'last_name' => $patient->last_name,
                 'status' => $patient->status ?? 'registered',
@@ -291,7 +293,7 @@ class MonitoringController extends BaseApiController
             return $path;
         }
         if (Str::startsWith($path, 'storage/')) {
-            return rtrim(config('app.url'), '/') . '/' . ltrim($path, '/');
+            return rtrim(config('app.url'), '/').'/'.ltrim($path, '/');
         }
 
         return Storage::disk('public')->url(ltrim($path, '/'));

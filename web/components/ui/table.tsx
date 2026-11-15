@@ -38,12 +38,12 @@ export function Table<T>({
     <div className={cn("w-full overflow-auto", className)}>
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-border-light">
+          <tr className="border-b border-border-light bg-bg-subtle">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={cn(
-                  "px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary",
+                  "px-4 py-3 text-left text-[12px] font-semibold text-text-secondary",
                   col.className
                 )}
               >
@@ -66,7 +66,7 @@ export function Table<T>({
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className={cn("px-4 py-3 text-[13px] text-text-body", col.className)}
+                  className={cn("px-4 py-3.5 text-[13px] text-text-body", col.className)}
                 >
                   {col.cell
                     ? col.cell(item)

@@ -19,7 +19,7 @@ function SkeletonCard({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "matte-surface rounded-[14px] border p-5",
+        "matte-surface rounded-[16px] border p-5",
         className
       )}
       {...props}

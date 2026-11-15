@@ -25,7 +25,7 @@ export interface AuthUser {
   name: string;
   email: string;
   phone: string | null;
-  role: "admin" | "patient";
+  role: "admin" | "nurse" | "patient";
   profile_photo_url: string | null;
   is_active: boolean;
   email_verified_at: string | null;

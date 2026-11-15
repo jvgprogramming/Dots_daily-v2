@@ -216,7 +216,7 @@ class SettingsController extends BaseApiController
                 $updates[$field] = $data[$field];
             }
         }
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $updates['password'] = Hash::make($data['password']);
         }
 
@@ -229,7 +229,17 @@ class SettingsController extends BaseApiController
             return $this->error(message: 'Cannot remove the last active admin account.', code: 422);
         }
 
+        // A change to who this person is or whether they may sign in ends their
+        // current sessions, so the new access level applies immediately.
+        $accessChanged = (isset($updates['role']) && $updates['role'] !== $user->role)
+            || (isset($updates['is_active']) && $updates['is_active'] === false)
+            || isset($updates['password']);
+
         $user->update($updates);
+
+        if ($accessChanged) {
+            $user->tokens()->delete();
+        }
 
         $this->logAudit($request, 'user.updated', "Updated staff account {$user->email}", User::class, $user->id);
 
@@ -247,6 +257,7 @@ class SettingsController extends BaseApiController
         }
 
         $email = $user->email;
+        $user->tokens()->delete();
         $user->delete();
 
         $this->logAudit($request, 'user.deleted', "Deleted staff account {$email}", User::class, $user->id);
@@ -274,7 +285,7 @@ class SettingsController extends BaseApiController
             $query->where('action', 'not like', 'login%');
         }
 
-        if (!empty($data['search'])) {
+        if (! empty($data['search'])) {
             $query->where(function ($q) use ($data) {
                 $q->where('description', 'like', "%{$data['search']}%")
                     ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$data['search']}%"));

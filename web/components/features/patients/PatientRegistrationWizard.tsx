@@ -123,7 +123,7 @@ function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: 
   return (
     <div className="flex items-center gap-2 mb-4">
       <div className="h-0.5 w-4 rounded-full bg-primary-500" />
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+      <h4 className="text-[13.5px] font-semibold text-text-primary">
         {title}
       </h4>
       <Icon className="h-3.5 w-3.5 text-text-tertiary" />
@@ -1160,7 +1160,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
 function ReviewGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[12px] border border-border-light p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-text-primary mb-2">{title}</p>
+      <p className="text-[13.5px] font-semibold text-text-primary mb-2">{title}</p>
       <div className="space-y-1.5">{children}</div>
     </div>
   );

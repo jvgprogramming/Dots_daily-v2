@@ -31,8 +31,8 @@ export function Progress({
     <div className={cn("flex items-center gap-3", className)}>
       <div
         className={cn(
-          "flex-1 overflow-hidden rounded-full bg-bg-subtle",
-          size === "sm" ? "h-1" : "h-1.5"
+          "flex-1 overflow-hidden rounded-full bg-primary-50 ring-1 ring-inset ring-border-light",
+          size === "sm" ? "h-1.5" : "h-2"
         )}
       >
         <motion.div

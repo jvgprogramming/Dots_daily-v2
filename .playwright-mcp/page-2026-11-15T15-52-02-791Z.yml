@@ -1,0 +1,46 @@
+- generic [ref=f3e1]:
+  - alert [ref=f3e2]
+  - generic [ref=f3e3]:
+    - complementary [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - img "Capiz Emmanuel Hospital logo" [ref=f3e7]
+        - generic [ref=f3e8]:
+          - generic [ref=f3e9]: DOTS Daily
+          - generic [ref=f3e10]: TB DOTS Center
+      - generic [ref=f3e11]:
+        - generic [ref=f3e12]:
+          - heading "Capiz Emmanuel Hospital" [level=2] [ref=f3e13]
+          - paragraph [ref=f3e14]: Tuberculosis treatment monitoring for the TB DOTS Center team.
+        - generic [ref=f3e16]:
+          - generic [ref=f3e17]: M
+          - generic [ref=f3e18]: T
+          - generic [ref=f3e19]: W
+          - generic [ref=f3e20]: T
+          - generic [ref=f3e21]: F
+          - generic [ref=f3e22]: S
+          - generic [ref=f3e23]: S
+        - list [ref=f3e108]:
+          - listitem [ref=f3e109]: Patient registration
+          - listitem [ref=f3e116]: Treatment phases
+          - listitem [ref=f3e121]: Daily dose monitoring
+          - listitem [ref=f3e125]: Reports
+      - paragraph [ref=f3e129]: For authorized DOTS Center staff only.
+    - main [ref=f3e133]:
+      - generic [ref=f3e136]:
+        - heading "Welcome Back!" [level=1] [ref=f3e137]
+        - paragraph [ref=f3e138]: TB Treatment Monitoring · DOTS Daily
+        - generic [ref=f3e139]:
+          - generic [ref=f3e140]:
+            - generic [ref=f3e141]: Username
+            - textbox "Username" [active] [ref=f3e143]:
+              - /placeholder: admin
+          - generic [ref=f3e144]:
+            - generic [ref=f3e145]: Password
+            - generic [ref=f3e146]:
+              - textbox "Password" [ref=f3e147]:
+                - /placeholder: ••••••••
+              - button "Show password" [ref=f3e148]
+          - link "Forgot Password?" [ref=f3e153] [cursor=pointer]:
+            - /url: /forgot-password
+          - button "Sign In" [ref=f3e154]
+      - generic [ref=f3e155]: © 2026 Capiz Emmanuel Hospital

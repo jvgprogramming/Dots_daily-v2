@@ -110,7 +110,7 @@ function Row({ label: l, value }: { label: string; value: string }) {
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[12px] border border-border-light p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-text-primary mb-2.5">{title}</p>
+      <p className="text-[13.5px] font-semibold text-text-primary mb-2.5">{title}</p>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -203,7 +203,7 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[11px] text-text-tertiary uppercase tracking-wider">Registration Group</p>
+                <p className="text-[12px] text-text-tertiary">Registration Group</p>
                 <p className="text-sm font-medium text-text-primary">
                   {classification ? label(CLASSIFICATION_LABELS, classification.registration_group) : "Not classified"}
                 </p>

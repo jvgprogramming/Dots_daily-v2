@@ -8,7 +8,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   return (
-    <div className="min-h-screen bg-transparent">
+    <div className="min-h-screen bg-bg-main">
       <Sidebar />
       <div className="pl-16 md:pl-64">
         <Header />

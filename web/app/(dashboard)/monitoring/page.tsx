@@ -14,33 +14,39 @@ import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Users,
-  Search,
-  Activity,
   Pill,
   TrendingUp,
   CalendarDays,
   AlertTriangle,
   CheckCircle2,
-  Clock,
-  Loader2,
   RefreshCw,
   Target,
+  Filter,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MonitoringCalendar, DayDetailPanel } from "@/components/features/monitoring/MonitoringCalendar";
-import { getPatients } from "@/lib/services/patients";
+import { PatientPicker } from "@/components/features/monitoring/PatientPicker";
 import { getPatientMonitoring } from "@/lib/services/monitoring";
+import { verifyMedicationLog, unverifyMedicationLog } from "@/lib/services/dashboard";
 import type {
   PatientListItem,
   PatientMonitoringData,
   AdherenceDay,
-  MonitoringEntry,
 } from "@/lib/types";
+
+const ADHERENCE_FILTERS = [
+  { value: "all", label: "All adherence" },
+  { value: "taken", label: "Taken" },
+  { value: "pending", label: "Pending" },
+  { value: "missed", label: "Missed" },
+  { value: "late", label: "Late" },
+  { value: "not_recorded", label: "Not recorded" },
+] as const;
 
 // ─── Date helpers (all local-time ISO YYYY-MM-DD) ───
 function toISO(d: Date): string {
@@ -117,12 +123,9 @@ export default function MonitoringPage() {
   const deepLinkPatientId = searchParams.get("patient");
 
   // ── Patient selection ──
-  const [patients, setPatients] = useState<PatientListItem[]>([]);
-  const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(
     deepLinkPatientId ? Number(deepLinkPatientId) || null : null
   );
-  const [patientsLoading, setPatientsLoading] = useState(true);
 
   // ── Monitoring data ──
   const [data, setData] = useState<PatientMonitoringData | null>(null);
@@ -136,30 +139,16 @@ export default function MonitoringPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "taken" | "pending" | "missed" | "late" | "not_recorded">("all");
 
-  // ── Load patients (registered only — drafts have no treatment yet) ──
-  const loadPatients = useCallback(async (search: string) => {
-    setPatientsLoading(true);
-    try {
-      const res = await getPatients({ search, per_page: 50, status: "registered" });
-      setPatients(res.data);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load patients");
-    } finally {
-      setPatientsLoading(false);
-    }
+  // ── Patient picker callbacks (picker loads registered patients itself) ──
+  const handleSelectPatient = useCallback((p: PatientListItem) => {
+    setSelectedPatientId(p.id);
+    setSelectedDate(null);
   }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => loadPatients(patientSearch), 300);
-    return () => clearTimeout(t);
-  }, [patientSearch, loadPatients]);
-
-  // ── Auto-select first patient when none selected ──
-  useEffect(() => {
-    if (!selectedPatientId && patients.length > 0) {
-      setSelectedPatientId(patients[0].id);
-    }
-  }, [patients, selectedPatientId]);
+  // Auto-select the first patient when nothing is selected (no deep link)
+  const handleFirstLoad = useCallback((p: PatientListItem) => {
+    setSelectedPatientId((cur) => cur ?? p.id);
+  }, []);
 
   // ── Compute visible range from anchor + view ──
   const range = useMemo(() => {
@@ -258,78 +247,50 @@ export default function MonitoringPage() {
 
       {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
-      {/* ── Patient selector + filters ── */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 gap-3 max-w-xl">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-            <Input
-              placeholder="Search patients by name or email..."
-              className="pl-9 h-9"
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-text-tertiary font-medium">View:</span>
-          {(["month", "week"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 ${
-                view === v ? "bg-brand-action text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
-              }`}
-            >
-              {v === "month" ? "Month" : "Week"}
-            </button>
-          ))}
-          <span className="text-xs text-text-tertiary font-medium ml-2">Adherence:</span>
-          {(["all", "taken", "pending", "missed", "late", "not_recorded"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 capitalize ${
-                statusFilter === s ? "bg-brand-action text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
-              }`}
-            >
-              {s.replace("_", " ")}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* ── Patient picker + filters ── */}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <PatientPicker
+          selectedId={selectedPatientId}
+          selectedName={data?.patient?.id === selectedPatientId ? data?.patient?.name : undefined}
+          onSelect={handleSelectPatient}
+          onFirstLoad={handleFirstLoad}
+          onError={setError}
+        />
 
-      {/* ── Patient chips ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {patientsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-40 rounded-full shrink-0" />)
-        ) : patients.length === 0 ? (
-          <p className="text-sm text-text-tertiary">No registered patients found.</p>
-        ) : (
-          patients.map((p) => {
-            const name = p.first_name ? `${p.first_name} ${p.last_name}` : p.user?.name || `Patient #${p.id}`;
-            const active = selectedPatientId === p.id;
-            return (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-[8px] bg-bg-subtle p-0.5" role="group" aria-label="Calendar view">
+            {(["month", "week"] as const).map((v) => (
               <button
-                key={p.id}
-                onClick={() => {
-                  setSelectedPatientId(p.id);
-                  setSelectedDate(null);
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm whitespace-nowrap transition-all duration-150 ${
-                  active
-                    ? "bg-primary-100/70 border-primary-300 text-primary-900"
-                    : "bg-bg-card border-border-light text-text-secondary hover:border-border-strong"
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1 text-xs font-medium rounded-[6px] transition-all duration-150 ${
+                  view === v ? "bg-bg-card text-text-primary shadow-sm" : "text-text-secondary hover:text-text-primary"
                 }`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-brand-action text-white" : "bg-bg-subtle text-text-tertiary"}`}>
-                  {name.charAt(0).toUpperCase()}
-                </span>
-                {name}
+                {v === "month" ? "Month" : "Week"}
               </button>
-            );
-          })
-        )}
+            ))}
+          </div>
+
+          <div className="relative">
+            <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              aria-label="Adherence filter"
+              className={`h-8 appearance-none rounded-[8px] border pl-8 pr-8 text-xs font-medium outline-none transition-colors ${
+                statusFilter === "all"
+                  ? "border-border-light bg-bg-card text-text-secondary"
+                  : "border-primary-300 bg-primary-100/70 text-primary-900"
+              }`}
+            >
+              {ADHERENCE_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+          </div>
+        </div>
       </div>
 
       {/* ── Main content ── */}
@@ -409,7 +370,7 @@ export default function MonitoringPage() {
 
           {/* ── Treatment timeline ── */}
           {progress && (
-            <div className="matte-surface rounded-[14px] border p-4">
+            <div className="matte-surface rounded-[16px] border p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Pill className="h-4 w-4 shrink-0 text-text-tertiary" />
@@ -483,9 +444,17 @@ export default function MonitoringPage() {
                 recentHistory={data?.recent_history ?? []}
                 loadingDoseDetail={loading}
                 onClose={() => setSelectedDate(null)}
+                onToggleVerify={async (log) => {
+                  if (log.observed_by_name) {
+                    await unverifyMedicationLog(log.id);
+                  } else {
+                    await verifyMedicationLog(log.id);
+                  }
+                  await fetchMonitoring(true);
+                }}
               />
             ) : (
-              <div className="matte-surface flex flex-col items-center justify-center rounded-[14px] border border-dashed p-6 text-center">
+              <div className="matte-surface flex flex-col items-center justify-center rounded-[16px] border border-dashed p-6 text-center">
                 <CalendarDays className="h-5 w-5 text-text-tertiary mb-2" />
                 <p className="text-sm text-text-secondary font-medium">Select a date</p>
                 <p className="text-xs text-text-tertiary mt-1">

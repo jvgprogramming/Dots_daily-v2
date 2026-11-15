@@ -9,6 +9,7 @@ use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\DoseVerificationController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\MobileDoseLogController;
+use App\Http\Controllers\API\MonitoringController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
@@ -35,11 +36,13 @@ Route::prefix('v1')->group(function () {
 
     // Auth
     Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    // Sign-in and password reset are rate limited (5 attempts / minute) to
+    // slow down password guessing and reset-email abuse.
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
     // Password Reset
-    Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
-    Route::post('/reset-password', [ResetPasswordController::class, 'reset']);
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [ResetPasswordController::class, 'reset'])->middleware('throttle:5,1');
 
     // Email Verification (signed URL — no auth required)
     Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
@@ -80,10 +83,11 @@ Route::prefix('v1')->group(function () {
         // Reports (Admin) — medication adherence + proof evidence from live logs
         Route::get('/reports/medication-adherence', [ReportsController::class, 'index'])->middleware('role:admin');
 
-        // Dose verification (Admin) — confirm a patient's logged intake by setting
+        // Dose verification (Admin + Nurse) — confirm a patient's logged intake by setting
         // `medication_logs.observed_by`, the flag the calendars read for verified/pending.
-        Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin');
-        Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin');
+        // Nurses may only verify doses of patients they registered (checked in the controller).
+        Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin,nurse');
+        Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin,nurse');
 
         // Treatments hub (Admin) — records, follow-up schedule, reschedule
         Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin');
@@ -101,18 +105,21 @@ Route::prefix('v1')->group(function () {
             Route::delete('{medication}', [MedicationInventoryController::class, 'destroy']);
         });
 
-        // Patient Routes (Admin)
-        Route::prefix('patients')->middleware('role:admin')->group(function () {
+        // Patient Routes (Admin + Nurse)
+        // Nurses work only with the patients they registered: every query is
+        // scoped with Patient::visibleTo() and single records 404 otherwise.
+        Route::prefix('patients')->middleware('role:admin,nurse')->group(function () {
             Route::get('/', [PatientController::class, 'index']);
             Route::get('/list', [PatientController::class, 'list']);
             // Static segments must be registered before the {patient} wildcard route
-            Route::get('monitoring', [\App\Http\Controllers\API\MonitoringController::class, 'index']);
+            Route::get('monitoring', [MonitoringController::class, 'index']);
             Route::post('/', [PatientController::class, 'store']);
             Route::post('{patient}/complete-draft', [PatientController::class, 'completeDraft']);
             Route::post('{patient}/update-draft', [PatientController::class, 'updateDraft']);
             Route::get('{patient}', [PatientController::class, 'show']);
             Route::put('{patient}', [PatientController::class, 'update']);
-            Route::delete('{patient}', [PatientController::class, 'destroy']);
+            // Deleting a patient record stays admin-only.
+            Route::delete('{patient}', [PatientController::class, 'destroy'])->middleware('role:admin');
         });
 
     });

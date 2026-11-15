@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Models\ActivityLog;
 use App\Models\MedicationLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,8 @@ class DoseVerificationController extends BaseApiController
 {
     public function verify(Request $request, MedicationLog $log): JsonResponse
     {
+        $this->ensureVisible($request, $log);
+
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -39,6 +42,8 @@ class DoseVerificationController extends BaseApiController
             'notes' => $data['notes'] ?? $log->notes,
         ])->save();
 
+        $this->audit($request, $log, 'dose.verified', 'Verified dose');
+
         return $this->success(
             data: $this->formatLog($log->load(['patient.user', 'treatmentPlanMedication.medication', 'observedBy'])),
             message: 'Dose verified successfully.',
@@ -47,11 +52,15 @@ class DoseVerificationController extends BaseApiController
 
     public function unverify(Request $request, MedicationLog $log): JsonResponse
     {
+        $this->ensureVisible($request, $log);
+
         if ($log->observed_by === null) {
             return $this->error('This dose is not verified.', 422);
         }
 
         $log->fill(['observed_by' => null])->save();
+
+        $this->audit($request, $log, 'dose.unverified', 'Removed verification of dose');
 
         return $this->success(
             data: $this->formatLog($log->load(['patient.user', 'treatmentPlanMedication.medication', 'observedBy'])),
@@ -71,10 +80,10 @@ class DoseVerificationController extends BaseApiController
             'id' => $log->id,
             'patient_id' => $log->patient_id,
             'patient_name' => $log->patient
-                ? (trim(($log->patient->first_name ?? '') . ' ' . ($log->patient->last_name ?? '')) ?: ($log->patient->user?->name ?? 'Unnamed patient'))
+                ? (trim(($log->patient->first_name ?? '').' '.($log->patient->last_name ?? '')) ?: ($log->patient->user?->name ?? 'Unnamed patient'))
                 : 'Unknown patient',
             'medication_name' => $medication?->name
-                ? trim($medication->name . ($medication->strength ? " {$medication->strength}" : ''))
+                ? trim($medication->name.($medication->strength ? " {$medication->strength}" : ''))
                 : null,
             'scheduled_date' => $log->scheduled_date?->toDateString(),
             'scheduled_time' => $log->scheduled_time,
@@ -88,5 +97,30 @@ class DoseVerificationController extends BaseApiController
             'verified' => $log->observed_by !== null,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Nurses may only act on doses of the patients they registered. Anything
+     * else answers 404 so other patients' records are not revealed.
+     */
+    private function ensureVisible(Request $request, MedicationLog $log): void
+    {
+        $patient = $log->patient;
+        abort_unless($patient && $patient->isVisibleTo($request->user()), 404, 'Dose log not found.');
+    }
+
+    /** Every (un)verification is recorded in the audit trail with who and where. */
+    private function audit(Request $request, MedicationLog $log, string $action, string $verb): void
+    {
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'action' => $action,
+            'description' => "{$verb} #{$log->id} for patient #{$log->patient_id}",
+            'subject_type' => MedicationLog::class,
+            'subject_id' => $log->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 500),
+            'created_at' => now(),
+        ]);
     }
 }

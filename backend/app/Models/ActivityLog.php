@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\ActivityLogFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,10 +18,11 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
     'properties',
     'ip_address',
     'user_agent',
+    'created_at', // no automatic timestamps on this table, so callers set it
 ])]
 class ActivityLog extends Model
 {
-    /** @use HasFactory<\Database\Factories\ActivityLogFactory> */
+    /** @use HasFactory<ActivityLogFactory> */
     use HasFactory;
 
     protected $table = 'activity_logs';

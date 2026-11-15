@@ -14,7 +14,7 @@ import * as authService from "@/lib/services/auth";
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (payload: LoginPayload) => Promise<void>;
+  login: (payload: LoginPayload) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (payload: LoginPayload) => {
     const res = await authService.login(payload);
     setUser(res.user);
+    return res.user;
   }, []);
 
   const logout = useCallback(async () => {

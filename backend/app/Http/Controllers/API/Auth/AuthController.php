@@ -62,16 +62,17 @@ class AuthController extends BaseApiController
             );
         }
 
-        // Only admin users can access the web portal
-        if ($user->role !== 'admin') {
+        // Only staff roles may use the web portal (admins and nurses).
+        if (! $user->canUsePortal()) {
             return $this->error(
-                message: 'Access denied. Only administrators can access this portal.',
+                message: 'Access denied. This portal is for authorized hospital staff only.',
                 code: 403,
             );
         }
 
+        // One active web session per account, and it expires after a shift.
         $user->tokens()->delete();
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $token = $user->createToken('auth-token', ['*'], now()->addHours(12))->plainTextToken;
         $user->update(['last_login_at' => now()]);
 
         return $this->success(

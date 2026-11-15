@@ -1,11 +1,27 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
+import { api, ApiError } from "@/lib/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Loader2, ArrowLeft } from "lucide-react";
+
+/** Pull the field-level validation text out of a failed API call. */
+function resolveErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return (
+      err.errors?.email?.[0] ??
+      err.message ??
+      "Failed to send reset link. Please try again."
+    );
+  }
+
+  return err instanceof Error && err.message
+    ? err.message
+    : "Failed to send reset link. Please try again.";
+}
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -13,40 +29,34 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Auto-dismiss the message after 5 seconds so it never lingers on screen.
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(""), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/forgot-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Something went wrong");
+      await api.post("/forgot-password", { email });
       setSent(true);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to send reset link. Please try again.");
-      }
+      setError(resolveErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="matte-surface rounded-[16px] border p-8">
+    <div>
       {/* Header */}
-      <div className="mb-8 text-center">
-        <h1 className="text-[22px] font-semibold text-text-primary">Reset password</h1>
-        <p className="mt-1.5 text-sm text-text-secondary">
+      <div className="mb-8">
+        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.025em] text-text-primary">Reset password</h1>
+        <p className="mt-2 text-[14px] text-text-secondary">
           {sent
             ? "Check your email for the reset link"
             : "Enter your email and we'll send you a reset link"}
@@ -64,7 +74,7 @@ export default function ForgotPasswordPage() {
           <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="text-sm font-medium text-text-primary"
+              className="block text-[13px] font-semibold text-text-primary"
             >
               Email
             </label>
@@ -79,7 +89,7 @@ export default function ForgotPasswordPage() {
             />
           </div>
 
-          <Button type="submit" className="w-full h-11" disabled={loading}>
+          <Button type="submit" className="h-11 w-full text-[14px]" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -93,7 +103,7 @@ export default function ForgotPasswordPage() {
       )}
 
       {/* Back link */}
-      <div className="mt-6 text-center">
+      <div className="mt-8">
         <Link
           href="/login"
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-secondary hover:text-text-primary transition-colors"

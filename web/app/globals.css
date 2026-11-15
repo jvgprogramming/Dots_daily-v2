@@ -1,75 +1,75 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-  --font-display: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-public-sans), "Public Sans", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-public-sans), "Public Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
 }
 
 @theme {
-  /* ── Botanical green scale — forest → emerald → sage ── */
-  --color-primary-50: #f2f7f4;
-  --color-primary-100: #e7f1ea;
-  --color-primary-200: #cfe4d8;
-  --color-primary-300: #a9d3be;
-  --color-primary-400: #77b99a;
+  /* ── Forest green scale — the DOTS brand ── */
+  --color-primary-50: #f1f7f3;
+  --color-primary-100: #e3f0e8;
+  --color-primary-200: #c9e2d3;
+  --color-primary-300: #a2cfb6;
+  --color-primary-400: #6fb592;
   --color-primary-500: #18865b;
   --color-primary-600: #147350;
   --color-primary-700: #0e5d41;
   --color-primary-800: #0b4934;
   --color-primary-900: #064e32;
   --color-primary-950: #032b1c;
-  --color-brand-action: #064e32;
-  --color-brand-action-hover: #0b4934;
+  --color-brand-action: #0b5a3c;
+  --color-brand-action-hover: #084a31;
 
-  /* ── Canvas & surfaces ── */
-  --color-bg-main: #eceeef;
+  /* ── Canvas & surfaces: cool clinical grey, solid white cards ── */
+  --color-bg-main: #f1f4f2;
   --color-bg-card: #ffffff;
-  --color-bg-subtle: #f7f8f7;
+  --color-bg-subtle: #f5f7f6;
   --color-bg-sidebar: #ffffff;
 
-  /* ── Hairline borders ── */
-  --color-border-light: #e7eae7;
-  --color-border-default: #dce2dd;
-  --color-border-strong: #c4cec7;
+  /* ── Borders ── */
+  --color-border-light: #e4e9e6;
+  --color-border-default: #d5ddd8;
+  --color-border-strong: #bcc7c1;
 
-  /* ── Ink ── */
-  --color-text-primary: #171d19;
-  --color-text-body: #4c564f;
-  --color-text-secondary: #87918a;
-  --color-text-tertiary: #9aa39c;
-  --color-text-muted: #b4bcb6;
+  /* ── Ink (secondary raised for AA contrast on white) ── */
+  --color-text-primary: #13201a;
+  --color-text-body: #3f4c45;
+  --color-text-secondary: #66736c;
+  --color-text-tertiary: #84908a;
+  --color-text-muted: #a6b0ab;
 
-  /* ── Status (used sparingly, mapped into the green system) ── */
+  /* ── Status ── */
   --color-success: #18865b;
-  --color-success-bg: #e7f1ea;
+  --color-success-bg: #e6f2ea;
   --color-success-text: #064e32;
-  --color-warning: #a9761c;
-  --color-warning-bg: #faf3e6;
+  --color-warning: #b07a16;
+  --color-warning-bg: #fbf3e2;
   --color-warning-text: #7c5713;
-  --color-danger: #b4402f;
-  --color-danger-bg: #fbefec;
+  --color-danger: #c0412f;
+  --color-danger-bg: #fcefec;
   --color-danger-text: #8c3226;
   --color-info: #0b4934;
-  --color-info-bg: #eef4f0;
+  --color-info-bg: #eaf3ee;
   --color-info-text: #0b4934;
-  --color-chart-cursor: rgb(6 78 50 / 0.04);
+  --color-chart-cursor: rgb(6 78 50 / 0.05);
 
-  /* ── Shadows — barely-there, for depth cues only ── */
-  --shadow-xs: 0 1px 1px 0 rgb(23 29 25 / 0.03);
-  --shadow-sm: 0 1px 2px 0 rgb(23 29 25 / 0.04);
-  --shadow-card: 0 1px 2px 0 rgb(23 29 25 / 0.035), 0 1px 1px 0 rgb(23 29 25 / 0.02);
-  --shadow-card-hover: 0 2px 6px -2px rgb(23 29 25 / 0.06), 0 0 0 1px rgb(23 29 25 / 0.03);
-  --shadow-dropdown: 0 16px 36px -20px rgb(23 29 25 / 0.28), 0 0 0 1px rgb(23 29 25 / 0.05);
-  --shadow-modal: 0 32px 72px -32px rgb(23 29 25 / 0.4), 0 0 0 1px rgb(23 29 25 / 0.06);
-  --shadow-elevated: 0 20px 44px -28px rgb(23 29 25 / 0.3), 0 0 0 1px rgb(23 29 25 / 0.04);
+  /* ── Shadows — a hairline plus a soft lift ── */
+  --shadow-xs: 0 1px 1px 0 rgb(19 32 26 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(19 32 26 / 0.05);
+  --shadow-card: 0 1px 2px 0 rgb(19 32 26 / 0.04), 0 6px 18px -12px rgb(19 32 26 / 0.12);
+  --shadow-card-hover: 0 2px 4px 0 rgb(19 32 26 / 0.05), 0 12px 28px -16px rgb(19 32 26 / 0.18);
+  --shadow-dropdown: 0 16px 36px -20px rgb(19 32 26 / 0.28), 0 0 0 1px rgb(19 32 26 / 0.05);
+  --shadow-modal: 0 32px 72px -32px rgb(19 32 26 / 0.4), 0 0 0 1px rgb(19 32 26 / 0.06);
+  --shadow-elevated: 0 20px 44px -28px rgb(19 32 26 / 0.3), 0 0 0 1px rgb(19 32 26 / 0.04);
 
-  /* ── Radii ── */
+  /* ── Radii: controls 10, cards 16 ── */
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 22px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-full: 9999px;
 }
 
@@ -88,20 +88,20 @@ html.dark {
   --color-primary-900: #c5efd3;
   --color-primary-950: #e0f7e7;
 
-  --color-bg-main: #0b0d10;
-  --color-bg-card: #141920;
-  --color-bg-subtle: #11151b;
-  --color-bg-sidebar: #11151b;
+  --color-bg-main: #0c0f0e;
+  --color-bg-card: #141a18;
+  --color-bg-subtle: #111614;
+  --color-bg-sidebar: #111614;
 
-  --color-border-light: #252c36;
-  --color-border-default: #303844;
-  --color-border-strong: #414b58;
+  --color-border-light: #232c28;
+  --color-border-default: #2e3934;
+  --color-border-strong: #3f4c46;
 
-  --color-text-primary: #f1f3f5;
-  --color-text-body: #c4cbd4;
-  --color-text-secondary: #a3afbc;
-  --color-text-tertiary: #8993a2;
-  --color-text-muted: #84919f;
+  --color-text-primary: #eef2f0;
+  --color-text-body: #c3ccc7;
+  --color-text-secondary: #9faca5;
+  --color-text-tertiary: #87948d;
+  --color-text-muted: #6f7b75;
 
   --color-success: #71bb91;
   --color-success-bg: #183126;
@@ -112,17 +112,17 @@ html.dark {
   --color-danger: #d4776c;
   --color-danger-bg: #38211f;
   --color-danger-text: #e6a39a;
-  --color-info: #8aa8c2;
-  --color-info-bg: #1c2935;
-  --color-info-text: #b6cee2;
+  --color-info: #8ab8a0;
+  --color-info-bg: #1a2c24;
+  --color-info-text: #b6dcc8;
 
-  --color-brand-action: #0b4934;
-  --color-brand-action-hover: #0e5d41;
+  --color-brand-action: #1c7a53;
+  --color-brand-action-hover: #23905f;
   --color-chart-cursor: rgb(88 184 137 / 0.1);
 
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.16);
   --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.18);
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -20px rgb(0 0 0 / 0.28);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -20px rgb(0 0 0 / 0.3);
   --shadow-card-hover: 0 3px 12px -4px rgb(0 0 0 / 0.3), 0 0 0 1px rgb(255 255 255 / 0.04);
   --shadow-dropdown: 0 18px 40px -20px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
   --shadow-modal: 0 32px 72px -32px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.06);
@@ -133,71 +133,56 @@ html.dark {
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-main);
-  background-image:
-    radial-gradient(ellipse at 10% 0%, rgb(24 134 91 / 0.045), transparent 38%),
-    radial-gradient(ellipse at 100% 100%, rgb(255 255 255 / 0.72), transparent 48%);
-  background-attachment: fixed;
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv02", "cv03", "cv04";
   text-rendering: optimizeLegibility;
 }
 
-html.dark body {
-  background-color: var(--color-bg-main);
-  background-image: linear-gradient(180deg, #0b0d10 0%, #11151b 100%);
-}
-
-/* ── Editorial type utilities ── */
+/* ── Surfaces & type utilities ──
+   Everything here lives in the components layer so a Tailwind utility on the
+   element (e.g. a coloured hero card) can still override it. */
 @layer components {
   .matte-surface,
   .stat-card {
-    background-color: rgb(255 255 255 / 0.72);
-    border-color: rgb(255 255 255 / 0.82);
-    box-shadow:
-      0 1px 2px rgb(23 29 25 / 0.035),
-      0 12px 28px -22px rgb(23 29 25 / 0.2),
-      inset 0 1px 0 rgb(255 255 255 / 0.72);
-    -webkit-backdrop-filter: blur(14px) saturate(112%);
-    backdrop-filter: blur(14px) saturate(112%);
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border-light);
+    box-shadow: var(--shadow-card);
   }
 
   .page-title {
-    font-size: 26px;
-    line-height: 1.12;
-    font-weight: 600;
-    letter-spacing: -0.025em;
+    font-size: 24px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.022em;
     color: var(--color-text-primary);
   }
 
   .page-lede {
-    margin-top: 7px;
+    margin-top: 6px;
     max-width: 68ch;
-    font-size: 13px;
-    line-height: 1.62;
+    font-size: 13.5px;
+    line-height: 1.55;
     color: var(--color-text-secondary);
   }
 
   .section-title {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.35;
     font-weight: 600;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.01em;
     color: var(--color-text-primary);
   }
 
   .eyebrow {
-    font-size: 10px;
-    line-height: 1.2;
+    font-size: 12px;
+    line-height: 1.3;
     font-weight: 600;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
     color: var(--color-text-secondary);
   }
 
   .meta {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
     color: var(--color-text-secondary);
   }
@@ -205,7 +190,7 @@ html.dark body {
   .metric {
     font-size: 30px;
     line-height: 1;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
     color: var(--color-text-primary);
@@ -214,28 +199,19 @@ html.dark body {
   .metric-sm {
     font-size: 24px;
     line-height: 1;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.025em;
     font-variant-numeric: tabular-nums;
     color: var(--color-text-primary);
   }
-}
 
-html.dark .matte-surface,
-html.dark .stat-card {
-  background-color: #141920;
-  border-color: #252c36;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -20px rgb(0 0 0 / 0.28);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-html.dark .modal-backdrop {
-  background-color: rgb(0 0 0 / 0.68);
+  html.dark .modal-backdrop {
+    background-color: rgb(0 0 0 / 0.68);
+  }
 }
 
 /* ── Stat / index cards ──────────────────────────────────────────────
-   One anatomy for every statistics card: label, value, optional footnote.
+   One anatomy for every statistics card: label + icon tile, value, footnote.
    `min-height` on the label reserves the two-line case so values line up
    across a row instead of stepping down when a label wraps. */
 @layer components {
@@ -246,7 +222,8 @@ html.dark .modal-backdrop {
     height: 100%;
     padding: 20px;
     border-radius: var(--radius-lg);
-    border: 1px solid rgb(255 255 255 / 0.82);
+    border-width: 1px;
+    border-style: solid;
   }
 
   .stat-card__head {
@@ -259,24 +236,23 @@ html.dark .modal-backdrop {
 
   .stat-card__label {
     min-width: 0;
-    min-height: 2.5em;
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1.25;
-    letter-spacing: 0.11em;
-    text-transform: uppercase;
+    min-height: 2.7em;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
     color: var(--color-text-secondary);
     overflow-wrap: break-word;
   }
 
   .stat-card__value {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 30px;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    color: var(--color-text-primary);
   }
 
   .stat-card__value--sm {
@@ -285,37 +261,44 @@ html.dark .modal-backdrop {
 
   .stat-card__foot {
     margin-top: 12px;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
     color: var(--color-text-secondary);
   }
 
-  /* Status indicator: the static outline icon on tablet and up. */
+  /* Icon tile in the card's top-right corner. */
   .stat-indicator {
     position: relative;
     display: inline-flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
-    margin-top: -1px;
-    color: var(--color-primary-400);
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background-color: var(--color-primary-50);
+    color: var(--color-primary-700);
+    box-shadow: inset 0 0 0 1px var(--color-primary-100);
+  }
+
+  .stat-indicator > svg {
+    width: 17px;
+    height: 17px;
   }
 
   .stat-indicator::after {
     content: "";
     display: none;
     box-sizing: border-box;
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border: 1.5px solid rgb(24 134 91 / 0.2);
     border-top-color: var(--color-primary-600);
     border-radius: var(--radius-full);
   }
 
-  /* Mobile only: swap the static status icon for a compact throbber.
-     The 16px box is unchanged, so nothing reflows when it swaps. */
+  /* Mobile only: swap the static icon for a compact throbber.
+     The tile size is unchanged, so nothing reflows when it swaps. */
   @media (max-width: 767px) {
     .stat-indicator[data-live="true"] > svg {
       display: none;
@@ -327,11 +310,17 @@ html.dark .modal-backdrop {
     }
 
     .stat-card {
-      padding: 14px;
+      padding: 16px;
+    }
+
+    .stat-indicator {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
     }
 
     .stat-card__value {
-      margin-top: 10px;
+      margin-top: 8px;
       font-size: 26px;
     }
 
@@ -403,57 +392,96 @@ html.dark .modal-backdrop {
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
-/* ── Auth canvas: quiet off-white paper with a soft sage wash ── */
-.auth-canvas {
-  background-color: #eef1ef;
-  background-image: radial-gradient(
-      120% 90% at 50% -10%,
-      #f7faf8 0%,
-      rgba(247, 250, 248, 0) 62%
-    ),
-    linear-gradient(180deg, #f0f3f1 0%, #eceeef 100%);
-}
+/* ── Auth: plain clinical canvas, one solid panel ── */
+@layer components {
+  .auth-canvas {
+    background-color: var(--color-bg-card);
+  }
 
-.auth-panel {
-  background-color: rgb(255 255 255 / 0.72);
-  border: 1px solid rgb(255 255 255 / 0.82);
-  border-radius: 18px;
-  box-shadow:
-    0 1px 2px rgb(23 29 25 / 0.035),
-    0 12px 28px -22px rgb(23 29 25 / 0.2),
-    inset 0 1px 0 rgb(255 255 255 / 0.72);
-  -webkit-backdrop-filter: blur(14px) saturate(112%);
-  backdrop-filter: blur(14px) saturate(112%);
-}
+  .auth-panel {
+    background-color: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+  }
 
-html.dark .auth-canvas {
-  background-color: #0b0d10;
-  background-image: linear-gradient(180deg, #0b0d10 0%, #11151b 100%);
-}
+  /* Brand side of the sign-in screens: deep forest green, a faint light
+     falling from the top corner, nothing else. */
+  .auth-brand {
+    background-color: #0b5a3c;
+    background-image: radial-gradient(120% 80% at 0% 0%, rgb(255 255 255 / 0.09), transparent 60%);
+  }
+  html.dark .auth-brand {
+    background-color: #0d3b29;
+  }
 
-html.dark .auth-panel {
-  background-color: #141920;
-  border-color: #252c36;
-  box-shadow: var(--shadow-modal);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  /* TB DOTS Center seal as a soft, blurred backdrop on the desktop brand
+     panel. Multiply drops the seal's white field into the panel green so
+     only the wreath and lungs show through. */
+  .auth-brand-seal {
+    position: absolute;
+    inset: -8%;
+    z-index: -1;
+    pointer-events: none;
+    background: url("/imports/tb-dots-seal.png") center / min(115%, 760px) no-repeat;
+    filter: blur(4px) saturate(1.1);
+    mix-blend-mode: multiply;
+    opacity: 0.55;
+  }
+  html.dark .auth-brand-seal {
+    opacity: 0.45;
+  }
+
+  /* Decorative dose calendar on the brand panel */
+  .auth-dose-card {
+    background-color: rgb(255 255 255 / 0.06);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  }
+  .auth-dose {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+  }
+  .auth-dose--taken {
+    background-color: rgb(255 255 255 / 0.82);
+  }
+  .auth-dose--missed {
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.45);
+  }
+  .auth-dose--today {
+    background-color: #a2cfb6;
+    box-shadow: 0 0 0 3px #0b5a3c, 0 0 0 4.5px rgb(255 255 255 / 0.85);
+  }
+  .auth-dose--ahead {
+    background-color: rgb(255 255 255 / 0.12);
+  }
+  html.dark .auth-dose--today {
+    box-shadow: 0 0 0 3px #0d3b29, 0 0 0 4.5px rgb(255 255 255 / 0.85);
+  }
+
+  /* Boxed fields for the sign-in form */
+  .login-input {
+    min-height: 44px;
+    padding-left: 14px;
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-md);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .login-input:hover {
+    border-color: var(--color-border-strong);
+  }
+  .login-input:focus,
+  .login-input:focus-visible {
+    outline: none;
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgb(24 134 91 / 0.12);
+  }
 }
 
 input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--color-primary-500);
-}
-
-/* Underline fields — Swiss form treatment */
-.login-input {
-  border: 0;
-  border-bottom: 1px solid var(--color-border-default);
-  border-radius: 0;
-  transition: border-color 0.18s ease;
-}
-.login-input:focus {
-  outline: none;
-  box-shadow: none;
-  border-radius: 0;
-  border-bottom-color: var(--color-primary-900);
 }

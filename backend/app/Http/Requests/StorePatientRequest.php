@@ -17,7 +17,7 @@ class StorePatientRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() ?? false;
+        return (bool) $this->user()?->canUsePortal();
     }
 
     public function rules(): array

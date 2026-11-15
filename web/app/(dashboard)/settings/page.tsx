@@ -133,7 +133,7 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
 // ─── Card wrapper ───
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="matte-surface rounded-[12px] border p-5">
+    <div className="matte-surface rounded-[16px] border p-5">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
         {description && <p className="mt-0.5 text-xs text-text-tertiary">{description}</p>}
@@ -246,7 +246,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         {/* ── Left menu ── */}
-        <nav className="matte-surface space-y-1 self-start rounded-[12px] border p-2">
+        <nav className="matte-surface space-y-1 self-start rounded-[16px] border p-2">
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             const active = section === s.key;
@@ -658,7 +658,7 @@ function ToggleRow({
       </div>
       <div className="flex items-center gap-2.5">
         <span
-          className={`text-[11px] font-medium uppercase tracking-wider ${
+          className={`text-[12px] font-medium ${
             checked ? "text-success-text" : "text-text-tertiary"
           }`}
         >
@@ -1073,7 +1073,7 @@ function AuditSection() {
 
       {!loading && (data?.login_activity.length ?? 0) > 0 && (
         <div className="mt-5 border-t border-border-light pt-4">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">Recent staff logins</p>
+          <p className="mb-2 text-[12px] font-semibold text-text-secondary">Recent staff logins</p>
           <div className="space-y-1">
             {data?.login_activity.map((l) => (
               <div key={l.id} className="flex items-center justify-between text-sm">

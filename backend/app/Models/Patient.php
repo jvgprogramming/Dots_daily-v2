@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\PatientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,7 +36,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 ])]
 class Patient extends Model
 {
-    /** @use HasFactory<\Database\Factories\PatientFactory> */
+    /** @use HasFactory<PatientFactory> */
     use HasFactory, SoftDeletes;
 
     public function user(): BelongsTo
@@ -80,6 +82,30 @@ class Patient extends Model
     public function isDraft(): bool
     {
         return $this->status === 'draft';
+    }
+
+    /**
+     * The single rule for who may see a patient record in the staff portal:
+     * admins see everyone, a nurse sees only the patients they registered,
+     * and any other role sees nothing.
+     */
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->isAdmin()) {
+            return $query;
+        }
+
+        if ($user->isNurse()) {
+            return $query->where('patients.registered_by', $user->id);
+        }
+
+        return $query->whereRaw('1 = 0');
+    }
+
+    public function isVisibleTo(User $user): bool
+    {
+        return $user->isAdmin()
+            || ($user->isNurse() && (int) $this->registered_by === (int) $user->id);
     }
 
     public function medicationLogs(): HasMany

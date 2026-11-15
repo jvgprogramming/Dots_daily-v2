@@ -972,7 +972,7 @@ export default function ReportsPage() {
                   <button
                     key={log.id}
                     onClick={() => setPreviewLog(log)}
-                    className="matte-surface group overflow-hidden rounded-[12px] border text-left transition-shadow hover:shadow-card"
+                    className="matte-surface group overflow-hidden rounded-[16px] border text-left transition-shadow hover:shadow-card-hover"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

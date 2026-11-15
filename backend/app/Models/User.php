@@ -5,7 +5,6 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,13 +13,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'phone', 'password', 'role', 'permissions', 'profile_photo_path', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, MustVerifyEmailTrait;
+    use HasApiTokens, HasFactory, MustVerifyEmailTrait, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -92,6 +92,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isPatient(): bool
     {
         return $this->role === 'patient';
+    }
+
+    public function isNurse(): bool
+    {
+        return $this->role === 'nurse';
+    }
+
+    /** Roles allowed to sign in to the web portal. */
+    public const PORTAL_ROLES = ['admin', 'nurse'];
+
+    public function canUsePortal(): bool
+    {
+        return in_array($this->role, self::PORTAL_ROLES, true);
     }
 
     /**

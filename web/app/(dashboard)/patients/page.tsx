@@ -17,6 +17,7 @@ import { PatientRegistrationWizard } from "@/components/features/patients/Patien
 import { PatientProfileModal } from "@/components/features/patients/PatientProfileModal";
 import type { PatientRegistrationPayload } from "@/lib/types";
 import { getPatient } from "@/lib/services/patients";
+import { useAuth } from "@/lib/store/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +99,11 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 export default function PatientsPage() {
+  // Nurses see only the patients they registered (the API scopes the list);
+  // deleting records and changing sign-in details stay with administrators.
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   // ── State ──
   const [patients, setPatients] = useState<PaginatedResponse<PatientListItem> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,10 +314,12 @@ export default function PatientsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="page-title">
-            Patients
+            {isAdmin ? "Patients" : "My patients"}
           </h1>
           <p className="page-lede">
-            Manage patient registrations and profiles.
+            {isAdmin
+              ? "Manage patient registrations and profiles."
+              : "Patients you registered. Only you and administrators can see these records."}
           </p>
         </div>
         <Button onClick={openAddModal}>
@@ -369,7 +377,7 @@ export default function PatientsPage() {
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="matte-surface rounded-[12px] border p-5">
+            <div key={i} className="matte-surface rounded-[16px] border p-5">
               <div className="flex items-center gap-4">
                 <Skeleton className="h-10 w-10 rounded-full" />
                 <div className="flex-1 space-y-2">
@@ -384,27 +392,27 @@ export default function PatientsPage() {
       ) : patients && patients.data.length > 0 ? (
         <>
           {/* ── Table ── */}
-          <div className="matte-surface overflow-hidden rounded-[14px] border">
+          <div className="matte-surface overflow-hidden rounded-[16px] border">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border-light bg-bg-subtle/50">
-                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                    <th className="px-5 py-3.5 text-left text-[12px] font-semibold text-text-secondary">
                       Patient
                     </th>
-                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden sm:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[12px] font-semibold text-text-secondary hidden sm:table-cell">
                       Contact
                     </th>
-                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden md:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[12px] font-semibold text-text-secondary hidden md:table-cell">
                       Gender
                     </th>
-                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden lg:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[12px] font-semibold text-text-secondary hidden lg:table-cell">
                       Health ID
                     </th>
-                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary hidden lg:table-cell">
+                    <th className="px-5 py-3.5 text-left text-[12px] font-semibold text-text-secondary hidden lg:table-cell">
                       Registered
                     </th>
-                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                    <th className="px-5 py-3.5 text-right text-[12px] font-semibold text-text-secondary">
                       Actions
                     </th>
                   </tr>
@@ -491,13 +499,15 @@ export default function PatientsPage() {
                             >
                               <Edit3 className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openDeleteModal(patient); }}
-                              className="flex h-8 w-8 items-center justify-center rounded-[6px] text-text-tertiary hover:bg-danger-bg hover:text-danger transition-all"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openDeleteModal(patient); }}
+                                className="flex h-8 w-8 items-center justify-center rounded-[6px] text-text-tertiary hover:bg-danger-bg hover:text-danger transition-all"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>
@@ -595,7 +605,7 @@ export default function PatientsPage() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-0.5 w-4 rounded-full bg-primary-500" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+                <h4 className="text-[13.5px] font-semibold text-text-primary">
                   Basic Information
                 </h4>
               </div>
@@ -634,7 +644,13 @@ export default function PatientsPage() {
                     placeholder="juan@example.com"
                     value={formData.email}
                     onChange={(e) => updateField("email", e.target.value)}
+                    disabled={!isAdmin && modalMode === "edit"}
                   />
+                  {!isAdmin && modalMode === "edit" && (
+                    <p className="mt-1.5 text-[11.5px] text-text-tertiary">
+                      Only an administrator can change a patient&apos;s sign-in email or password.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary mb-1.5 block">Phone</label>
@@ -645,17 +661,19 @@ export default function PatientsPage() {
                     onChange={(e) => updateField("phone", e.target.value)}
                   />
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">
-                    New Password <span className="text-text-tertiary font-normal">(blank = keep current)</span>
-                  </label>
-                  <Input
-                    type="password"
-                    placeholder="Enter new password"
-                    value={formData.password}
-                    onChange={(e) => updateField("password", e.target.value)}
-                  />
-                </div>
+                {(isAdmin || modalMode !== "edit") && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-text-secondary mb-1.5 block">
+                      New Password <span className="text-text-tertiary font-normal">(blank = keep current)</span>
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Enter new password"
+                      value={formData.password}
+                      onChange={(e) => updateField("password", e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -663,7 +681,7 @@ export default function PatientsPage() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-0.5 w-4 rounded-full bg-primary-500" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+                <h4 className="text-[13.5px] font-semibold text-text-primary">
                   Medical Profile
                 </h4>
               </div>
@@ -771,7 +789,7 @@ export default function PatientsPage() {
             <div className="pb-2">
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-0.5 w-4 rounded-full bg-primary-500" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+                <h4 className="text-[13.5px] font-semibold text-text-primary">
                   Emergency Contact
                 </h4>
               </div>
