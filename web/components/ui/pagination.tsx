@@ -66,7 +66,7 @@ export function Pagination({
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-medium transition-colors duration-150",
               page === currentPage
-                ? "bg-primary-900 text-white"
+                ? "bg-brand-action text-white"
                 : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary"
             )}
           >

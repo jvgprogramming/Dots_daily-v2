@@ -112,7 +112,7 @@ export function MonitoringCalendar({
   const end = plan?.actual_end_date ?? plan?.expected_end_date ?? null;
 
   return (
-    <div className="rounded-[12px] border border-border-light bg-bg-card">
+    <div className="matte-surface rounded-[12px] border">
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">
         <div className="flex items-center gap-2">
@@ -288,7 +288,7 @@ export function DayDetailPanel({
     <motion.div
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
-      className="rounded-[12px] border border-border-light bg-bg-card flex flex-col"
+      className="matte-surface flex flex-col rounded-[12px] border"
     >
       {/* ── Header: selected date ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">

@@ -75,10 +75,10 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r border-border-light bg-bg-sidebar md:w-64">
+      <aside className="matte-surface fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r md:w-64">
         {/* Logo */}
         <div className="flex h-16 items-center justify-center gap-3 md:justify-start md:px-5">
-          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[9px] bg-primary-900">
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[9px] bg-brand-action">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/imports/image-2.png"

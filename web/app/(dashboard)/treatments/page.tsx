@@ -537,7 +537,7 @@ export default function TreatmentsPage() {
               onClick={() => setStatusFilter(chip.key)}
               className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
                 statusFilter === chip.key
-                  ? "bg-primary-900 text-white"
+                  ? "bg-brand-action text-white"
                   : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
@@ -627,7 +627,7 @@ export default function TreatmentsPage() {
               return (
                 <div
                   key={f.id}
-                  className="rounded-[14px] border border-border-light bg-bg-card p-4"
+                  className="matte-surface rounded-[14px] border p-4"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>

@@ -278,7 +278,7 @@ export default function MonitoringPage() {
               key={v}
               onClick={() => setView(v)}
               className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 ${
-                view === v ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+                view === v ? "bg-brand-action text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
               {v === "month" ? "Month" : "Week"}
@@ -290,7 +290,7 @@ export default function MonitoringPage() {
               key={s}
               onClick={() => setStatusFilter(s)}
               className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 capitalize ${
-                statusFilter === s ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+                statusFilter === s ? "bg-brand-action text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
               }`}
             >
               {s.replace("_", " ")}
@@ -322,7 +322,7 @@ export default function MonitoringPage() {
                     : "bg-bg-card border-border-light text-text-secondary hover:border-border-strong"
                 }`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-tertiary"}`}>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-brand-action text-white" : "bg-bg-subtle text-text-tertiary"}`}>
                   {name.charAt(0).toUpperCase()}
                 </span>
                 {name}
@@ -409,7 +409,7 @@ export default function MonitoringPage() {
 
           {/* ── Treatment timeline ── */}
           {progress && (
-            <div className="rounded-[14px] border border-border-light bg-bg-card p-4">
+            <div className="matte-surface rounded-[14px] border p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Pill className="h-4 w-4 shrink-0 text-text-tertiary" />
@@ -485,7 +485,7 @@ export default function MonitoringPage() {
                 onClose={() => setSelectedDate(null)}
               />
             ) : (
-              <div className="rounded-[14px] border border-dashed border-border-light bg-bg-card/60 p-6 flex flex-col items-center justify-center text-center">
+              <div className="matte-surface flex flex-col items-center justify-center rounded-[14px] border border-dashed p-6 text-center">
                 <CalendarDays className="h-5 w-5 text-text-tertiary mb-2" />
                 <p className="text-sm text-text-secondary font-medium">Select a date</p>
                 <p className="text-xs text-text-tertiary mt-1">

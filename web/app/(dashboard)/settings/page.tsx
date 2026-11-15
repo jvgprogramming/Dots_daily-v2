@@ -133,7 +133,7 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
 // ─── Card wrapper ───
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[12px] border border-border-light bg-bg-card p-5">
+    <div className="matte-surface rounded-[12px] border p-5">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
         {description && <p className="mt-0.5 text-xs text-text-tertiary">{description}</p>}
@@ -246,7 +246,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         {/* ── Left menu ── */}
-        <nav className="space-y-1 self-start rounded-[12px] border border-border-light bg-bg-card p-2">
+        <nav className="matte-surface space-y-1 self-start rounded-[12px] border p-2">
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             const active = section === s.key;
@@ -1036,7 +1036,7 @@ function AuditSection() {
             key={t}
             onClick={() => setType(t)}
             className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all ${
-              type === t ? "bg-primary-900 text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+              type === t ? "bg-brand-action text-white" : "bg-bg-subtle text-text-secondary hover:bg-border-light"
             }`}
           >
             {t === "all" ? "All" : t === "logins" ? "Logins" : "Changes"}

@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="rounded-[16px] border border-border-light bg-bg-card p-8 shadow-card">
+    <div className="matte-surface rounded-[16px] border p-8">
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="text-[22px] font-semibold text-text-primary">Reset password</h1>

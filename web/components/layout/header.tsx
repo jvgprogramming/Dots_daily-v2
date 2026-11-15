@@ -1,17 +1,65 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { ChevronDown, Moon, Sun } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { GlobalSearch } from "@/components/layout/global-search";
 
+const THEME_STORAGE_KEY = "dots-daily-theme";
+const THEME_CHANGE_EVENT = "dots-daily-theme-change";
+
+function subscribeToTheme(onChange: () => void) {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== THEME_STORAGE_KEY) return;
+    document.documentElement.classList.toggle("dark", event.newValue === "dark");
+    onChange();
+  };
+
+  window.addEventListener(THEME_CHANGE_EVENT, onChange);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(THEME_CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+function getThemeSnapshot() {
+  return document.documentElement.classList.contains("dark");
+}
+
+function getServerThemeSnapshot() {
+  return false;
+}
+
 export function Header() {
+  const isDark = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot
+  );
+
+  const toggleTheme = () => {
+    const nextIsDark = !document.documentElement.classList.contains("dark");
+    document.documentElement.classList.toggle("dark", nextIsDark);
+
+    try {
+      window.localStorage.setItem(
+        THEME_STORAGE_KEY,
+        nextIsDark ? "dark" : "light"
+      );
+    } catch (error) {
+      console.error("Unable to save the theme preference.", error);
+    }
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  };
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border-light bg-bg-card px-4 sm:gap-4 sm:px-8 lg:px-10">
+    <header className="matte-surface sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 sm:gap-4 sm:px-8 lg:px-10">
       {/* Search */}
       <GlobalSearch />
 
       {/* Right section */}
-      <div className="flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1">
         {/* Divider */}
         <div className="mx-2 h-5 w-px bg-border-light" />
 
@@ -27,6 +75,21 @@ export function Header() {
             </p>
           </div>
           <ChevronDown className="h-3 w-3 text-text-tertiary" />
+        </button>
+        <div className="mx-2 h-5 w-px bg-border-light" />
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
+          aria-pressed={isDark}
+          title={`Switch to ${isDark ? "light" : "dark"} mode`}
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] text-text-secondary transition-colors hover:bg-bg-subtle hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+        >
+          {isDark ? (
+            <Sun className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Moon className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
       </div>
     </header>

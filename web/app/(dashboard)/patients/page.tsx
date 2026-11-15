@@ -347,7 +347,7 @@ export default function PatientsPage() {
                 onClick={() => handleGenderChange(opt.value)}
                 className={`px-2.5 py-1 text-[11px] font-medium rounded-[6px] transition-all duration-150 ${
                   genderFilter === opt.value
-                    ? "bg-primary-900 text-white"
+                    ? "bg-brand-action text-white"
                     : "bg-bg-subtle text-text-secondary hover:bg-border-light"
                 }`}
               >
@@ -369,7 +369,7 @@ export default function PatientsPage() {
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-[12px] border border-border-light p-5">
+            <div key={i} className="matte-surface rounded-[12px] border p-5">
               <div className="flex items-center gap-4">
                 <Skeleton className="h-10 w-10 rounded-full" />
                 <div className="flex-1 space-y-2">
@@ -384,7 +384,7 @@ export default function PatientsPage() {
       ) : patients && patients.data.length > 0 ? (
         <>
           {/* ── Table ── */}
-          <div className="rounded-[14px] border border-border-light bg-bg-card overflow-hidden">
+          <div className="matte-surface overflow-hidden rounded-[14px] border">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>

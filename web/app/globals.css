@@ -4,7 +4,9 @@
   --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-display: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+}
 
+@theme {
   /* ── Botanical green scale — forest → emerald → sage ── */
   --color-primary-50: #f2f7f4;
   --color-primary-100: #e7f1ea;
@@ -17,6 +19,8 @@
   --color-primary-800: #0b4934;
   --color-primary-900: #064e32;
   --color-primary-950: #032b1c;
+  --color-brand-action: #064e32;
+  --color-brand-action-hover: #0b4934;
 
   /* ── Canvas & surfaces ── */
   --color-bg-main: #eceeef;
@@ -49,6 +53,7 @@
   --color-info: #0b4934;
   --color-info-bg: #eef4f0;
   --color-info-text: #0b4934;
+  --color-chart-cursor: rgb(6 78 50 / 0.04);
 
   /* ── Shadows — barely-there, for depth cues only ── */
   --shadow-xs: 0 1px 1px 0 rgb(23 29 25 / 0.03);
@@ -68,10 +73,70 @@
   --radius-full: 9999px;
 }
 
+html.dark {
+  color-scheme: dark;
+
+  --color-primary-50: #111a16;
+  --color-primary-100: #15291e;
+  --color-primary-200: #20402e;
+  --color-primary-300: #2e5a40;
+  --color-primary-400: #3e8359;
+  --color-primary-500: #58b889;
+  --color-primary-600: #70c99a;
+  --color-primary-700: #8bd5ac;
+  --color-primary-800: #a7e2be;
+  --color-primary-900: #c5efd3;
+  --color-primary-950: #e0f7e7;
+
+  --color-bg-main: #0b0d10;
+  --color-bg-card: #141920;
+  --color-bg-subtle: #11151b;
+  --color-bg-sidebar: #11151b;
+
+  --color-border-light: #252c36;
+  --color-border-default: #303844;
+  --color-border-strong: #414b58;
+
+  --color-text-primary: #f1f3f5;
+  --color-text-body: #c4cbd4;
+  --color-text-secondary: #a3afbc;
+  --color-text-tertiary: #8993a2;
+  --color-text-muted: #84919f;
+
+  --color-success: #71bb91;
+  --color-success-bg: #183126;
+  --color-success-text: #a5dbb6;
+  --color-warning: #d3a85b;
+  --color-warning-bg: #342a19;
+  --color-warning-text: #e8c77f;
+  --color-danger: #d4776c;
+  --color-danger-bg: #38211f;
+  --color-danger-text: #e6a39a;
+  --color-info: #8aa8c2;
+  --color-info-bg: #1c2935;
+  --color-info-text: #b6cee2;
+
+  --color-brand-action: #0b4934;
+  --color-brand-action-hover: #0e5d41;
+  --color-chart-cursor: rgb(88 184 137 / 0.1);
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.16);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.18);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -20px rgb(0 0 0 / 0.28);
+  --shadow-card-hover: 0 3px 12px -4px rgb(0 0 0 / 0.3), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-dropdown: 0 18px 40px -20px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-modal: 0 32px 72px -32px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-elevated: 0 20px 44px -24px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
 /* ── Base ── */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg-main);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgb(24 134 91 / 0.045), transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgb(255 255 255 / 0.72), transparent 48%);
+  background-attachment: fixed;
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -79,8 +144,25 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+html.dark body {
+  background-color: var(--color-bg-main);
+  background-image: linear-gradient(180deg, #0b0d10 0%, #11151b 100%);
+}
+
 /* ── Editorial type utilities ── */
 @layer components {
+  .matte-surface,
+  .stat-card {
+    background-color: rgb(255 255 255 / 0.72);
+    border-color: rgb(255 255 255 / 0.82);
+    box-shadow:
+      0 1px 2px rgb(23 29 25 / 0.035),
+      0 12px 28px -22px rgb(23 29 25 / 0.2),
+      inset 0 1px 0 rgb(255 255 255 / 0.72);
+    -webkit-backdrop-filter: blur(14px) saturate(112%);
+    backdrop-filter: blur(14px) saturate(112%);
+  }
+
   .page-title {
     font-size: 26px;
     line-height: 1.12;
@@ -139,6 +221,19 @@ body {
   }
 }
 
+html.dark .matte-surface,
+html.dark .stat-card {
+  background-color: #141920;
+  border-color: #252c36;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -20px rgb(0 0 0 / 0.28);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.dark .modal-backdrop {
+  background-color: rgb(0 0 0 / 0.68);
+}
+
 /* ── Stat / index cards ──────────────────────────────────────────────
    One anatomy for every statistics card: label, value, optional footnote.
    `min-height` on the label reserves the two-line case so values line up
@@ -150,10 +245,8 @@ body {
     min-width: 0;
     height: 100%;
     padding: 20px;
-    background-color: var(--color-bg-card);
-    border: 1px solid var(--color-border-light);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
+    border: 1px solid rgb(255 255 255 / 0.82);
   }
 
   .stat-card__head {
@@ -283,11 +376,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d3d9d5;
+  background: var(--color-border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #aeb8b1;
+  background: var(--color-text-tertiary);
 }
 
 *:focus-visible {
@@ -307,7 +400,7 @@ body {
   scrollbar-color: transparent transparent;
 }
 .sidebar-scroll:hover {
-  scrollbar-color: #d3d9d5 transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 
 /* ── Auth canvas: quiet off-white paper with a soft sage wash ── */
@@ -322,10 +415,33 @@ body {
 }
 
 .auth-panel {
-  background-color: #ffffff;
-  border: 1px solid var(--color-border-light);
+  background-color: rgb(255 255 255 / 0.72);
+  border: 1px solid rgb(255 255 255 / 0.82);
   border-radius: 18px;
-  box-shadow: 0 1px 2px rgb(23 29 25 / 0.04), 0 24px 60px -40px rgb(23 29 25 / 0.35);
+  box-shadow:
+    0 1px 2px rgb(23 29 25 / 0.035),
+    0 12px 28px -22px rgb(23 29 25 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(112%);
+  backdrop-filter: blur(14px) saturate(112%);
+}
+
+html.dark .auth-canvas {
+  background-color: #0b0d10;
+  background-image: linear-gradient(180deg, #0b0d10 0%, #11151b 100%);
+}
+
+html.dark .auth-panel {
+  background-color: #141920;
+  border-color: #252c36;
+  box-shadow: var(--shadow-modal);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-primary-500);
 }
 
 /* Underline fields — Swiss form treatment */

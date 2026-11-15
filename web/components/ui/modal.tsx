@@ -58,7 +58,7 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="absolute inset-0 bg-[#0d1612]/40"
+            className="modal-backdrop absolute inset-0"
             onClick={(e) => {
               if (e.target === overlayRef.current) onClose();
             }}

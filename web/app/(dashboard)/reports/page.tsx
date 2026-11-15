@@ -540,7 +540,7 @@ export default function ReportsPage() {
                 onClick={() => setAdherenceFilter(f.key)}
                 className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
                   adherenceFilter === f.key
-                    ? "bg-primary-900 text-white"
+                    ? "bg-brand-action text-white"
                     : "bg-bg-subtle text-text-secondary hover:bg-border-light"
                 }`}
               >
@@ -625,12 +625,12 @@ export default function ReportsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 5" stroke="#e7eae7" vertical={false} />
+                  <CartesianGrid strokeDasharray="2 5" stroke="var(--color-border-light)" vertical={false} />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#87918a", fontSize: 11 }}
+                    tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                     interval="preserveStartEnd"
                     minTickGap={24}
                   />
@@ -639,7 +639,7 @@ export default function ReportsPage() {
                     axisLine={false}
                     tickLine={false}
                     allowDecimals={false}
-                    tick={{ fill: "#87918a", fontSize: 11 }}
+                    tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                   />
                   <YAxis
                     yAxisId="rate"
@@ -647,17 +647,17 @@ export default function ReportsPage() {
                     domain={[0, 100]}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#87918a", fontSize: 11 }}
+                    tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                     tickFormatter={(v) => `${v}%`}
                   />
                   <RechartsTooltip content={<TrendTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: "#87918a" }} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: "var(--color-text-secondary)" }} />
                   <Bar
                     yAxisId="doses"
                     dataKey="taken"
                     name="Taken"
                     stackId="doses"
-                    fill="#18865b"
+                    fill="var(--color-primary-500)"
                     radius={[0, 0, 0, 0]}
                   />
                   <Bar
@@ -665,14 +665,14 @@ export default function ReportsPage() {
                     dataKey="late"
                     name="Late"
                     stackId="doses"
-                    fill="#a9761c"
+                    fill="var(--color-warning)"
                   />
                   <Bar
                     yAxisId="doses"
                     dataKey="missed"
                     name="Missed"
                     stackId="doses"
-                    fill="#b4402f"
+                    fill="var(--color-danger)"
                     radius={[4, 4, 0, 0]}
                   />
                   <Line
@@ -680,7 +680,7 @@ export default function ReportsPage() {
                     type="monotone"
                     dataKey="rate"
                     name="Adherence %"
-                    stroke="#064e32"
+                    stroke="var(--color-primary-900)"
                     strokeWidth={1.75}
                     dot={false}
                     connectNulls
@@ -972,7 +972,7 @@ export default function ReportsPage() {
                   <button
                     key={log.id}
                     onClick={() => setPreviewLog(log)}
-                    className="group overflow-hidden rounded-[12px] border border-border-light bg-bg-subtle text-left transition-shadow hover:shadow-card"
+                    className="matte-surface group overflow-hidden rounded-[12px] border text-left transition-shadow hover:shadow-card"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

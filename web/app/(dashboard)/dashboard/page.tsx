@@ -78,7 +78,7 @@ const STAT_ICONS = [Users, Pill, Activity, AlertTriangle, Package];
 
 // Phase dots are held to the botanical palette regardless of backend classes.
 const PHASE_DOT: Record<string, string> = {
-  Intensive: "bg-primary-900",
+  Intensive: "bg-brand-action",
   Continuation: "bg-primary-400",
   Completed: "bg-primary-500",
   Interrupted: "bg-danger/60",
@@ -231,13 +231,13 @@ export default function DashboardPage() {
                           x2="0"
                           y2="1"
                         >
-                          <stop offset="0%" stopColor="#18865b" stopOpacity={0.14} />
-                          <stop offset="100%" stopColor="#18865b" stopOpacity={0} />
+                          <stop offset="0%" stopColor="var(--color-primary-500)" stopOpacity={0.14} />
+                          <stop offset="100%" stopColor="var(--color-primary-500)" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid
                         strokeDasharray="2 5"
-                        stroke="#e7eae7"
+                        stroke="var(--color-border-light)"
                         vertical={false}
                       />
                       <XAxis
@@ -245,25 +245,25 @@ export default function DashboardPage() {
                         axisLine={false}
                         tickLine={false}
                         tickMargin={10}
-                        tick={{ fill: "#87918a", fontSize: 11 }}
+                        tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                       />
                       <YAxis
                         axisLine={false}
                         tickLine={false}
                         tickMargin={6}
-                        tick={{ fill: "#87918a", fontSize: 11 }}
+                        tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                         domain={[0, 100]}
                         tickFormatter={(v) => `${v}%`}
                       />
                       <RechartsTooltip
                         content={<CustomTooltip />}
-                        cursor={{ stroke: "#c4cec7", strokeWidth: 1 }}
+                        cursor={{ stroke: "var(--color-border-strong)", strokeWidth: 1 }}
                       />
                       <Area
                         type="monotone"
                         dataKey="rate"
                         name="Adherence"
-                        stroke="#064e32"
+                        stroke="var(--color-primary-900)"
                         strokeWidth={1.75}
                         fill="url(#adherenceGradient)"
                       />
@@ -384,7 +384,7 @@ export default function DashboardPage() {
                   <BarChart data={patientActivity} barGap={4} barCategoryGap="28%">
                     <CartesianGrid
                       strokeDasharray="2 5"
-                      stroke="#e7eae7"
+                      stroke="var(--color-border-light)"
                       vertical={false}
                     />
                     <XAxis
@@ -392,30 +392,30 @@ export default function DashboardPage() {
                       axisLine={false}
                       tickLine={false}
                       tickMargin={10}
-                      tick={{ fill: "#87918a", fontSize: 11 }}
+                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                     />
                     <YAxis
                       axisLine={false}
                       tickLine={false}
                       tickMargin={6}
-                      tick={{ fill: "#87918a", fontSize: 11 }}
+                      tick={{ fill: "var(--color-text-secondary)", fontSize: 11 }}
                       allowDecimals={false}
                     />
                     <RechartsTooltip
                       content={<CustomTooltip />}
-                      cursor={{ fill: "rgba(6,78,50,0.04)" }}
+                      cursor={{ fill: "var(--color-chart-cursor)" }}
                     />
                     <Bar
                       dataKey="new"
                       name="New Patients"
-                      fill="#064e32"
+                      fill="var(--color-primary-900)"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={22}
                     />
                     <Bar
                       dataKey="followups"
                       name="Follow-ups"
-                      fill="#a9d3be"
+                      fill="var(--color-primary-300)"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={22}
                     />
