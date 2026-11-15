@@ -32,6 +32,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MonitoringCalendar, DayDetailPanel } from "@/components/features/monitoring/MonitoringCalendar";
 import { PatientPicker } from "@/components/features/monitoring/PatientPicker";
 import { getPatientMonitoring } from "@/lib/services/monitoring";
+import { useClinicSettings } from "@/lib/hooks/useClinicSettings";
 import { verifyMedicationLog, unverifyMedicationLog } from "@/lib/services/dashboard";
 import type {
   PatientListItem,
@@ -77,8 +78,9 @@ function endOfMonth(iso: string): string {
 // ─── Risk indicator config ───
 const RISK_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "danger" | "default"; icon: React.ElementType }> = {
   on_track: { label: "On track", variant: "success", icon: CheckCircle2 },
-  watch: { label: "Watch — adherence below 90%", variant: "warning", icon: AlertTriangle },
-  high_risk: { label: "High risk — adherence below 80%", variant: "danger", icon: AlertTriangle },
+  // "{n}" is filled from the risk bands in Settings → Clinical rules.
+  watch: { label: "Watch — adherence below {n}%", variant: "warning", icon: AlertTriangle },
+  high_risk: { label: "High risk — adherence below {n}%", variant: "danger", icon: AlertTriangle },
   overdue: { label: "Overdue — past expected end date", variant: "danger", icon: AlertTriangle },
   interrupted: { label: "Treatment interrupted", variant: "danger", icon: AlertTriangle },
   discontinued: { label: "Treatment discontinued", variant: "default", icon: AlertTriangle },
@@ -120,6 +122,7 @@ function SummaryCard({
 
 export default function MonitoringPage() {
   const searchParams = useSearchParams();
+  const clinic = useClinicSettings();
   const deepLinkPatientId = searchParams.get("patient");
 
   // ── Patient selection ──
@@ -219,7 +222,15 @@ export default function MonitoringPage() {
   const plan = data?.treatment_plan ?? null;
   const progress = data?.progress ?? null;
   const summary = data?.summary;
-  const risk = progress ? RISK_CONFIG[progress.risk] : null;
+  const watchBelow = clinic?.risk_watch_below ?? 90;
+  const highBelow = clinic?.risk_high_below ?? 80;
+  const riskBase = progress ? RISK_CONFIG[progress.risk] : null;
+  const risk = riskBase && progress
+    ? {
+        ...riskBase,
+        label: riskBase.label.replace("{n}", String(progress.risk === "high_risk" ? highBelow : watchBelow)),
+      }
+    : null;
 
   const selectedDay = selectedDate ? filteredAdherence.get(selectedDate) ?? adherenceByDate.get(selectedDate) : undefined;
   const selectedMonitoring = selectedDate ? monitoringByDate.get(selectedDate) : undefined;
@@ -344,7 +355,7 @@ export default function MonitoringPage() {
               sub={`${summary?.days_taken ?? 0} of ${summary?.scheduled_days ?? 0} expected days taken${
                 (summary?.pending ?? 0) > 0 ? ` · ${summary?.pending ?? 0} awaiting verification` : ""
               }`}
-              tone={summary?.adherence_rate != null && summary.adherence_rate < 80 ? "danger" : summary?.adherence_rate != null && summary.adherence_rate < 90 ? "warning" : "success"}
+              tone={summary?.adherence_rate != null && summary.adherence_rate < highBelow ? "danger" : summary?.adherence_rate != null && summary.adherence_rate < watchBelow ? "warning" : "success"}
             />
             <SummaryCard
               icon={AlertTriangle}

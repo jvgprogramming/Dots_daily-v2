@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { ChevronDown, Moon, Sun } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { useAuth } from "@/lib/store/auth";
 import { roleLabel } from "@/lib/access";
 
@@ -66,6 +67,8 @@ export function Header() {
 
       {/* Right section */}
       <div className="ml-auto flex items-center gap-1">
+        <NotificationBell />
+
         {/* Divider */}
         <div className="mx-2 h-5 w-px bg-border-light" />
 

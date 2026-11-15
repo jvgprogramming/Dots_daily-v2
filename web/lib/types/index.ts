@@ -875,7 +875,14 @@ export interface GlobalSearchData {
 }
 
 // ── Settings ──
-export type SettingsGroup = "facility" | "clinical" | "notifications" | "reports" | "security";
+export type SettingsGroup =
+  | "facility"
+  | "clinical"
+  | "protocols"
+  | "inventory"
+  | "notifications"
+  | "reports"
+  | "security";
 export type StaffRole = "admin" | "staff";
 export type SettingsModule =
   | "patients"
@@ -894,6 +901,38 @@ export interface SettingEntry {
 export interface SettingsData {
   settings: Record<SettingsGroup, Record<string, SettingEntry>>;
   modules: SettingsModule[];
+}
+
+/** A TB regimen configured in Settings → Treatment protocols. */
+export interface RegimenProtocol {
+  code: string;
+  name: string;
+  intensive_days: number;
+  continuation_days: number;
+  drugs: string;
+}
+
+/** Adult FDC tablet counts per body-weight band. */
+export interface WeightBand {
+  min_kg: number;
+  max_kg: number | null;
+  intensive_tablets: number;
+  continuation_tablets: number;
+}
+
+/** GET /settings/public — values any portal user's screens depend on. */
+export interface PublicSettings {
+  facility_name: string;
+  clinic_schedule: string;
+  late_dose_threshold_minutes: number;
+  adherence_calculation: "taken_plus_late" | "taken_only";
+  risk_watch_below: number;
+  risk_high_below: number;
+  regimens: RegimenProtocol[];
+  weight_bands: WeightBand[];
+  outcome_options: string[];
+  low_stock_default: number;
+  near_expiry_days: number;
 }
 
 export interface StaffUser {
@@ -926,27 +965,88 @@ export interface UpdateStaffUserPayload {
   is_active?: boolean;
 }
 
+export type AuditArea =
+  | "all"
+  | "logins"
+  | "failed_logins"
+  | "auth"
+  | "patients"
+  | "treatments"
+  | "doses"
+  | "medications"
+  | "users"
+  | "settings";
+
+export interface AuditChange {
+  from: unknown;
+  to: unknown;
+}
+
 export interface AuditEntry {
   id: number;
   user_name: string;
   action: string;
   description: string | null;
+  subject_type: string | null;
+  subject_id: number | null;
+  properties: ({ changes?: Record<string, AuditChange> } & Record<string, unknown>) | null;
   ip_address: string | null;
+  user_agent: string | null;
   created_at: string | null;
+}
+
+export interface AuditFilters {
+  area?: AuditArea;
+  user_id?: number | "";
+  from?: string;
+  to?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export interface AuditData {
+  entries: AuditEntry[];
+  meta: { current_page: number; last_page: number; per_page: number; total: number };
+  areas: string[];
+  staff: { id: number; name: string }[];
+  audit_logging_enabled: boolean;
 }
 
 export interface LoginActivityRow {
   id: number;
   name: string;
   email: string;
-  role: string;
-  last_login_at: string | null;
+  role: StaffRole;
   is_active: boolean;
+  last_login_at: string | null;
+  last_login_ip: string | null;
+  failed_attempts_24h: number;
+  active_sessions: number;
 }
 
-export interface AuditData {
-  entries: AuditEntry[];
-  login_activity: LoginActivityRow[];
+export interface LoginActivityData {
+  users: LoginActivityRow[];
+  failed_logins_24h: number;
+  unknown_email_attempts_24h: number;
+}
+
+// ── Staff notifications ──
+export interface StaffNotification {
+  id: number;
+  type: "missed_dose_escalation" | "followup_reminder" | string;
+  title: string;
+  body: string;
+  data: { patient_id?: number; link?: string } & Record<string, unknown>;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+export interface StaffNotificationsData {
+  notifications: StaffNotification[];
+  unread_count: number;
+  meta: { current_page: number; last_page: number; total: number };
 }
 
 // ── Navigation ──

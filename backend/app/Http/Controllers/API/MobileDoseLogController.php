@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Models\MedicationLog;
+use App\Support\AppSettings;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
@@ -30,9 +31,6 @@ use Illuminate\Support\Collection;
  */
 class MobileDoseLogController extends BaseApiController
 {
-    /** Grace period after the scheduled time before a dose counts as late. */
-    private const LATE_AFTER_MINUTES = 120;
-
     /** Safety cap on the history payload the calendar hydrates from. */
     private const MAX_HISTORY = 400;
 
@@ -260,8 +258,9 @@ class MobileDoseLogController extends BaseApiController
     }
 
     /**
-     * A dose is late once it lands more than the grace period after the
-     * scheduled time; otherwise it is simply taken.
+     * A dose is late once it lands more than the grace period (Settings →
+     * Clinical rules → late-dose threshold) after the scheduled time;
+     * otherwise it is simply taken.
      */
     private function statusFor(
         CarbonImmutable $takenAt,
@@ -273,7 +272,7 @@ class MobileDoseLogController extends BaseApiController
             config('app.timezone'),
         );
 
-        return $takenAt->greaterThan($scheduled->addMinutes(self::LATE_AFTER_MINUTES))
+        return $takenAt->greaterThan($scheduled->addMinutes(AppSettings::int('clinical.late_dose_threshold_minutes', 120)))
             ? 'late'
             : 'taken';
     }

@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Models\ActivityLog;
+use App\Models\Medication;
 use App\Models\MedicationLog;
+use App\Models\MedicationStockMovement;
+use App\Support\AppSettings;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The admin half of the verification loop.
@@ -37,12 +41,18 @@ class DoseVerificationController extends BaseApiController
             );
         }
 
-        $log->fill([
-            'observed_by' => $request->user()->id,
-            'notes' => $data['notes'] ?? $log->notes,
-        ])->save();
+        $deducted = DB::transaction(function () use ($request, $log, $data) {
+            $wasVerified = $log->observed_by !== null;
+            $log->fill([
+                'observed_by' => $request->user()->id,
+                'notes' => $data['notes'] ?? $log->notes,
+            ])->save();
 
-        $this->audit($request, $log, 'dose.verified', 'Verified dose');
+            // First verification only — re-verifying must not deduct twice.
+            return $wasVerified ? null : $this->deductStock($request, $log);
+        });
+
+        $this->audit($request, $log, 'dose.verified', 'Verified dose', $deducted ? ['stock_deducted' => $deducted] : []);
 
         return $this->success(
             data: $this->formatLog($log->load(['patient.user', 'treatmentPlanMedication.medication', 'observedBy'])),
@@ -109,18 +119,55 @@ class DoseVerificationController extends BaseApiController
         abort_unless($patient && $patient->isVisibleTo($request->user()), 404, 'Dose log not found.');
     }
 
-    /** Every (un)verification is recorded in the audit trail with who and where. */
-    private function audit(Request $request, MedicationLog $log, string $action, string $verb): void
+    /**
+     * Settings → Inventory → "Deduct stock when a dose is verified": take the
+     * dose out of the medicine's stock and record it in the stock ledger.
+     * Returns what was deducted, or null when off / nothing to deduct.
+     *
+     * @return array{medication: string, quantity: int}|null
+     */
+    private function deductStock(Request $request, MedicationLog $log): ?array
     {
-        ActivityLog::create([
+        if (! AppSettings::bool('inventory.auto_deduct_on_verify')) {
+            return null;
+        }
+
+        $medicationId = $log->treatmentPlanMedication?->medication_id;
+        $medication = $medicationId ? Medication::query()->lockForUpdate()->find($medicationId) : null;
+        if (! $medication || $medication->quantity <= 0) {
+            return null;
+        }
+
+        // dose_quantity is free text ("2 tablets"); its leading number is the count.
+        $qty = preg_match('/\d+/', (string) $log->dose_quantity, $m) ? max(1, (int) $m[0]) : 1;
+        $qty = min($qty, (int) $medication->quantity);
+
+        $before = (int) $medication->quantity;
+        $medication->quantity = $before - $qty;
+        $medication->stock_status = $medication->computeStockStatus();
+        $medication->save();
+
+        $medication->stockMovements()->create([
+            'type' => MedicationStockMovement::TYPE_DEDUCTION,
+            'quantity_change' => -$qty,
+            'quantity_before' => $before,
+            'quantity_after' => $before - $qty,
+            'reason' => "Verified dose #{$log->id} (patient #{$log->patient_id})",
             'user_id' => $request->user()->id,
-            'action' => $action,
-            'description' => "{$verb} #{$log->id} for patient #{$log->patient_id}",
-            'subject_type' => MedicationLog::class,
-            'subject_id' => $log->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 500),
-            'created_at' => now(),
         ]);
+
+        return ['medication' => $medication->name, 'quantity' => $qty];
+    }
+
+    /** Every (un)verification is recorded in the audit trail with who and where. */
+    private function audit(Request $request, MedicationLog $log, string $action, string $verb, array $properties = []): void
+    {
+        Audit::log(
+            $request,
+            $action,
+            "{$verb} #{$log->id} for patient #{$log->patient_id}",
+            $log,
+            $properties,
+        );
     }
 }

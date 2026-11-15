@@ -60,3 +60,28 @@ export function optionLabel(
   if (!value) return "—";
   return options.find((o) => o.value === value)?.label ?? value.replace(/_/g, " ");
 }
+
+// ─── Settings-driven options ───────────────────────────────────────────
+// Regimens and outcomes are configurable in Settings → Treatment protocols.
+// These merge the configured list with the built-in labels above, and keep a
+// value already stored on a record selectable even if it was later removed.
+
+type Option = { value: string; label: string };
+
+export function regimenOptionsFrom(
+  regimens: ReadonlyArray<{ code: string; name: string }> | null | undefined,
+  keep?: string | null
+): Option[] {
+  const base: Option[] =
+    regimens && regimens.length > 0
+      ? regimens.filter((r) => r.code).map((r) => ({ value: r.code, label: r.name ? `${r.code} — ${r.name}` : r.code }))
+      : REGIMEN_OPTIONS.map((r) => ({ value: r.value, label: r.label }));
+  if (keep && !base.some((o) => o.value === keep)) base.push({ value: keep, label: optionLabel(REGIMEN_OPTIONS, keep) });
+  return base;
+}
+
+export function outcomeOptionsFrom(codes: ReadonlyArray<string> | null | undefined, keep?: string | null): Option[] {
+  const list = codes && codes.length > 0 ? [...codes] : TREATMENT_OUTCOME_OPTIONS.map((o) => o.value as string);
+  if (keep && !list.includes(keep)) list.push(keep);
+  return list.map((value) => ({ value, label: optionLabel(TREATMENT_OUTCOME_OPTIONS, value) }));
+}

@@ -19,6 +19,7 @@ const STAFF_PATHS = [
   "/treatments",
   "/medications",
   "/reports",
+  "/notifications",
 ];
 
 export function isPortalRole(role: Role | undefined): boolean {

@@ -47,6 +47,7 @@ import {
   ChevronDown,
   Clock,
   ImageOff,
+  Loader2,
   Pill,
   RefreshCw,
   Search,
@@ -134,32 +135,49 @@ const ADHERENCE_FILTERS: { key: AdherenceQuickFilter; label: string }[] = [
   { key: "unrecorded", label: "Unrecorded" },
 ];
 
-// ─── Searchable patient selector (combobox) ───
+// ─── Searchable patient selector (combobox, live server search) ───
+const SEARCH_DEBOUNCE_MS = 250;
+
 function PatientSelector({
-  patients,
   value,
   onChange,
 }: {
-  patients: PatientSelectOption[];
   value: string;
   onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PatientSelectOption[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  // Remember the chosen patient so its label survives later searches; ignored
+  // once the value is cleared from outside.
+  const [chosen, setSelected] = useState<PatientSelectOption | null>(null);
+  const selected = chosen && String(chosen.id) === value ? chosen : null;
   const containerRef = useRef<HTMLDivElement>(null);
+  const requestId = useRef(0);
 
-  const selected = patients.find((p) => String(p.id) === value) ?? null;
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        String(p.id).includes(q) ||
-        (p.health_id_number ?? "").toLowerCase().includes(q)
-    );
-  }, [patients, query]);
+  // Debounced live search — only the newest response is applied.
+  useEffect(() => {
+    if (!open) return;
+    const id = ++requestId.current;
+    const t = setTimeout(() => {
+      setSearching(true);
+      getPatientList(query.trim() || undefined)
+        .then((res) => {
+          if (id !== requestId.current) return;
+          setResults(res.data ?? []);
+          setActiveIndex(-1);
+        })
+        .catch(() => {
+          if (id === requestId.current) setResults([]);
+        })
+        .finally(() => {
+          if (id === requestId.current) setSearching(false);
+        });
+    }, query ? SEARCH_DEBOUNCE_MS : 0);
+    return () => clearTimeout(t);
+  }, [query, open]);
 
   // Close on outside click
   useEffect(() => {
@@ -173,89 +191,119 @@ function PatientSelector({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  const choose = (p: PatientSelectOption | null) => {
+    setSelected(p);
+    onChange(p ? String(p.id) : "");
+    setOpen(false);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      choose(activeIndex >= 0 ? results[activeIndex] ?? null : null);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative w-full">
-      <label className="mb-1 block text-xs font-medium text-text-secondary">
-        Patient
-      </label>
+      <label className="mb-1.5 block text-xs font-medium text-text-secondary">Patient</label>
       <button
         type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => {
           setOpen((o) => !o);
           setQuery("");
         }}
-        className="flex h-10 w-full items-center justify-between rounded-[10px] border border-border-default bg-bg-card px-3 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border-default bg-bg-card px-3 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
       >
         <span className={selected ? "truncate" : "text-text-tertiary"}>
           {selected
             ? `${selected.name}${selected.health_id_number ? ` · ${selected.health_id_number}` : ""}`
-            : "All patients"}
+            : value
+              ? `Patient #${value}`
+              : "All patients"}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-text-tertiary" />
+        <ChevronDown className={`h-4 w-4 shrink-0 text-text-tertiary transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-[10px] border border-border-light bg-bg-card shadow-dropdown">
+        <div
+          className="absolute z-30 mt-1 w-full min-w-[280px] rounded-[10px] border border-border-light bg-bg-card shadow-dropdown"
+          onKeyDown={onKeyDown}
+        >
           <div className="relative p-2 border-b border-border-light">
             <Search className="absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
             <input
               autoFocus
               className="h-8 w-full rounded-[6px] bg-bg-subtle pl-8 pr-8 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
-              placeholder="Search by name, ID, or health ID…"
+              placeholder="Search name, email, health ID or #…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            {query && (
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary">
+              {searching ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : query ? (
+                <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="hover:text-text-secondary">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </span>
+          </div>
+          <div role="listbox" className="max-h-64 overflow-y-auto py-1">
+            {!query && (
               <button
                 type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary"
+                onClick={() => choose(null)}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-bg-subtle ${
+                  !value ? "text-primary-700 font-medium" : "text-text-primary"
+                }`}
               >
-                <X className="h-3.5 w-3.5" />
+                <Users className="h-4 w-4 text-text-tertiary" />
+                All patients
+                {!value && <Check className="ml-auto h-4 w-4 text-primary-600" />}
               </button>
             )}
-          </div>
-          <div className="max-h-56 overflow-y-auto py-1">
-            <button
-              type="button"
-              onClick={() => {
-                onChange("");
-                setOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-bg-subtle ${
-                !value ? "text-primary-700 font-medium" : "text-text-primary"
-              }`}
-            >
-              <Users className="h-4 w-4 text-text-tertiary" />
-              All patients
-              {!value && <Check className="ml-auto h-4 w-4 text-primary-600" />}
-            </button>
-            {filtered.map((p) => (
+            {results.map((p, i) => (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => {
-                  onChange(String(p.id));
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-bg-subtle ${
-                  value === String(p.id) ? "text-primary-700 font-medium" : "text-text-primary"
-                }`}
+                role="option"
+                aria-selected={value === String(p.id)}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => choose(p)}
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm ${
+                  i === activeIndex ? "bg-bg-subtle" : "hover:bg-bg-subtle"
+                } ${value === String(p.id) ? "text-primary-700 font-medium" : "text-text-primary"}`}
               >
-                <span className="truncate">
-                  {p.name}
-                  {p.health_id_number && (
-                    <span className="ml-1.5 text-xs text-text-tertiary">
-                      {p.health_id_number}
+                <span className="min-w-0">
+                  <span className="block truncate">{p.name}</span>
+                  {(p.health_id_number || p.email) && (
+                    <span className="block truncate text-[11px] text-text-tertiary">
+                      {[p.health_id_number, p.email].filter(Boolean).join(" · ")}
                     </span>
                   )}
                 </span>
                 <span className="shrink-0 text-[11px] text-text-tertiary">#{p.id}</span>
               </button>
             ))}
-            {filtered.length === 0 && (
+            {!searching && results.length === 0 && (
               <p className="px-3 py-4 text-center text-xs text-text-tertiary">
-                No patients match “{query}”.
+                {query ? <>No patients match “{query}”.</> : "No patients yet."}
+              </p>
+            )}
+            {results.length >= 50 && (
+              <p className="border-t border-border-light px-3 py-2 text-[11px] text-text-tertiary">
+                Showing the first 50 — keep typing to narrow down.
               </p>
             )}
           </div>
@@ -297,7 +345,6 @@ export default function ReportsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const [patients, setPatients] = useState<PatientSelectOption[]>([]);
   const [from, setFrom] = useState(() => fmtISO(new Date(Date.now() - 29 * 86400000)));
   const [to, setTo] = useState(() => fmtISO(new Date()));
   const [patientId, setPatientId] = useState("");
@@ -328,16 +375,6 @@ export default function ReportsPage() {
 
   // Dose confirmations arriving from patients show up without a manual refresh.
   useAutoRefresh(loadReports);
-
-  useEffect(() => {
-    getPatientList()
-      .then((res) => {
-        if (res.data) setPatients(res.data);
-      })
-      .catch(() => {
-        /* filter dropdown is optional — ignore load failures */
-      });
-  }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -495,65 +532,66 @@ export default function ReportsPage() {
 
       {/* ── Filters ── */}
       <Card>
-        <CardContent className="p-4 pt-4 flex flex-wrap items-end gap-3">
-          <div className="flex items-center gap-1.5">
-            {[7, 30, 90].map((d) => (
-              <Button key={d} variant="outline" size="sm" onClick={() => applyPreset(d)}>
-                {d}d
-              </Button>
-            ))}
+        <CardContent className="space-y-4 p-5 sm:p-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[auto_minmax(150px,1fr)_minmax(150px,1fr)_minmax(240px,1.6fr)]">
+            <div>
+              <span className="mb-1.5 block text-xs font-medium text-text-secondary">Quick range</span>
+              <div className="flex h-10 items-center gap-1.5">
+                {[7, 30, 90].map((d) => (
+                  <Button key={d} variant="outline" size="sm" onClick={() => applyPreset(d)}>
+                    {d}d
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="report-from" className="mb-1.5 block text-xs font-medium text-text-secondary">
+                From
+              </label>
+              <Input id="report-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor="report-to" className="mb-1.5 block text-xs font-medium text-text-secondary">
+                To
+              </label>
+              <Input
+                id="report-to"
+                type="date"
+                value={to}
+                min={from}
+                max={fmtISO(new Date())}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+            <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+              <PatientSelector value={patientId} onChange={setPatientId} />
+            </div>
           </div>
-          <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
-              From
-            </label>
-            <Input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => setFrom(e.target.value)}
-            />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-light pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-xs font-medium text-text-secondary">Show:</span>
+              {ADHERENCE_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setAdherenceFilter(f.key)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
+                    adherenceFilter === f.key
+                      ? "bg-brand-action text-white"
+                      : "bg-bg-subtle text-text-secondary hover:bg-border-light"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {data && (
+              <p className="text-xs text-text-tertiary">
+                {fmtDate(overview?.from)} – {fmtDate(overview?.to)} · generated{" "}
+                {fmtDateTime(data.generated_at)}
+              </p>
+            )}
           </div>
-          <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
-              To
-            </label>
-            <Input
-              type="date"
-              value={to}
-              min={from}
-              max={fmtISO(new Date())}
-              onChange={(e) => setTo(e.target.value)}
-            />
-          </div>
-          <div className="w-72">
-            <PatientSelector
-              patients={patients}
-              value={patientId}
-              onChange={setPatientId}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 pb-0.5">
-            {ADHERENCE_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setAdherenceFilter(f.key)}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-all duration-150 ${
-                  adherenceFilter === f.key
-                    ? "bg-brand-action text-white"
-                    : "bg-bg-subtle text-text-secondary hover:bg-border-light"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          {data && (
-            <p className="ml-auto text-xs text-text-tertiary">
-              {fmtDate(overview?.from)} – {fmtDate(overview?.to)} · generated{" "}
-              {fmtDateTime(data.generated_at)}
-            </p>
-          )}
         </CardContent>
       </Card>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Users,
@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
   Lock,
+  X,
 } from "lucide-react";
 import { PatientRegistrationWizard } from "@/components/features/patients/PatientRegistrationWizard";
 import { PatientProfileModal } from "@/components/features/patients/PatientProfileModal";
@@ -85,6 +86,9 @@ const emptyForm: CreatePatientPayload = {
 };
 
 // ─── Format date for display ───
+/** Wait this long after the last keystroke before searching. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   try {
@@ -133,7 +137,12 @@ export default function PatientsPage() {
   const [formSuccess, setFormSuccess] = useState("");
 
   // ── Fetch patients ──
+  // Only the newest request may update the table, so a slow response for an
+  // older search term can never overwrite the results for the current one.
+  const requestId = useRef(0);
+
   const fetchPatients = useCallback(async (params: PatientListParams = {}) => {
+    const id = ++requestId.current;
     setLoading(true);
     setError("");
     try {
@@ -145,11 +154,11 @@ export default function PatientsPage() {
         sort_by: "created_at",
         sort_dir: "desc",
       });
-      setPatients(res);
+      if (id === requestId.current) setPatients(res);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load patients");
+      if (id === requestId.current) setError(err instanceof Error ? err.message : "Failed to load patients");
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }, [page, search, genderFilter]);
 
@@ -164,15 +173,31 @@ export default function PatientsPage() {
     setPage(1);
   }, [urlQuery]);
 
-  // ── Search debounce ──
-  const handleSearch = () => {
-    setSearch(searchInput);
-    setPage(1);
-  };
+  // ── Live search (debounced) ──
+  // Each keystroke restarts the timer; the search only runs once typing has
+  // paused for SEARCH_DEBOUNCE_MS. Enter searches immediately.
+  const commitSearch = useCallback(
+    (value: string) => {
+      const term = value.trim();
+      if (term === search) return; // unchanged — don't refetch or reset paging
+      setSearch(term);
+      setPage(1);
+    },
+    [search]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => commitSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput, commitSearch]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSearch();
+    if (e.key === "Enter") commitSearch(searchInput);
+    if (e.key === "Escape") setSearchInput("");
   };
+
+  // Typed but not yet searched (debounce pending)
+  const searchPending = searchInput.trim() !== search;
 
   // ── Gender filter ──
   const handleGenderChange = (value: string) => {
@@ -330,16 +355,29 @@ export default function PatientsPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <Input
+              type="search"
+              aria-label="Search patients"
               placeholder="Search by name, email, phone, or health ID..."
-              className="pl-9 h-9"
+              className="pl-9 pr-9 h-9 [&::-webkit-search-cancel-button]:hidden"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSearchKeyDown}
             />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary">
+              {searchPending || (loading && search) ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-label="Searching" />
+              ) : searchInput ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                  className="flex hover:text-text-primary"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </span>
           </div>
-          <Button variant="secondary" size="sm" onClick={handleSearch} className="shrink-0">
-            Search
-          </Button>
         </div>
 
         <div className="flex items-center gap-2">

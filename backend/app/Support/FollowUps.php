@@ -18,15 +18,18 @@ use Illuminate\Support\Collection;
  */
 final class FollowUps
 {
-    /** Follow-ups due within this window are "due soon". */
-    public const DUE_SOON_DAYS = 14;
+    /** Follow-ups due within this many days are "due soon" (Settings → Clinical rules). */
+    public static function dueSoonDays(): int
+    {
+        return AppSettings::int('clinical.followup_due_soon_days', 14);
+    }
 
     /**
      * The next follow-up for a plan with its state, or null when there is none
      * (inactive plan, undated plan, or nothing left to attend).
      *
      * Status: `overdue` → a follow-up date already passed this window without
-     * being rescheduled; `due` → within DUE_SOON_DAYS; else `scheduled`.
+     * being rescheduled; `due` → within dueSoonDays(); else `scheduled`.
      *
      * @param  iterable<int, FollowUpReschedule>|null  $planReschedules  pre-fetched reschedules for this plan; queried when null
      * @return array{date: ?string, status: string}|null
@@ -97,7 +100,7 @@ final class FollowUps
         $status = 'scheduled';
         if ($hasOverdue) {
             $status = 'overdue';
-        } elseif ($upcoming['date']->lte($today->addDays(self::DUE_SOON_DAYS))) {
+        } elseif ($upcoming['date']->lte($today->addDays(self::dueSoonDays()))) {
             $status = 'due';
         }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Models\DailyMonitoring;
+use App\Support\AppSettings;
 use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Support\Adherence;
@@ -158,7 +159,9 @@ class MonitoringController extends BaseApiController
             $progressPct = $plan->status === 'completed' ? 100 : (int) floor(($elapsed / $totalDays) * 100);
             $daysRemaining = $plan->status === 'completed' ? 0 : max(0, (int) $expectedEnd->diffInDays($today));
 
-            // Risk flags — most severe first
+            // Risk flags — most severe first (bands from Settings → Clinical rules)
+            $highBelow = AppSettings::int('clinical.risk_high_below', 80);
+            $watchBelow = AppSettings::int('clinical.risk_watch_below', 90);
             $risk = 'on_track';
             if ($plan->status === 'discontinued') {
                 $risk = 'discontinued';
@@ -166,9 +169,9 @@ class MonitoringController extends BaseApiController
                 $risk = 'interrupted';
             } elseif ($plan->status === 'active' && $expectedEnd->isPast() && $actualEnd === null) {
                 $risk = 'overdue';
-            } elseif ($plan->status === 'active' && $adherenceRate !== null && $adherenceRate < 80) {
+            } elseif ($plan->status === 'active' && $adherenceRate !== null && $adherenceRate < $highBelow) {
                 $risk = 'high_risk';
-            } elseif ($plan->status === 'active' && $adherenceRate !== null && $adherenceRate < 90) {
+            } elseif ($plan->status === 'active' && $adherenceRate !== null && $adherenceRate < $watchBelow) {
                 $risk = 'watch';
             }
 
@@ -184,7 +187,7 @@ class MonitoringController extends BaseApiController
                 'days_elapsed' => $elapsed,
                 'progress_pct' => $progressPct,
                 'days_remaining' => $daysRemaining,
-                'approaching_end' => $plan->status === 'active' && $daysRemaining > 0 && $daysRemaining <= 14,
+                'approaching_end' => $plan->status === 'active' && $daysRemaining > 0 && $daysRemaining <= AppSettings::int('clinical.approaching_end_days', 14),
                 'risk' => $risk,
             ];
         }

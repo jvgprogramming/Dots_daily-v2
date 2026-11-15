@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Support\Audit;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
 use App\Http\Resources\PatientResource;
@@ -93,6 +94,9 @@ class PatientController extends BaseApiController
 
             $patient->load(['user', 'registeredBy']);
 
+            Audit::log($request, $isDraft ? 'patient.draft_created' : 'patient.registered',
+                ($isDraft ? 'Saved patient draft ' : 'Registered patient ').self::auditName($patient), $patient);
+
             return $this->created(
                 data: [
                     'patient' => new PatientResource($patient),
@@ -143,6 +147,8 @@ class PatientController extends BaseApiController
         ]);
 
         $patient = $service->updateDraft($request, $patient);
+
+        Audit::log($request, 'patient.draft_updated', 'Updated patient draft '.self::auditName($patient), $patient);
 
         return $this->success(
             data: ['patient' => new PatientResource($patient->fresh())],
@@ -232,6 +238,8 @@ class PatientController extends BaseApiController
             $patient = $service->completeDraft($request, $patient, $data);
 
             $patient->load(['user', 'registeredBy']);
+
+            Audit::log($request, 'patient.registered', 'Completed registration of '.self::auditName($patient), $patient);
 
             return $this->success(
                 data: [
@@ -327,8 +335,10 @@ class PatientController extends BaseApiController
                 'phone' => $data['phone'] ?? null,
             ], fn ($v) => $v !== null);
 
+            $changes = [];
             if (! empty($userData) && $patient->user) {
                 $patient->user->update($userData);
+                $changes += Audit::diff($patient->user)['changes'] ?? [];
             }
 
             // Update password if provided
@@ -336,6 +346,7 @@ class PatientController extends BaseApiController
                 $patient->user->update([
                     'password' => Hash::make($data['password']),
                 ]);
+                $changes['password'] = ['from' => '••••', 'to' => 'changed'];
             }
 
             // Update patient fields
@@ -360,9 +371,14 @@ class PatientController extends BaseApiController
 
             if (! empty($patientData)) {
                 $patient->update($patientData);
+                $changes += Audit::diff($patient)['changes'] ?? [];
             }
 
             DB::commit();
+
+            if ($changes !== []) {
+                Audit::log($request, 'patient.updated', 'Updated patient '.self::auditName($patient).' ('.implode(', ', array_keys($changes)).')', $patient, ['changes' => $changes]);
+            }
 
             $patient = $patient->fresh()->load(['user', 'registeredBy']);
 
@@ -386,13 +402,17 @@ class PatientController extends BaseApiController
     /**
      * Remove the specified patient (soft delete).
      */
-    public function destroy(Patient $patient): JsonResponse
+    public function destroy(Request $request, Patient $patient): JsonResponse
     {
+        $name = self::auditName($patient);
+
         // Draft patients may not have a linked user account
         if ($patient->user) {
             $patient->user->delete(); // Soft delete user (cascades to patient)
         }
         $patient->delete();       // Soft delete patient
+
+        Audit::log($request, 'patient.deleted', "Deleted patient {$name}", $patient);
 
         return $this->success(message: 'Patient deleted successfully.');
     }
@@ -435,11 +455,19 @@ class PatientController extends BaseApiController
     {
         $query = Patient::query()->visibleTo($request->user())->with('user');
 
-        if ($search = $request->get('search')) {
+        if ($search = trim((string) $request->get('search'))) {
             $query->where(function ($q) use ($search) {
-                $q->whereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"))
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%");
+                $q->whereHas('user', fn ($uq) => $uq->where(
+                    fn ($w) => $w->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")
+                ))
+                    ->orWhere('patients.first_name', 'like', "%{$search}%")
+                    ->orWhere('patients.last_name', 'like', "%{$search}%")
+                    ->orWhereRaw("CONCAT_WS(' ', patients.first_name, patients.last_name) like ?", ["%{$search}%"])
+                    ->orWhere('patients.health_id_number', 'like', "%{$search}%");
+                // "#12" or "12" also finds patient number 12
+                if (ctype_digit(ltrim($search, '#'))) {
+                    $q->orWhere('patients.id', (int) ltrim($search, '#'));
+                }
             });
         }
 
@@ -469,5 +497,13 @@ class PatientController extends BaseApiController
     private function ensureVisible(Request $request, Patient $patient): void
     {
         abort_unless($patient->isVisibleTo($request->user()), 404, 'Patient not found.');
+    }
+
+    /** "Juan Dela Cruz (#12)" for audit descriptions. */
+    private static function auditName(Patient $patient): string
+    {
+        $name = trim(($patient->first_name ?? '').' '.($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient');
+
+        return "{$name} (#{$patient->id})";
     }
 }

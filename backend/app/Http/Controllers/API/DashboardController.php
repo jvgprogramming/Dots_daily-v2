@@ -63,14 +63,16 @@ class DashboardController extends BaseApiController
         $nearingExpiryMeds = Medication::query()
             ->whereNotNull('expiry_date')
             ->whereDate('expiry_date', '>=', $today)
-            ->whereDate('expiry_date', '<=', $now->addDays(Medication::NEARING_EXPIRY_DAYS)->toDateString())
+            ->whereDate('expiry_date', '<=', $now->addDays(Medication::nearingExpiryDays())->toDateString())
             ->count();
 
+        // Settings → Inventory → "Expiry alerts" controls the expiry warnings.
+        $expiryAlerts = \App\Support\AppSettings::bool('inventory.expiry_alert_enabled');
         $stockNoteParts = array_filter([
             $lowStockMeds > 0 ? "{$lowStockMeds} low stock" : null,
             $outOfStockMeds > 0 ? "{$outOfStockMeds} out of stock" : null,
-            $expiredMeds > 0 ? "{$expiredMeds} expired" : null,
-            $nearingExpiryMeds > 0 ? "{$nearingExpiryMeds} nearing expiry" : null,
+            $expiryAlerts && $expiredMeds > 0 ? "{$expiredMeds} expired" : null,
+            $expiryAlerts && $nearingExpiryMeds > 0 ? "{$nearingExpiryMeds} nearing expiry" : null,
         ]);
 
         $stats = [

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\API\Auth;
 
 use App\Http\Controllers\API\BaseApiController;
+use App\Http\Controllers\API\SettingsController;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,17 +18,19 @@ class ResetPasswordController extends BaseApiController
         $request->validate([
             'token' => ['required', 'string'],
             'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:'.SettingsController::passwordMin(), 'confirmed'],
         ]);
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
+            function ($user, $password) use ($request) {
                 $user->forceFill([
                     'password' => Hash::make($password),
                 ])->save();
 
                 $user->tokens()->delete();
+
+                Audit::log($request, 'auth.password_reset', "{$user->email} reset their password via email link", $user, userId: $user->id);
             }
         );
 

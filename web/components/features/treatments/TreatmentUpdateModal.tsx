@@ -18,13 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import {
-  REGIMEN_OPTIONS,
   TREATMENT_STATUS_OPTIONS,
   TREATMENT_PHASE_OPTIONS,
-  TREATMENT_OUTCOME_OPTIONS,
   LAB_TEST_TYPE_OPTIONS,
   LAB_TEST_STATUS_OPTIONS,
+  regimenOptionsFrom,
+  outcomeOptionsFrom,
 } from "@/lib/treatment-options";
+import { useClinicSettings } from "@/lib/hooks/useClinicSettings";
 import { updateTreatment } from "@/lib/services/treatments";
 import type { NewLabTestEntry } from "@/lib/types";
 
@@ -66,6 +67,8 @@ export function TreatmentUpdateModal({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  // Regimens and outcomes come from Settings → Treatment protocols.
+  const clinic = useClinicSettings();
   const [regimenType, setRegimenType] = useState(target.regimen_type ?? "");
   const [regimenTypeEnd, setRegimenTypeEnd] = useState(target.regimen_type_end ?? "");
   const [phase, setPhase] = useState(target.phase ?? "intensive");
@@ -166,7 +169,7 @@ export function TreatmentUpdateModal({
                 onChange={(e) => setRegimenType(e.target.value)}
               >
                 <option value="">— Not set —</option>
-                {REGIMEN_OPTIONS.map((r) => (
+                {regimenOptionsFrom(clinic?.regimens, regimenType).map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
                   </option>
@@ -228,7 +231,7 @@ export function TreatmentUpdateModal({
                 onChange={(e) => setRegimenTypeEnd(e.target.value)}
               >
                 <option value="">— Not recorded yet —</option>
-                {REGIMEN_OPTIONS.map((r) => (
+                {regimenOptionsFrom(clinic?.regimens, regimenTypeEnd).map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
                   </option>
@@ -243,7 +246,7 @@ export function TreatmentUpdateModal({
                 onChange={(e) => setOutcome(e.target.value)}
               >
                 <option value="">— Not recorded yet —</option>
-                {TREATMENT_OUTCOME_OPTIONS.map((o) => (
+                {outcomeOptionsFrom(clinic?.outcome_options, outcome).map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

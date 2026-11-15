@@ -209,14 +209,24 @@ class PatientRegistrationService
         // ── Treatment plan (start info only; outcome fields filled later) ──
         if (!empty($data['treatment']['start_date'])) {
             $startDate = \Carbon\Carbon::parse($data['treatment']['start_date']);
-            $expectedEnd = $startDate->copy()->addMonths(6); // standard 6-month course default
+
+            // Course length comes from Settings → Treatment protocols for the
+            // chosen regimen; unknown/individualized regimens keep the
+            // standard 6-month default.
+            $regimen = \App\Support\AppSettings::regimen($data['treatment']['regimen_type'] ?? null);
+            $intensiveDays = (int) ($regimen['intensive_days'] ?? 0);
+            $courseDays = $intensiveDays + (int) ($regimen['continuation_days'] ?? 0);
+            $expectedEnd = $courseDays > 0
+                ? $startDate->copy()->addDays($courseDays)
+                : $startDate->copy()->addMonths(6);
 
             TreatmentPlan::create([
                 'patient_id' => $patient->id,
                 'assigned_by' => $assignedBy ?? $patient->registered_by,
                 'plan_name' => 'TB Treatment — ' . ($data['classification']['registration_group'] ?? 'new'),
                 'regimen_type' => $data['treatment']['regimen_type'] ?? null,
-                'phase' => 'intensive',
+                // A regimen with no intensive phase (e.g. TB infection) starts in continuation.
+                'phase' => ($regimen && $intensiveDays === 0 && $courseDays > 0) ? 'continuation' : 'intensive',
                 'start_date' => $startDate->toDateString(),
                 'expected_end_date' => $expectedEnd->toDateString(),
                 'status' => 'active',

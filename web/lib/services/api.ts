@@ -67,7 +67,46 @@ async function request<T>(
   return data;
 }
 
+/**
+ * Authenticated file download (e.g. a CSV export): fetches with the bearer
+ * token and hands the browser a file to save.
+ */
+async function download(path: string, params: Record<string, string> | undefined, fallbackName: string): Promise<void> {
+  const token = await getToken();
+  const url = new URL(`${API_BASE_URL}${path}`);
+  Object.entries(params ?? {}).forEach(([k, v]) => url.searchParams.append(k, v));
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: "text/csv, application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.message || "Download failed", response.status, data.errors);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const name = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName;
+  const href = URL.createObjectURL(await response.blob());
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+/** First field error from a validation failure, else the message. */
+export function errorMessage(err: unknown, fallback = "Something went wrong."): string {
+  if (err instanceof ApiError && err.errors) {
+    const first = Object.values(err.errors).flat()[0];
+    if (first) return first;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 export const api = {
+  download,
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>("GET", path, undefined, options),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>

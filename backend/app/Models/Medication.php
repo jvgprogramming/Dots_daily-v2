@@ -53,10 +53,19 @@ class Medication extends Model
     public const STOCK_EXPIRED = 'expired';
 
     /**
-     * Extend expiry warnings: items within this many days of expiring
-     * are flagged as "nearing expiry".
+     * Items within this many days of expiring are flagged as "nearing expiry"
+     * (Settings → Inventory → near-expiry window).
      */
-    public const NEARING_EXPIRY_DAYS = 90;
+    public static function nearingExpiryDays(): int
+    {
+        return \App\Support\AppSettings::int('inventory.near_expiry_days', 90);
+    }
+
+    /** Reorder level a new medicine gets when none is entered (Settings → Inventory). */
+    public static function defaultReorderLevel(): int
+    {
+        return \App\Support\AppSettings::int('inventory.low_stock_default', 10);
+    }
 
     /**
      * Stock count units — what `quantity` counts (discrete items in stock).
@@ -123,7 +132,7 @@ class Medication extends Model
     {
         $days = $this->daysUntilExpiry();
 
-        return $days !== null && $days >= 0 && $days <= self::NEARING_EXPIRY_DAYS;
+        return $days !== null && $days >= 0 && $days <= self::nearingExpiryDays();
     }
 
     protected function casts(): array

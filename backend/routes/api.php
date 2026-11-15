@@ -13,6 +13,7 @@ use App\Http\Controllers\API\MonitoringController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\SettingsController;
 use App\Http\Controllers\API\TreatmentsController;
 use Illuminate\Support\Facades\Route;
@@ -69,15 +70,28 @@ Route::prefix('v1')->group(function () {
         // Global search (Admin)
         Route::get('/search', [SearchController::class, 'index'])->middleware('role:admin');
 
+        // Staff notification inbox (missed-dose escalations, follow-up reminders)
+        Route::prefix('notifications')->middleware('role:admin,staff')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('read-all', [NotificationController::class, 'markAllRead']);
+            Route::post('{id}/read', [NotificationController::class, 'markRead'])->whereNumber('id');
+        });
+
+        // Settings values every portal user needs (risk bands, regimens…)
+        Route::get('/settings/public', [SettingsController::class, 'publicSettings'])->middleware('role:admin,staff');
+
         // Settings (Admin) — system configuration control panel
         Route::prefix('settings')->middleware('role:admin')->group(function () {
             Route::get('/', [SettingsController::class, 'index']);
             Route::put('/', [SettingsController::class, 'update']);
             Route::get('audit', [SettingsController::class, 'audit']);
+            Route::get('audit/export', [SettingsController::class, 'exportAudit']);
+            Route::get('login-activity', [SettingsController::class, 'loginActivity']);
             Route::get('users', [SettingsController::class, 'users']);
             Route::post('users', [SettingsController::class, 'storeUser']);
             Route::put('users/{user}', [SettingsController::class, 'updateUser']);
             Route::delete('users/{user}', [SettingsController::class, 'destroyUser']);
+            Route::post('users/{user}/revoke-sessions', [SettingsController::class, 'revokeSessions']);
         });
 
         // Reports (Admin + Staff) — medication adherence + proof evidence from live logs

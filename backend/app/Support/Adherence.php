@@ -32,6 +32,18 @@ final class Adherence
     }
 
     /**
+     * Whether a day's status counts toward the adherence figure. Follows
+     * Settings → Clinical rules → adherence calculation: by default a late
+     * dose still counts; with `taken_only` only on-time doses do.
+     */
+    public static function countsTowardAdherence(?string $status): bool
+    {
+        return AppSettings::get('clinical.adherence_calculation') === 'taken_only'
+            ? $status === 'taken'
+            : self::countsAsTaken($status);
+    }
+
+    /**
      * Expected dose-days per patient within [$from, $to], as a set of 'Y-m-d'
      * keys. Days after today are never expected.
      *
@@ -261,7 +273,7 @@ final class Adherence
         foreach ($expectedSets as $patientId => $days) {
             foreach (array_keys($days) as $date) {
                 $expected++;
-                if (self::countsAsTaken($loggedSets[$patientId][$date] ?? null)) {
+                if (self::countsTowardAdherence($loggedSets[$patientId][$date] ?? null)) {
                     $taken++;
                 }
             }

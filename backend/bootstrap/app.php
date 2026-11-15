@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\CheckRole::class,
         ]);
 
+        // Runs after auth:sanctum has resolved the user (it is a no-op for guests).
+        $middleware->api(append: [
+            \App\Http\Middleware\SlideSessionExpiry::class,
+        ]);
+
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);

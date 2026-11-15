@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Medication;
 use App\Models\MedicationStockMovement;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -72,7 +73,7 @@ class MedicationInventoryController extends BaseApiController
     public function summary(): JsonResponse
     {
         $today = now()->startOfDay();
-        $nearingDate = (clone $today)->addDays(Medication::NEARING_EXPIRY_DAYS);
+        $nearingDate = (clone $today)->addDays(Medication::nearingExpiryDays());
 
         $summary = [
             'total_medicines' => Medication::count(),
@@ -116,6 +117,8 @@ class MedicationInventoryController extends BaseApiController
 
             DB::commit();
 
+            Audit::log($request, 'medication.created', "Registered medicine {$medication->name} ({$medication->quantity} in stock)", $medication);
+
             return $this->created(
                 data: ['medication' => $this->serialize($medication)],
                 message: 'Medicine registered successfully.',
@@ -145,6 +148,7 @@ class MedicationInventoryController extends BaseApiController
             }
 
             $medication->update($fields);
+            $diff = Audit::diff($medication);
 
             // Ledger: the edit form is the ONLY place quantity can change,
             // so every stock delta made through it is recorded here.
@@ -163,6 +167,10 @@ class MedicationInventoryController extends BaseApiController
 
             DB::commit();
 
+            if ($diff !== []) {
+                Audit::log($request, 'medication.updated', "Updated medicine {$medication->name}", $medication, $diff);
+            }
+
             return $this->success(
                 data: ['medication' => $this->serialize($medication->fresh())],
                 message: 'Medicine updated successfully.',
@@ -174,10 +182,12 @@ class MedicationInventoryController extends BaseApiController
         }
     }
 
-    public function destroy(Medication $medication): JsonResponse
+    public function destroy(Request $request, Medication $medication): JsonResponse
     {
         // Archive from inventory rather than hard-deleting treatment history links
         $medication->update(['is_active' => false]);
+
+        Audit::log($request, 'medication.archived', "Removed medicine {$medication->name} from inventory", $medication);
 
         return $this->success(message: 'Medicine removed from inventory.');
     }
@@ -261,7 +271,7 @@ class MedicationInventoryController extends BaseApiController
             'strength' => $dosage ?? $existing?->strength ?? '',
             'dosage' => $dosage,
             'quantity' => $data['quantity'],
-            'reorder_level' => $data['reorder_level'] ?? 10,
+            'reorder_level' => $data['reorder_level'] ?? Medication::defaultReorderLevel(),
             'unit' => $data['unit'],
             'storage_condition' => $data['storage_condition'],
             'expiry_date' => $expiry,

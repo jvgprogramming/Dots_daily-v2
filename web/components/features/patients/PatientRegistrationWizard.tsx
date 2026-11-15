@@ -36,6 +36,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { registerPatient, completePatientDraft } from "@/lib/services/patients";
 import { ApiError } from "@/lib/services/api";
+import { useClinicSettings } from "@/lib/hooks/useClinicSettings";
+import { regimenOptionsFrom } from "@/lib/treatment-options";
 import type {
   PatientRegistrationPayload,
   LaboratoryTestEntry,
@@ -65,19 +67,6 @@ const STEPS = [
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
-
-// ─── Regimen options (official DOTS regimens) ───
-const REGIMEN_OPTIONS = [
-  { value: "2HRZE/4HR", label: "2HRZE / 4HR — DS-TB standard (6 mo)" },
-  { value: "2HRZE/10HR", label: "2HRZE / 10HR — extended (12 mo)" },
-  { value: "9H", label: "9H — TB infection, 9 months isoniazid" },
-  { value: "3HP", label: "3HP — TB infection, 3 months HP" },
-  { value: "4R", label: "4R — TB infection, 4 months rifampicin" },
-  { value: "BPaLM", label: "BPaLM — RR/MDR-TB (6 mo)" },
-  { value: "BPaL", label: "BPaL — RR/MDR-TB (6 mo)" },
-  { value: "9-11 mo MDR", label: "9–11 month MDR regimen" },
-  { value: "individualized", label: "Individualized MDR/XDR regimen" },
-];
 
 const SELECT_CLASSES =
   "flex h-11 w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500";
@@ -273,6 +262,12 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
+  // Regimens come from Settings → Treatment protocols (falls back to the built-in list).
+  const clinic = useClinicSettings();
+  const regimenOptions = useMemo(
+    () => regimenOptionsFrom(clinic?.regimens, form.treatment.regimen_type),
+    [clinic, form.treatment.regimen_type]
+  );
 
   const isResume = !!draft;
   const currentStep = STEPS[stepIndex];
@@ -906,7 +901,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                       onChange={(e) => updateSection("treatment", "regimen_type", e.target.value)}
                     >
                       <option value="">Select starting regimen</option>
-                      {REGIMEN_OPTIONS.map((r) => (
+                      {regimenOptions.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
                       ))}
                     </select>

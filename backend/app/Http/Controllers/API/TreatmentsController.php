@@ -6,12 +6,15 @@ use App\Models\FollowUpReschedule;
 use App\Models\MedicationLog;
 use App\Models\TreatmentPlan;
 use App\Support\Adherence;
+use App\Support\AppSettings;
+use App\Support\Audit;
 use App\Support\FollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Treatments hub — the clinical operations area for admins.
@@ -210,7 +213,7 @@ class TreatmentsController extends BaseApiController
             'regimen_type_end' => ['sometimes', 'nullable', 'string', 'max:50'],
             'phase' => ['sometimes', 'nullable', 'string', 'in:intensive,continuation'],
             'status' => ['sometimes', 'nullable', 'string', 'in:active,completed,discontinued,interrupted'],
-            'outcome' => ['sometimes', 'nullable', 'string', 'in:cured,treatment_completed,died,failed,lost_to_followup'],
+            'outcome' => ['sometimes', 'nullable', 'string', Rule::in(AppSettings::list('protocols.outcome_options'))],
             'outcome_date' => ['sometimes', 'nullable', 'date'],
             'outcome_reason' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -225,7 +228,8 @@ class TreatmentsController extends BaseApiController
             'new_lab_tests.*.remarks' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $plan = DB::transaction(function () use ($data, $plan, $request) {
+        $changes = [];
+        $plan = DB::transaction(function () use ($data, $plan, $request, &$changes) {
             $planFields = collect($data)
                 ->only(['regimen_type', 'regimen_type_end', 'phase', 'status', 'outcome', 'outcome_date', 'outcome_reason', 'notes'])
                 ->all();
@@ -238,6 +242,7 @@ class TreatmentsController extends BaseApiController
 
             if (!empty($planFields)) {
                 $plan->update($planFields);
+                $changes += Audit::diff($plan)['changes'] ?? [];
             }
 
             // Outcome recorded → completion date follows the outcome date
@@ -263,6 +268,18 @@ class TreatmentsController extends BaseApiController
         });
 
         $plan->load(['patient.user', 'treatmentPlanMedications']);
+
+        $newLabs = count($data['new_lab_tests'] ?? []);
+        if ($changes !== [] || $newLabs > 0) {
+            $patientName = trim(($plan->patient->first_name ?? '').' '.($plan->patient->last_name ?? '')) ?: ($plan->patient->user?->name ?? 'patient');
+            $action = isset($changes['status']) ? 'treatment.status_changed' : (isset($changes['outcome']) ? 'treatment.outcome_recorded' : 'treatment.updated');
+            $what = $changes !== [] ? implode(', ', array_keys($changes)) : '';
+            $what .= $newLabs > 0 ? ($what !== '' ? ', ' : '')."{$newLabs} new lab test".($newLabs === 1 ? '' : 's') : '';
+            Audit::log($request, $action, "Updated treatment for {$patientName} (#{$plan->patient_id}): {$what}", $plan, array_filter([
+                'changes' => $changes ?: null,
+                'new_lab_tests' => $newLabs ?: null,
+            ]));
+        }
 
         // Return the same record shape the hub uses so the UI can refresh in place
         $today = CarbonImmutable::today();
@@ -335,6 +352,10 @@ class TreatmentsController extends BaseApiController
                 'rescheduled_by' => $request->user()?->id,
             ]);
         });
+
+        Audit::log($request, 'treatment.followup_rescheduled',
+            "Rescheduled follow-up for patient #{$plan->patient_id} from {$reschedule->original_date->toDateString()} to {$reschedule->new_date->toDateString()}",
+            $plan, ['reason' => $reschedule->reason]);
 
         return $this->success(data: [
             'id' => $reschedule->id,
