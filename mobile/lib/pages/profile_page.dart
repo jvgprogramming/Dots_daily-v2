@@ -233,11 +233,81 @@ class ProfilePage extends StatelessWidget {
               ),
           ]),
 
+          const SizedBox(height: 24),
+
+          // Log out
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: auth.loading ? null : () => _confirmLogout(context),
+              icon: auth.loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.logout_rounded),
+              label: Text(auth.loading ? 'Logging out...' : 'Log out'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.destructive,
+                side: BorderSide(
+                  color: AppColors.destructive.withValues(alpha: 0.4),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+
           const SizedBox(height: 32),
         ],
         ),
       ),
     );
+  }
+
+  /// Ask for confirmation, then end the session and return to the login screen.
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(Icons.logout_rounded, color: AppColors.destructive),
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to see your medications and reminders.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.destructive,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    // Grab these before the await: once logout() notifies, this page's
+    // context may be torn down.
+    final auth = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
+
+    await auth.logout();
+
+    // Profile is pushed on top of the tab shell, so the login screen the
+    // shell swaps in would stay hidden underneath. Pop back to it.
+    navigator.popUntil((route) => route.isFirst);
   }
 
   Widget _buildSectionHeader(BuildContext context, IconData icon, String title) {

@@ -197,6 +197,8 @@ class _MainShellState extends State<MainShell> {
     if (!auth.isLoggedIn) {
       // The next sign-in belongs to whoever logs in next, so pull again then.
       _pulledFromBackend = false;
+      // Land the next session on Home rather than whichever tab was open.
+      _currentIndex = 0;
       return const LoginPage();
     }
 
