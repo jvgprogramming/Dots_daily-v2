@@ -48,7 +48,7 @@ void main() {
       expect(meds.alarms, hasLength(1));
       expect(meds.reminder.id, MedicationsProvider.reminderId);
       expect(meds.reminder.enabled, isTrue);
-      expect(meds.reminder.displayTime, '07:00 AM');
+      expect(meds.reminder.displayTime, '09:00 AM');
     });
 
     test('updateReminder edits the time and on/off state in place', () {

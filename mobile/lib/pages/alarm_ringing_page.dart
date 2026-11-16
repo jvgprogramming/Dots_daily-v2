@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/medication.dart';
 import '../providers/medications_provider.dart';
 import '../services/device_lock_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import 'app_lock_page.dart';
 import 'vot/vot_instructions_page.dart';
@@ -143,6 +144,30 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
     await _dismiss(AlarmDismissAction.taken);
   }
 
+  /// One-shot id for a snoozed alarm, kept separate from the daily reminder's
+  /// id so re-ringing in 5 minutes never cancels the standing daily schedule.
+  static const int _snoozeNotificationId = 0x5D2A80;
+
+  /// Rings again in 5 minutes, then closes. The dose can still be taken any
+  /// time today; this is just a short nudge for someone not ready right now.
+  Future<void> _snooze() async {
+    if (!widget.preview) {
+      try {
+        await NotificationService().scheduleNotification(
+          id: _snoozeNotificationId,
+          title: '⏰ Time for your daily dose',
+          body: 'Take your medicine today — preferably before lunch.',
+          scheduledDate: DateTime.now().add(const Duration(minutes: 5)),
+          payload: 'alarm:${MedicationsProvider.reminderId}',
+        );
+      } catch (_) {
+        // If scheduling fails the daily reminder still stands; don't trap the
+        // patient on the ringing screen over it.
+      }
+    }
+    await _dismiss(AlarmDismissAction.snoozed);
+  }
+
   /// Closes the ringing screen (after the lock gate), without logging anything.
   Future<void> _dismiss(AlarmDismissAction action) async {
     // The activity is showWhenLocked, so after the alarm closes the whole app
@@ -209,8 +234,9 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
 
   @override
   Widget build(BuildContext context) {
-    // The alarm cannot be swiped or backed away: the only exits are recording
-    // the dose or snoozing.
+    // The alarm cannot be swiped or backed away by accident, but it never traps
+    // the patient: the exits are taking the dose, snoozing 5 minutes, or
+    // choosing to take it later today (the dose is loggable all day from home).
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -458,9 +484,7 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
                           width: double.infinity,
                           height: 56,
                           child: OutlinedButton.icon(
-                            onPressed: _capturing
-                                ? null
-                                : () => _dismiss(AlarmDismissAction.snoozed),
+                            onPressed: _capturing ? null : _snooze,
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.white,
                               side: BorderSide(
@@ -477,6 +501,25 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Not ready now? The dose can still be taken any time
+                        // today from the home screen — so never trap the alarm.
+                        TextButton(
+                          onPressed: _capturing
+                              ? null
+                              : () => _dismiss(AlarmDismissAction.dismissed),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          child: const Text(
+                            "I'll take it later today",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),

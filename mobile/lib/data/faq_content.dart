@@ -57,16 +57,16 @@ const List<FaqEntry> kFaqEntries = [
     category: 'Your Medicines',
     question: 'When should I take my medicine?',
     answer:
-        'Take all of your TB tablets together once a day, in the morning before '
-        'breakfast, on an empty stomach. Set your reminder time on the Reminder '
-        'tab. Taking them on an empty stomach helps your body absorb the '
-        'medicine properly.',
+        'Take all of your TB tablets together once a day. You can take them any '
+        'time during the day, but preferably before lunch. The important thing '
+        'is to take them every single day. Set your reminder time on the '
+        'Reminder tab so you don\'t forget.',
     keywords: [
       'when',
       'time',
       'morning',
-      'empty stomach',
-      'before breakfast',
+      'before lunch',
+      'daily',
       'schedule',
     ],
   ),

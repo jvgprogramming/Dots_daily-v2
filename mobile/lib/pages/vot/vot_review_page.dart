@@ -141,8 +141,9 @@ class _VotReviewPageState extends State<VotReviewPage> {
       // statusCode 0 = no connection / timeout: worth keeping for later.
       final offline = e.statusCode == 0 || e.statusCode >= 500;
       if (e.statusCode == 409) {
-        _fail('Proof for this dose was already sent. Your nurse will review it.',
-            canQueue: false);
+        // The server's own message is specific — "already submitted", "no
+        // active regimen", etc. Show that rather than guessing it was a repeat.
+        _fail(e.displayMessage, canQueue: false);
       } else {
         _fail(
           offline

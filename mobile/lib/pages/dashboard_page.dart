@@ -91,6 +91,8 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                FadeSlideIn(index: 2, child: _buildTodayDoseCard(context, p, meds)),
+                if (meds.canLogDoses) const SizedBox(height: 16),
                 FadeSlideIn(index: 3, child: _buildNextDoseCard(context, p, meds)),
                 const SizedBox(height: 16),
                 if (meds.isVotEnrolled) ...[
@@ -452,6 +454,202 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // ---------- Next dose ----------
+
+  // ---------- Today's dose (the main action) ----------
+
+  /// The one clear "what do I do today" card: take today's dose, or — once it
+  /// is logged — its current state. The dose can be taken any time during the
+  /// day, so this lives on the home screen, not only on the alarm.
+  Widget _buildTodayDoseCard(
+    BuildContext context,
+    AppPalette p,
+    MedicationsProvider meds,
+  ) {
+    // No regimen assigned yet → nothing to take; keep the home screen clean.
+    if (!meds.canLogDoses) return const SizedBox.shrink();
+
+    if (meds.hasTakenToday) {
+      return _todayDoneCard(p, meds);
+    }
+    return _todayActionCard(context, p, meds);
+  }
+
+  /// Not taken yet: a big primary action. VOT patients record proof; everyone
+  /// else confirms with one tap.
+  Widget _todayActionCard(
+    BuildContext context,
+    AppPalette p,
+    MedicationsProvider meds,
+  ) {
+    final isVot = meds.isVotEnrolled;
+
+    Future<void> onPressed() async {
+      if (isVot) {
+        final sent = await startVotFlow(context);
+        if (sent && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Dose recorded — your nurse will review it.')),
+          );
+        }
+      } else {
+        meds.logDoseOn(DateTime.now(), notes: 'Logged from home');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Nice! Today\'s dose is logged.')),
+          );
+        }
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [p.brandAction, p.primary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        boxShadow: [
+          BoxShadow(
+            color: p.primary.withValues(alpha: 0.30),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel("TODAY'S DOSE", color: _glass(0.8)),
+          const SizedBox(height: 6),
+          const Text(
+            'You haven\'t taken it yet',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isVot
+                ? 'Record yourself taking your medicine — any time today, preferably before lunch.'
+                : 'Take your medicine any time today — preferably before lunch — then tap below.',
+            style: TextStyle(fontSize: 13, height: 1.4, color: _glass(0.85)),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: p.primaryStrong,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: Icon(
+                isVot ? Icons.videocam_rounded : Icons.check_circle_rounded,
+                size: 22,
+              ),
+              label: Text(
+                isVot ? 'Record & take my dose' : 'Mark dose as taken',
+                style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Already taken: confirmation + where it stands (plain log, or VOT review).
+  Widget _todayDoneCard(AppPalette p, MedicationsProvider meds) {
+    final today = DateTime.now();
+    final votStatus = meds.todaysVotStatus;
+
+    IconData icon = Icons.check_circle_rounded;
+    Color tone = p.success;
+    Color toneBg = p.successBg;
+    String title = 'Dose taken today';
+    String subtitle = 'Logged — your clinic can see it. See you tomorrow!';
+
+    if (meds.isDayFlagged(today)) {
+      icon = Icons.flag_rounded;
+      tone = p.warning;
+      toneBg = p.warningBg;
+      title = 'Dose under review';
+      subtitle = 'Your clinic is reviewing today\'s dose.';
+    } else if (votStatus == 'uploading') {
+      icon = Icons.cloud_upload_outlined;
+      tone = p.warning;
+      toneBg = p.warningBg;
+      title = 'Recorded — uploading';
+      subtitle = 'Your recording will reach your nurse once you\'re online.';
+    } else if (votStatus == 'pending') {
+      icon = Icons.hourglass_top_rounded;
+      tone = p.warning;
+      toneBg = p.warningBg;
+      title = 'Waiting for nurse review';
+      subtitle = 'You recorded today\'s dose — your nurse will verify it.';
+    } else if (votStatus == 'verified') {
+      icon = Icons.verified_rounded;
+      title = 'Verified by your nurse';
+      subtitle = 'Today\'s dose is confirmed. Well done!';
+    } else if (votStatus == 'rejected' || votStatus == 'resubmission_required') {
+      icon = Icons.error_outline_rounded;
+      tone = p.danger;
+      toneBg = p.dangerBg;
+      title = 'A new recording is needed';
+      subtitle = 'Your nurse asked for a new recording — see the card below.';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(p),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: toneBg,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+            ),
+            child: Icon(icon, color: tone, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionLabel("TODAY'S DOSE", color: p.textTertiary),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: p.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 12.5, height: 1.35, color: p.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildNextDoseCard(
     BuildContext context,

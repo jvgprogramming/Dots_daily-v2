@@ -8,9 +8,10 @@ import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import 'alarm_demo_page.dart';
 
-/// TB patients take all of their medicines together, once a day, before
-/// breakfast — so instead of a list of alarms this screen simply lets the
-/// patient pick the one time they want to be reminded each day.
+/// TB patients take all of their medicines together, once a day — so instead
+/// of a list of alarms this screen simply lets the patient pick the one time
+/// they want to be reminded each day. The dose can be taken any time that day
+/// (preferably before lunch); the reminder is just the nudge.
 class ReminderPage extends StatefulWidget {
   final ValueChanged<String>? onViewChange;
 
@@ -21,7 +22,7 @@ class ReminderPage extends StatefulWidget {
 }
 
 class _ReminderPageState extends State<ReminderPage> {
-  TimeOfDay _time = const TimeOfDay(hour: 7, minute: 0);
+  TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
   bool _enabled = true;
   bool _saving = false;
   Timer? _clock;
@@ -162,7 +163,7 @@ class _ReminderPageState extends State<ReminderPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text(
-              'Take your medicine before breakfast.',
+              'Take your medicine once a day — preferably before lunch.',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 12.5,
@@ -299,9 +300,10 @@ class _ReminderPageState extends State<ReminderPage> {
     );
   }
 
-  /// TB treatment depends on taking the dose every day, so the reminder is not
+  /// TB treatment depends on taking a dose every day, so the reminder is not
   /// something to switch off — this card explains that rather than offering a
-  /// toggle that would let the alarm be silenced in one tap.
+  /// toggle that would let the alarm be silenced in one tap. The dose itself
+  /// can still be taken any time that day.
   Widget _buildEnabledCard() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -331,13 +333,14 @@ class _ReminderPageState extends State<ReminderPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Every day, before breakfast',
+                  'Every day — your daily dose',
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Your TB medicines must be taken daily, so this reminder '
-                  'always stays on. You can change the time above.',
+                  'always stays on. Take the dose any time that day — '
+                  'preferably before lunch. You can change the time above.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.mutedForeground,
@@ -420,7 +423,7 @@ class _ReminderPageState extends State<ReminderPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Taken at your reminder time, before breakfast.',
+            'Taken once a day, around your reminder time.',
             style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
           ),
           const SizedBox(height: 12),
@@ -569,8 +572,8 @@ class _ReminderPageState extends State<ReminderPage> {
 
     await service.scheduleDailyAlarm(
       id: _notificationId,
-      title: '⏰ Time to take your medicines',
-      body: 'Take your medicine now, before breakfast.',
+      title: '⏰ Time for your daily dose',
+      body: 'Take your medicine today — preferably before lunch.',
       hour: time.hour,
       minute: time.minute,
       payload: 'alarm:${MedicationsProvider.reminderId}',

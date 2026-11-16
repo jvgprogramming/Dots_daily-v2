@@ -84,7 +84,7 @@ class NotificationService {
       const alarmChannel = AndroidNotificationChannel(
         alarmChannelId,
         'Medication Reminders',
-        description: 'Daily reminder to take TB medication before breakfast',
+        description: 'Daily reminder to take your TB medication',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -118,8 +118,7 @@ class NotificationService {
     return const AndroidNotificationDetails(
       alarmChannelId,
       'Medication Reminders',
-      channelDescription:
-          'Daily reminder to take TB medication before breakfast',
+      channelDescription: 'Daily reminder to take your TB medication',
       importance: Importance.max,
       priority: Priority.max,
       category: AndroidNotificationCategory.alarm,

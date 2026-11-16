@@ -50,8 +50,8 @@ class _AlarmDemoPageState extends State<AlarmDemoPage> {
     try {
       await NotificationService().scheduleNotification(
         id: _demoNotificationId,
-        title: '⏰ Time to take your medicines',
-        body: 'Take your medicine now, before breakfast.',
+        title: '⏰ Time for your daily dose',
+        body: 'Take your medicine today — preferably before lunch.',
         scheduledDate: DateTime.now().add(const Duration(seconds: 10)),
         payload: 'alarm:${MedicationsProvider.reminderId}',
       );
@@ -362,6 +362,6 @@ const List<_Step> _steps = [
     Icons.check_circle_rounded,
     '3. Log your dose',
     'Tap "I took my dose" to record it, or "Snooze 5 minutes" if you need a '
-        'little more time before breakfast.',
+        'little more time. You can also take it later that day.',
   ),
 ];

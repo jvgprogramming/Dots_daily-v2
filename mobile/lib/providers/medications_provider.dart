@@ -14,18 +14,19 @@ class MedicationsProvider extends ChangeNotifier {
   final ApiService _api = ApiService.shared;
 
   /// The patient only needs one reminder a day — all TB medicines are taken
-  /// together before breakfast — so alarms are represented by this single,
-  /// fixed entry instead of one alarm per medication.
+  /// together, once daily — so alarms are represented by this single, fixed
+  /// entry instead of one alarm per medication. The dose can be taken any time
+  /// during the day; the reminder just nudges them, preferably before lunch.
   static const String reminderId = 'daily-reminder';
 
   static const Alarm _defaultReminder = Alarm(
     id: reminderId,
     medicationId: '1',
     medicationName: medicineName,
-    time: '07:00',
+    time: '09:00',
     enabled: true,
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    label: 'Before breakfast',
+    label: 'Daily dose',
   );
 
   List<Medication> _medications = [];
@@ -135,7 +136,7 @@ class MedicationsProvider extends ChangeNotifier {
         dosage: medicineDosage,
         frequency: 'Once daily',
         instructions:
-            'Take on an empty stomach, 1 hour before breakfast. Swallow all 4 tablets together.',
+            'Take all 4 tablets together, once a day — any time during the day, preferably before lunch.',
         prescribedBy: 'Dr. Sarah Johnson',
         startDate: '2024-01-01',
         endDate: '2024-07-01',
@@ -171,7 +172,7 @@ class MedicationsProvider extends ChangeNotifier {
             day.year,
             day.month,
             day.day,
-            6 + rng.nextInt(3), // taken before breakfast
+            8 + rng.nextInt(4), // taken through the morning
             rng.nextInt(60),
           ),
           verified: false,
@@ -248,6 +249,23 @@ class MedicationsProvider extends ChangeNotifier {
   /// adherence and could never be backfilled.
   bool isDayTaken(DateTime day) =>
       _doseLogs.any((log) => !log.isMissed && _isSameDay(log.timestamp, day));
+
+  /// Today's recorded dose (the one actually taken, not a `missed` marker), or
+  /// null if the patient hasn't logged one yet today. Drives the home screen's
+  /// "take today's dose" vs "done today" state.
+  DoseLog? get todaysDose {
+    final today = DateTime.now();
+    for (final log in _doseLogs) {
+      if (!log.isMissed && _isSameDay(log.timestamp, today)) return log;
+    }
+    return null;
+  }
+
+  /// Whether today's dose has already been logged.
+  bool get hasTakenToday => todaysDose != null;
+
+  /// The VOT review state of today's dose (same vocabulary as [votStatusOn]).
+  String? get todaysVotStatus => votStatusOn(DateTime.now());
 
   /// A day whose logged dose a nurse flagged as suspicious (held out of
   /// adherence until the clinic clears it).
@@ -498,8 +516,8 @@ class MedicationsProvider extends ChangeNotifier {
       if (!current.enabled) return;
       await service.scheduleDailyAlarm(
         id: reminderNotificationId,
-        title: '⏰ Time to take your medicines',
-        body: 'Take your medicine now, before breakfast.',
+        title: '⏰ Time for your daily dose',
+        body: 'Take your medicine today — preferably before lunch.',
         hour: hour,
         minute: minute,
         payload: 'alarm:$reminderId',
