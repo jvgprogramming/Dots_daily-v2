@@ -1,9 +1,18 @@
 <?php
 
+use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\SlideSessionExpiry;
+use App\Services\Vot\VotException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,16 +23,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
+            'role' => CheckRole::class,
         ]);
 
         // Runs after auth:sanctum has resolved the user (it is a no-op for guests).
         $middleware->api(append: [
-            \App\Http\Middleware\SlideSessionExpiry::class,
+            SlideSessionExpiry::class,
         ]);
 
         $middleware->api(prepend: [
-            \Illuminate\Http\Middleware\HandleCors::class,
+            HandleCors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -31,7 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*'),
         );
 
-        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, Request $request) {
+        $exceptions->render(function (ValidationException $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed.',
@@ -39,35 +48,44 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 422);
         });
 
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, Request $request) {
+        // VOT rule violations carry their own status (403 not enrolled, 409
+        // duplicate proof / already reviewed…) and a message the user can read.
+        $exceptions->render(function (VotException $e, Request $request) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->status);
+        });
+
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated.',
             ], 401);
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Resource not found.',
             ], 404);
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e, Request $request) {
+        $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Forbidden.',
             ], 403);
         });
 
-        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, Request $request) {
+        $exceptions->render(function (TokenMismatchException $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Session expired. Please refresh.',
             ], 419);
         });
 
-        $exceptions->render(function (\TypeError $e, Request $request) {
+        $exceptions->render(function (TypeError $e, Request $request) {
             return response()->json([
                 'success' => false,
                 'message' => 'Internal server error.',

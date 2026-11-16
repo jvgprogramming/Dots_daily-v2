@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'treatment_plan_medication_id',
@@ -17,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'scheduled_time',
     'taken_at',
     'status',
+    'verification_status',
     'dose_quantity',
     'proof_photo',
     'proof_video_path',
@@ -45,16 +48,30 @@ class MedicationLog extends Model
         return $this->belongsTo(User::class, 'flagged_by');
     }
 
-    /** Displayable URL for the stored proof video (null when none). */
+    /** VOT review states that hold a dose out of adherence. */
+    public const HELD_VERIFICATION_STATUSES = ['awaiting_proof', 'rejected', 'resubmission_required'];
+
+    /** Short-lived signed URL for the proof video (null when none). */
     protected function proofVideoUrl(): Attribute
     {
-        return Attribute::get(fn () => ProofMedia::url($this->proof_video_path));
+        return Attribute::get(fn () => ProofMedia::logUrl($this, 'video'));
     }
 
-    /** Displayable URL for the stored proof photo (null when none). */
+    /** Short-lived signed URL for the proof photo (null when none). */
     protected function proofPhotoUrl(): Attribute
     {
-        return Attribute::get(fn () => ProofMedia::url($this->proof_photo));
+        return Attribute::get(fn () => ProofMedia::logUrl($this, 'photo'));
+    }
+
+    /** Every VOT proof attempt for this dose, oldest first. */
+    public function votSubmissions(): HasMany
+    {
+        return $this->hasMany(VotSubmission::class)->orderBy('attempt');
+    }
+
+    public function latestVotSubmission(): HasOne
+    {
+        return $this->hasOne(VotSubmission::class)->latestOfMany('attempt');
     }
 
     public function treatmentPlanMedication(): BelongsTo

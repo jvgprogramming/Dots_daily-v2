@@ -710,6 +710,8 @@ export interface ReportMedicationLog {
   flagged: boolean;
   flag_reason: string | null;
   flagged_by_name: string | null;
+  /** Video-Observed Therapy review state; null for a non-VOT dose. */
+  verification_status: VotDoseStatus | null;
   created_at: string | null;
 }
 
@@ -889,7 +891,8 @@ export type SettingsGroup =
   | "inventory"
   | "notifications"
   | "reports"
-  | "security";
+  | "security"
+  | "vot";
 export type StaffRole = "admin" | "staff";
 export type SettingsModule =
   | "patients"
@@ -1063,3 +1066,127 @@ export interface NavItem {
   icon: string;
   badge?: number;
 }
+
+// ── Video-Observed Therapy ──
+
+/** A dose's VOT review state (medication_logs.verification_status). */
+export type VotDoseStatus =
+  | "awaiting_proof"
+  | "pending"
+  | "verified"
+  | "rejected"
+  | "resubmission_required";
+
+/** One proof attempt's review state. */
+export type VotSubmissionStatus = "pending" | "verified" | "rejected" | "resubmission_requested";
+
+export type VotEnrollmentStatus = "active" | "suspended" | "revoked";
+
+export interface IVotEnrollment {
+  id: number;
+  patient_id: number;
+  status: VotEnrollmentStatus;
+  is_active: boolean;
+  eligible_since: string | null;
+  assigned_nurse_id: number | null;
+  assigned_nurse_name: string | null;
+  granted_by_name: string | null;
+  notes: string | null;
+  status_reason: string | null;
+  status_changed_at: string | null;
+  status_changed_by_name: string | null;
+  updated_at: string | null;
+}
+
+export interface IVotEnrollmentPayload {
+  status: VotEnrollmentStatus;
+  eligible_since?: string | null;
+  assigned_nurse_id?: number | null;
+  notes?: string | null;
+  status_reason?: string | null;
+}
+
+export interface IVotNurse {
+  id: number;
+  name: string;
+  role: StaffRole;
+}
+
+export interface IVotSummary {
+  total_submissions: number;
+  pending: number;
+  verified: number;
+  rejected: number;
+  resubmission_requested: number;
+  enrolled_patients: number;
+}
+
+export interface IVotSubmission {
+  id: number;
+  attempt: number;
+  status: VotSubmissionStatus;
+  media_type: "video" | "photo";
+  media_mime: string | null;
+  media_size: number | null;
+  duration_seconds: number | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by_name: string | null;
+  review_reason: string | null;
+  /** Signed, short-lived link — only on the detail endpoint. */
+  media_url?: string;
+  patient: {
+    id: number;
+    name: string;
+    health_id_number: string | null;
+    assigned_nurse_name: string | null;
+  };
+  treatment: {
+    id: number;
+    plan_name: string | null;
+    regimen_type: string | null;
+    phase: string | null;
+    status: string | null;
+  } | null;
+  dose: {
+    medication_log_id: number;
+    medication_name: string | null;
+    dosage: string | null;
+    dose_quantity: string | null;
+    scheduled_date: string | null;
+    scheduled_time: string | null;
+    taken_at: string | null;
+    dose_status: string | null;
+    verification_status: VotDoseStatus | null;
+  };
+}
+
+export interface IVotSubmissionAttempt {
+  id: number;
+  attempt: number;
+  status: VotSubmissionStatus;
+  media_type: "video" | "photo";
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by_name: string | null;
+  review_reason: string | null;
+}
+
+export interface IVotSubmissionDetail extends IVotSubmission {
+  media_url: string;
+  history: IVotSubmissionAttempt[];
+}
+
+export interface IVotSubmissionFilters {
+  search?: string;
+  patient_id?: number;
+  status?: VotSubmissionStatus;
+  nurse_id?: number;
+  treatment_status?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export type VotReviewAction = "verify" | "reject" | "request-resubmission";

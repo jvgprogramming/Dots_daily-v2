@@ -20,17 +20,20 @@ function useTabs() {
 // ── Root ──
 interface TabsProps {
   defaultValue: string;
+  /** Optional controlled value — pass with onValueChange to drive tabs from outside. */
+  value?: string;
   children: ReactNode;
   className?: string;
   onValueChange?: (value: string) => void;
 }
 
-function Tabs({ defaultValue, children, className, onValueChange }: TabsProps) {
-  const [activeTab, setActiveTab] = useState(defaultValue);
+function Tabs({ defaultValue, value, children, className, onValueChange }: TabsProps) {
+  const [internalTab, setInternalTab] = useState(defaultValue);
+  const activeTab = value ?? internalTab;
 
-  const handleSetActiveTab = (value: string) => {
-    setActiveTab(value);
-    onValueChange?.(value);
+  const handleSetActiveTab = (next: string) => {
+    setInternalTab(next);
+    onValueChange?.(next);
   };
 
   return (

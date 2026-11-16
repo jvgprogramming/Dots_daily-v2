@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Stethoscope,
   Users,
+  Video,
 } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,18 +36,20 @@ import {
   NotificationsSection,
   ReportsSection,
   SecurityPolicySection,
+  VotSettingsSection,
 } from "@/components/features/settings/GroupSections";
 import { ProtocolsSection } from "@/components/features/settings/ProtocolsSection";
 import { UsersSection } from "@/components/features/settings/UsersSection";
 import { SecurityAuditPanels } from "@/components/features/settings/AuditSection";
 
-type SectionKey = "facility" | "users" | "clinical" | "protocols" | "inventory" | "notifications" | "security" | "reports";
+type SectionKey = "facility" | "users" | "clinical" | "protocols" | "vot" | "inventory" | "notifications" | "security" | "reports";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
   { key: "facility", label: "Facility", icon: Building2, description: "Clinic identity, contact details, and default schedule." },
   { key: "users", label: "Users & Roles", icon: Users, description: "Manage staff accounts and module access." },
   { key: "clinical", label: "Clinical Rules", icon: ClipboardList, description: "Late-dose threshold, adherence formula, and risk bands." },
   { key: "protocols", label: "Treatment Protocols", icon: Stethoscope, description: "Regimens, phase lengths, weight-band dosing, and outcomes." },
+  { key: "vot", label: "Video-Observed Therapy", icon: Video, description: "Recording instructions, accepted proof, and upload limits for VOT patients." },
   { key: "inventory", label: "Inventory", icon: Package, description: "Reorder levels, expiry window, and stock deduction." },
   { key: "notifications", label: "Notifications", icon: BellRing, description: "Missed-dose escalation, quiet hours, and message templates." },
   { key: "security", label: "Security & Audit", icon: ShieldCheck, description: "Password and session policy, login activity, and the audit log." },
@@ -204,6 +207,7 @@ export default function SettingsPage() {
               {section === "users" && <UsersSection passwordMin={passwordMin} showToast={showToast} onError={setError} />}
               {section === "clinical" && <ClinicalSection form={formFor("clinical")} />}
               {section === "protocols" && <ProtocolsSection form={formFor("protocols")} />}
+              {section === "vot" && <VotSettingsSection form={formFor("vot")} />}
               {section === "inventory" && <InventorySection form={formFor("inventory")} />}
               {section === "notifications" && <NotificationsSection form={formFor("notifications")} />}
               {section === "security" && (

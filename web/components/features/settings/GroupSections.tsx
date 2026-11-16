@@ -7,6 +7,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { BoundInput, Card, SaveBar, SELECT_CLASSES, SettingField, ToggleRow, type GroupForm } from "./shared";
 
 // ═══ Facility ═══
@@ -323,5 +324,71 @@ export function ReportsSection({ form }: { form: GroupForm }) {
       </div>
       <SaveBar form={form} />
     </Card>
+  );
+}
+
+// ═══ Video-Observed Therapy ═══
+export function VotSettingsSection({ form }: { form: GroupForm }) {
+  const instructionCount = form.str("instructions").split(/\r?\n/).filter((l) => l.trim()).length;
+
+  return (
+    <div className="space-y-6">
+      <Card
+        title="Recording Instructions"
+        description="Shown to the patient before the camera opens. Follow your facility's observation protocol."
+      >
+        <SettingField
+          label="Instructions (one per line)"
+          hint={`${instructionCount} step${instructionCount === 1 ? "" : "s"} · the app numbers them in this order.`}
+          updatedBy={form.entry("instructions")}
+        >
+          <Textarea
+            rows={6}
+            maxLength={2000}
+            value={form.str("instructions")}
+            onChange={(e) => form.set("instructions", e.target.value)}
+          />
+        </SettingField>
+        <SaveBar form={form} />
+      </Card>
+
+      <Card title="Proof Rules" description="What patients may submit, and the upload limits the server enforces.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SettingField label="Accepted proof" updatedBy={form.entry("allowed_media")}>
+            <select
+              className={SELECT_CLASSES}
+              value={form.str("allowed_media")}
+              onChange={(e) => form.set("allowed_media", e.target.value)}
+            >
+              <option value="video,photo">Video or photo</option>
+              <option value="video">Video only</option>
+              <option value="photo">Photo only</option>
+            </select>
+          </SettingField>
+          <div />
+          <SettingField label="Minimum video length (seconds)" updatedBy={form.entry("min_video_seconds")}>
+            <BoundInput form={form} k="min_video_seconds" type="number" min={1} max={60} />
+          </SettingField>
+          <SettingField label="Maximum video length (seconds)" updatedBy={form.entry("max_video_seconds")}>
+            <BoundInput form={form} k="max_video_seconds" type="number" min={10} max={600} />
+          </SettingField>
+          <SettingField label="Maximum video size (MB)" hint="Clips are compressed on the phone first." updatedBy={form.entry("max_video_mb")}>
+            <BoundInput form={form} k="max_video_mb" type="number" min={5} max={200} />
+          </SettingField>
+          <SettingField label="Maximum photo size (MB)" updatedBy={form.entry("max_photo_mb")}>
+            <BoundInput form={form} k="max_photo_mb" type="number" min={1} max={25} />
+          </SettingField>
+        </div>
+        <div className="mt-4">
+          <ToggleRow
+            label="Allow new proof after a rejection"
+            hint="When off, a rejected dose stays rejected and the patient is told to contact their nurse."
+            checked={form.bool("allow_resubmit_after_reject")}
+            onChange={(v) => form.set("allow_resubmit_after_reject", v)}
+          />
+        </div>
+        <SaveBar form={form} />
+      </Card>
+    </div>
   );
 }

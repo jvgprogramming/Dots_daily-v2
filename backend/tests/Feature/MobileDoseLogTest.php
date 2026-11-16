@@ -227,70 +227,36 @@ class MobileDoseLogTest extends TestCase
             ->assertJsonPath('data.logs.0.verified', false);
     }
 
-    public function test_a_dose_can_be_logged_with_a_proof_video(): void
+    public function test_the_plain_dose_log_does_not_store_proof_media(): void
     {
-        Storage::fake('public');
+        // Proof belongs to video-observed therapy (/mobile/vot/submissions);
+        // the plain confirmation ignores any file an old app version sends.
+        Storage::fake('local');
         [$user, $patient] = $this->patientWithRegimen();
         Sanctum::actingAs($user);
 
-        $response = $this->post('/api/v1/mobile/dose-logs', [
+        $this->post('/api/v1/mobile/dose-logs', [
             'scheduled_date' => now()->toDateString(),
             'scheduled_time' => '07:00',
-            'taken_at' => now()->setTime(7, 5)->toIso8601String(),
             'proof_video' => UploadedFile::fake()->create('proof.mp4', 1200, 'video/mp4'),
-        ], ['Accept' => 'application/json']);
-
-        $response->assertOk()
-            ->assertJsonPath('data.has_video', true)
-            ->assertJsonPath('data.proof_video_url', fn ($url) => $url !== null);
-
-        $log = MedicationLog::where('patient_id', $patient->id)->sole();
-        $this->assertNotNull($log->proof_video_path);
-        $this->assertSame('video/mp4', $log->proof_video_mime);
-        Storage::disk('public')->assertExists($log->proof_video_path);
-    }
-
-    public function test_a_non_video_proof_is_rejected(): void
-    {
-        [$user] = $this->patientWithRegimen();
-        Sanctum::actingAs($user);
-
-        $this->post('/api/v1/mobile/dose-logs', [
-            'scheduled_date' => now()->toDateString(),
-            'scheduled_time' => '07:00',
-            'proof_video' => UploadedFile::fake()->create('not-a-video.pdf', 50, 'application/pdf'),
         ], ['Accept' => 'application/json'])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('proof_video');
+            ->assertOk()
+            ->assertJsonPath('data.has_video', false)
+            ->assertJsonPath('data.verification_status', null);
+
+        $this->assertNull(MedicationLog::where('patient_id', $patient->id)->sole()->proof_video_path);
     }
 
-    public function test_relogging_the_day_without_a_video_keeps_the_existing_one(): void
+    public function test_a_vot_patients_plain_log_waits_for_proof(): void
     {
-        Storage::fake('public');
         [$user, $patient] = $this->patientWithRegimen();
+        $patient->votEnrollment()->create(['status' => 'active']);
         Sanctum::actingAs($user);
 
-        // First call attaches a video.
-        $this->post('/api/v1/mobile/dose-logs', [
-            'scheduled_date' => now()->toDateString(),
-            'scheduled_time' => '07:00',
-            'proof_video' => UploadedFile::fake()->create('proof.mp4', 800, 'video/mp4'),
-        ], ['Accept' => 'application/json'])->assertOk();
-
-        $storedPath = MedicationLog::where('patient_id', $patient->id)->sole()->proof_video_path;
-
-        // A later JSON-only retry/backfill for the same day must not wipe it.
         $this->postJson('/api/v1/mobile/dose-logs', [
             'scheduled_date' => now()->toDateString(),
             'scheduled_time' => '07:00',
-            'notes' => 'retry without video',
-        ])->assertOk();
-
-        $this->assertSame(
-            $storedPath,
-            MedicationLog::where('patient_id', $patient->id)->sole()->proof_video_path,
-            'A videoless re-log must keep the proof already stored for that day.',
-        );
+        ])->assertOk()->assertJsonPath('data.verification_status', 'awaiting_proof');
     }
 
     public function test_a_dose_cannot_be_logged_against_another_patients_medicine(): void

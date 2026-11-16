@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -101,6 +102,17 @@ class Patient extends Model
     public function isVisibleTo(User $user): bool
     {
         return $user->isAdmin() || $user->isStaff();
+    }
+
+    public function votEnrollment(): HasOne
+    {
+        return $this->hasOne(VotEnrollment::class);
+    }
+
+    /** Whether this patient may currently submit VOT proof. */
+    public function isVotActive(): bool
+    {
+        return $this->votEnrollment?->isActive() ?? false;
     }
 
     public function medicationLogs(): HasMany

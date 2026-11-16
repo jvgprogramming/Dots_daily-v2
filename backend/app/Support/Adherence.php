@@ -242,15 +242,22 @@ final class Adherence
             ->whereIn('patient_id', $ids)
             ->whereDate('scheduled_date', '>=', $from->toDateString())
             ->whereDate('scheduled_date', '<=', $to->toDateString())
-            ->get(['patient_id', 'scheduled_date', 'status', 'flagged_at']);
+            ->get(['patient_id', 'scheduled_date', 'status', 'flagged_at', 'verification_status']);
 
         $sets = [];
         foreach ($rows as $row) {
             $patientId = (int) $row->patient_id;
             $date = $row->scheduled_date->toDateString();
-            // A flagged dose is held out of adherence until the flag is cleared,
-            // so it is treated as a non-counting day rather than a taken one.
-            $status = $row->flagged_at !== null ? 'flagged' : $row->status;
+            // Held out of adherence (a non-counting day, not a taken one):
+            //  - a dose a nurse flagged, until the flag is cleared;
+            //  - a VOT dose still awaiting proof, rejected, or sent back for
+            //    new proof. A VOT dose pending review *does* count — patients
+            //    are never penalised for a nurse not having reviewed it yet.
+            $status = match (true) {
+                $row->flagged_at !== null => 'flagged',
+                in_array($row->verification_status, MedicationLog::HELD_VERIFICATION_STATUSES, true) => 'unverified',
+                default => $row->status,
+            };
 
             if (! isset($sets[$patientId][$date]) || self::countsAsTaken($status)) {
                 $sets[$patientId][$date] = $status;

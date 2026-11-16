@@ -3,12 +3,17 @@
 /**
  * Reports & Analytics — medication adherence reporting for admins.
  *
- * Read-only aggregation of the live medication logs that patients record
- * from the mobile app (dose confirmations + proof photos). No separate
- * reporting storage — everything comes from the MedicationLog table.
+ * Two tabs:
+ *  - Adherence: read-only aggregation of the live medication logs patients
+ *    record from the mobile app. Everything comes from the MedicationLog table.
+ *  - Video-Observed Therapy: the nurse's proof review queue (VotSection).
+ *
+ * `?tab=vot&submission=ID` (the link in a "new proof" notification) opens the
+ * VOT tab with that submission's review already showing.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import {
   Card,
@@ -26,6 +31,9 @@ import { Alert } from "@/components/ui/alert";
 import { Table } from "@/components/ui/table";
 import { Modal } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VotSection } from "@/components/features/reports/vot/VotSection";
+import { VotDoseBadge } from "@/components/features/reports/vot/VotStatusBadge";
 import {
   Bar,
   CartesianGrid,
@@ -45,23 +53,17 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Flag,
   ImageOff,
   Loader2,
   Pill,
   PlayCircle,
   RefreshCw,
   Search,
-  Undo2,
   Users,
   X,
   XCircle,
 } from "lucide-react";
-import {
-  flagMedicationLog,
-  getMedicationReports,
-  unflagMedicationLog,
-} from "@/lib/services/dashboard";
+import { getMedicationReports } from "@/lib/services/dashboard";
 import { getPatientList } from "@/lib/services/patients";
 import type {
   PatientSelectOption,
@@ -341,6 +343,21 @@ const TrendTooltip = ({
 };
 
 export default function ReportsPage() {
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab") === "vot" ? "vot" : "adherence";
+  const urlSubmission = Number(searchParams.get("submission")) || null;
+  const [activeTab, setActiveTab] = useState(urlTab);
+
+  // A notification link can land here while the page is already open: follow
+  // the URL when it changes. (Adjusting state during render, React's
+  // recommended alternative to syncing it in an effect.)
+  const urlKey = `${urlTab}:${urlSubmission ?? ""}`;
+  const [seenUrlKey, setSeenUrlKey] = useState(urlKey);
+  if (seenUrlKey !== urlKey) {
+    setSeenUrlKey(urlKey);
+    setActiveTab(urlTab);
+  }
+
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -380,44 +397,6 @@ export default function ReportsPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     loadReports();
-  };
-
-  // ── Dose verification (the admin half of the loop) ──
-  // Doses are "logged" and count by default. A nurse reviews the proof video and
-  // flags one that looks suspicious; a flagged dose is held out of adherence
-  // until the flag is cleared. This is review-by-exception, not verify-everything.
-  const [flaggingLogId, setFlaggingLogId] = useState<number | null>(null);
-  const [flagReason, setFlagReason] = useState("");
-
-  const toggleFlag = async (log: ReportMedicationLog, reason?: string) => {
-    // Update the row in place — a reload would re-fetch the whole report and
-    // flash skeletons over perfectly good data.
-    const apply = (updated: ReportMedicationLog) => {
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              recent_logs: prev.recent_logs.map((l) => (l.id === updated.id ? updated : l)),
-              proof_uploads: prev.proof_uploads.map((l) => (l.id === updated.id ? updated : l)),
-            }
-          : prev
-      );
-      setPreviewLog((prev) => (prev && prev.id === updated.id ? updated : prev));
-    };
-
-    setFlaggingLogId(log.id);
-    setError("");
-    try {
-      const res = log.flagged
-        ? await unflagMedicationLog(log.id)
-        : await flagMedicationLog(log.id, reason?.trim() || undefined);
-      if (res.data) apply(res.data);
-      setFlagReason("");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update the flag");
-    } finally {
-      setFlaggingLogId(null);
-    }
   };
 
   const applyPreset = (days: number) => {
@@ -518,17 +497,30 @@ export default function ReportsPage() {
             mobile app.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        {activeTab === "adherence" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        )}
       </div>
 
+      <Tabs defaultValue={urlTab} value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="adherence">Adherence</TabsTrigger>
+          <TabsTrigger value="vot">Video-Observed Therapy</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="vot">
+          <VotSection initialSubmissionId={urlTab === "vot" ? urlSubmission : null} />
+        </TabsContent>
+
+        <TabsContent value="adherence" className="space-y-8">
       {error && (
         <Alert variant="danger" title="Could not load reports">
           {error}
@@ -882,50 +874,17 @@ export default function ReportsPage() {
                 {
                   key: "review",
                   header: "Review",
-                  cell: (l) => (
-                    <div className="flex items-center justify-between gap-2">
-                      {l.flagged ? (
-                        <Badge
-                          variant="danger"
-                          size="sm"
-                          title={l.flag_reason ?? undefined}
-                        >
-                          <Flag className="h-3 w-3" />
-                          Flagged{l.flagged_by_name ? ` · ${l.flagged_by_name}` : ""}
-                        </Badge>
-                      ) : (
-                        <Badge variant="success" size="sm">
-                          <Check className="h-3 w-3" />
-                          Logged
-                        </Badge>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={flaggingLogId === l.id}
-                        onClick={() =>
-                          l.flagged ? toggleFlag(l) : setPreviewLog(l)
-                        }
-                        title={
-                          l.flagged
-                            ? "Clear this flag"
-                            : "Review the proof and flag if suspicious"
-                        }
-                      >
-                        {l.flagged ? (
-                          <>
-                            <Undo2 className="h-3.5 w-3.5" />
-                            Clear
-                          </>
-                        ) : (
-                          <>
-                            <Flag className="h-3.5 w-3.5" />
-                            Review
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ),
+                  // VOT doses carry their proof-review state; decisions are made
+                  // in the Video-Observed Therapy tab. Other doses are simply logged.
+                  cell: (l) =>
+                    l.verification_status ? (
+                      <VotDoseBadge status={l.verification_status} />
+                    ) : (
+                      <Badge variant={l.verified ? "success" : "default"} size="sm">
+                        <Check className="h-3 w-3" />
+                        {l.verified ? "Verified" : "Logged"}
+                      </Badge>
+                    ),
                 },
                 {
                   key: "taken_at",
@@ -1003,7 +962,7 @@ export default function ReportsPage() {
           <div>
             <CardTitle>Proof Uploads</CardTitle>
             <CardDescription>
-              Photo evidence attached to dose confirmations
+              Photo and video evidence attached to dose confirmations
             </CardDescription>
           </div>
           {!loading && proofUploads.length > 0 && (
@@ -1052,10 +1011,9 @@ export default function ReportsPage() {
                         Video
                       </span>
                     )}
-                    {log.flagged && (
-                      <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-[10px] font-medium text-white">
-                        <Flag className="h-3 w-3" />
-                        Flagged
+                    {log.verification_status && (
+                      <span className="absolute right-2 top-2">
+                        <VotDoseBadge status={log.verification_status} />
                       </span>
                     )}
                   </div>
@@ -1159,13 +1117,13 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
+        </TabsContent>
+      </Tabs>
+
       {/* ── Proof preview modal ── */}
       <Modal
         open={previewLog !== null}
-        onClose={() => {
-          setPreviewLog(null);
-          setFlagReason("");
-        }}
+        onClose={() => setPreviewLog(null)}
         title={previewLog ? `Proof — ${previewLog.patient_name}` : undefined}
         description={
           previewLog
@@ -1201,16 +1159,8 @@ export default function ReportsPage() {
 
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <StatusBadge status={previewLog.status} />
-              {previewLog.flagged ? (
-                <Badge variant="danger" size="sm">
-                  <Flag className="h-3 w-3" />
-                  Flagged{previewLog.flagged_by_name ? ` · ${previewLog.flagged_by_name}` : ""}
-                </Badge>
-              ) : (
-                <Badge variant="success" size="sm">
-                  <Check className="h-3 w-3" />
-                  Logged
-                </Badge>
+              {previewLog.verification_status && (
+                <VotDoseBadge status={previewLog.verification_status} />
               )}
               {previewLog.taken_at && (
                 <span className="text-text-secondary">
@@ -1230,47 +1180,21 @@ export default function ReportsPage() {
               </p>
             )}
 
-            {/* Review by exception: flag a suspicious clip, or clear a flag. */}
-            {previewLog.flagged ? (
-              <div className="space-y-2 rounded-[12px] border border-danger/20 bg-danger-bg px-4 py-3">
-                <p className="text-sm text-danger-text">
-                  {previewLog.flag_reason
-                    ? `Flagged: ${previewLog.flag_reason}`
-                    : "This dose is flagged and is not counting toward adherence."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={flaggingLogId === previewLog.id}
-                  onClick={() => toggleFlag(previewLog)}
+            {previewLog.verification_status && (
+              <p className="rounded-[10px] border border-border-light px-4 py-3 text-sm text-text-secondary">
+                This is a video-observed therapy dose. Verify or reject its proof in the{" "}
+                <button
+                  type="button"
+                  className="font-medium text-primary-700 hover:underline"
+                  onClick={() => {
+                    setPreviewLog(null);
+                    setActiveTab("vot");
+                  }}
                 >
-                  <Undo2 className="h-4 w-4" />
-                  Clear flag — count this dose again
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2 rounded-[12px] border border-border-light px-4 py-3">
-                <label className="text-xs font-medium text-text-secondary">
-                  Flag this dose if the video looks wrong (optional reason)
-                </label>
-                <textarea
-                  value={flagReason}
-                  onChange={(e) => setFlagReason(e.target.value)}
-                  rows={2}
-                  maxLength={500}
-                  placeholder="e.g. Face not visible / tablets not swallowed"
-                  className="w-full rounded-[10px] border border-border-light bg-bg-subtle px-3 py-2 text-sm outline-none focus:border-primary"
-                />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={flaggingLogId === previewLog.id}
-                  onClick={() => toggleFlag(previewLog, flagReason)}
-                >
-                  <Flag className="h-4 w-4" />
-                  Flag as suspicious
-                </Button>
-              </div>
+                  Video-Observed Therapy
+                </button>{" "}
+                tab.
+              </p>
             )}
           </div>
         )}

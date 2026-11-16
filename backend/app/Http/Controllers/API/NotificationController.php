@@ -25,7 +25,10 @@ class NotificationController extends BaseApiController
         $query = NotificationRecipient::query()
             ->where('user_id', $userId)
             ->with('notification')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')
+            // Several notifications can land in the same second (a proof
+            // submitted, then reviewed) — the notification id keeps "newest first" exact.
+            ->orderByDesc('notification_id');
 
         if (! empty($data['unread'])) {
             $query->where('is_read', false);

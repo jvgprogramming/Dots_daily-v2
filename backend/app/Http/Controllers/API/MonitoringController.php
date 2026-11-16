@@ -11,8 +11,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Patient-centric treatment monitoring data for the admin monitoring calendar.
@@ -277,7 +275,7 @@ class MonitoringController extends BaseApiController
             'taken_at' => $log->taken_at?->toIso8601String(),
             'status' => $log->status,
             'proof_status' => ($log->proof_photo || $log->proof_video_path) ? 'provided' : 'none',
-            'proof_url' => $log->proof_photo ? $this->proofUrl($log->proof_photo) : null,
+            'proof_url' => $log->proof_photo_url,
             'proof_video_url' => $log->proof_video_url,
             'has_video' => $log->proof_video_path !== null,
             'patient_notes' => $log->notes,
@@ -285,25 +283,8 @@ class MonitoringController extends BaseApiController
             'observed_by_name' => $log->observedBy?->name,
             'flagged' => $log->flagged,
             'flag_reason' => $log->flag_reason,
+            'verification_status' => $log->verification_status,
             'flagged_by_name' => $log->flaggedBy?->name,
         ];
-    }
-
-    /**
-     * Resolve a proof photo path to a displayable URL (same rules as ReportsController).
-     */
-    private function proofUrl(?string $path): ?string
-    {
-        if (! $path) {
-            return null;
-        }
-        if (Str::startsWith($path, ['http://', 'https://'])) {
-            return $path;
-        }
-        if (Str::startsWith($path, 'storage/')) {
-            return rtrim(config('app.url'), '/').'/'.ltrim($path, '/');
-        }
-
-        return Storage::disk('public')->url(ltrim($path, '/'));
     }
 }

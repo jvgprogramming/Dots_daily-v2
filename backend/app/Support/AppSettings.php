@@ -109,6 +109,22 @@ final class AppSettings
             'notifications.missed_dose_template' => '{patient} has missed {count} consecutive doses (last expected {date}). Please follow up.',
             'notifications.followup_template' => 'Reminder: {patient} has a follow-up visit on {date}.',
 
+            // ── Video-Observed Therapy ──
+            // One instruction per line, shown to the patient before recording.
+            'vot.instructions' => implode("\n", [
+                "Say your full name and today's date.",
+                'Show your prescribed medicine or its packaging to the camera.',
+                'Keep your face, hands and medicine in view the whole time.',
+                'Put the medicine in your mouth and swallow it with water.',
+                'Open your mouth and lift your tongue toward the camera.',
+            ]),
+            'vot.allowed_media' => 'video,photo',                         // video | photo | video,photo
+            'vot.min_video_seconds' => '5',
+            'vot.max_video_seconds' => '120',
+            'vot.max_video_mb' => '64',
+            'vot.max_photo_mb' => '10',
+            'vot.allow_resubmit_after_reject' => '1',                     // may a rejected dose get new proof?
+
             // ── Reports ──
             'reports.default_range_days' => '30',
             'reports.default_filter' => 'all',                            // all | taken | late | missed | unrecorded

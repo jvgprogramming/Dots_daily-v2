@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPatient } from "@/lib/services/patients";
+import { VotEligibilityPanel } from "./VotEligibilityPanel";
 import type {
   PatientDetailResponse,
   LaboratoryTestRecord,
@@ -224,6 +225,9 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
                 </Button>
               </div>
             )}
+
+            {/* ── Video-Observed Therapy eligibility ── */}
+            {!isDraft && <VotEligibilityPanel patientId={p.id} hasMobileAccount={Boolean(data?.user)} />}
 
             {/* ── Patient Information ── */}
             <Group title="Patient Information">

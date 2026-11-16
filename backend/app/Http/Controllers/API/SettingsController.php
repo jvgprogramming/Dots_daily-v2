@@ -175,6 +175,14 @@ class SettingsController extends BaseApiController
                 'session_timeout_minutes' => ['integer', 'min:0', 'max:1440'],
                 'max_login_attempts' => ['integer', 'min:3', 'max:20'],
             ],
+            'vot' => [
+                'instructions' => ['required', 'max:2000'],
+                'allowed_media' => [Rule::in(['video', 'photo', 'video,photo', 'photo,video'])],
+                'min_video_seconds' => ['integer', 'min:1', 'max:60'],
+                'max_video_seconds' => ['integer', 'min:10', 'max:600'],
+                'max_video_mb' => ['integer', 'min:5', 'max:200'],
+                'max_photo_mb' => ['integer', 'min:1', 'max:25'],
+            ],
             'protocols' => [
                 'regimens' => ['json'],
                 'weight_bands' => ['json'],
@@ -188,6 +196,10 @@ class SettingsController extends BaseApiController
             if ($group === 'clinical' && isset($clean['risk_watch_below'], $clean['risk_high_below'])
                 && (int) $clean['risk_high_below'] > (int) $clean['risk_watch_below']) {
                 $v->errors()->add('risk_high_below', 'High-risk threshold must be at or below the watch threshold.');
+            }
+            if ($group === 'vot' && isset($clean['min_video_seconds'], $clean['max_video_seconds'])
+                && (int) $clean['min_video_seconds'] >= (int) $clean['max_video_seconds']) {
+                $v->errors()->add('max_video_seconds', 'The maximum length must be longer than the minimum.');
             }
             if ($group === 'protocols') {
                 foreach (json_decode($clean['regimens'] ?? '[]', true) ?: [] as $i => $r) {

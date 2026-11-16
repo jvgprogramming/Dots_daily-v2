@@ -5,16 +5,13 @@ namespace App\Http\Controllers\API;
 use App\Http\Requests\StoreDoseLogRequest;
 use App\Models\MedicationLog;
 use App\Models\Patient;
-use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
+use App\Services\Medication\DoseLogService;
 use App\Support\Adherence;
-use App\Support\AppSettings;
 use App\Support\FollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Patient-facing dose logging for the Flutter app.
@@ -27,14 +24,16 @@ use Illuminate\Support\Facades\Storage;
  *   TreatmentPlan + TreatmentPlanMedication → the patient's active regimen
  *   MedicationLog                           → one row per daily intake
  *
- * Verification: `medication_logs` has no "verified" column. A row counts as
- * verified once a DOTS observer confirmed it (`observed_by`), which is exactly
- * the green/pending split the app's calendar draws.
+ * Proof: a patient enrolled in Video-Observed Therapy sends proof through
+ * /mobile/vot/submissions (MobileVotController). This endpoint is the plain
+ * "I took it" confirmation everyone else uses — it carries no media.
  */
 class MobileDoseLogController extends BaseApiController
 {
     /** Safety cap on the history payload the calendar hydrates from. */
     private const MAX_HISTORY = 400;
+
+    public function __construct(private readonly DoseLogService $doseLogs) {}
 
     /**
      * The patient's active regimen: plan, prescribed medicines and which one the
@@ -51,8 +50,8 @@ class MobileDoseLogController extends BaseApiController
             return $this->error('This account is not linked to a patient profile.', 403);
         }
 
-        $plan = $this->activePlan($patient);
-        $medications = $this->regimenMedications($plan);
+        $plan = $this->doseLogs->activePlan($patient);
+        $medications = $this->doseLogs->regimenMedications($plan);
         $primary = $medications->first();
 
         // Full-course adherence (plan start → scheduled end, future days
@@ -105,6 +104,9 @@ class MobileDoseLogController extends BaseApiController
                     : null,
                 'next_follow_up' => $followUp['date'] ?? null,
                 'next_follow_up_status' => $followUp['status'] ?? 'none',
+                // Whether doses go through Video-Observed Therapy (proof upload)
+                // instead of the plain confirmation. Details: GET /mobile/vot.
+                'vot_enrolled' => $patient->isVotActive(),
             ],
             message: $primary
                 ? 'Regimen retrieved successfully.'
@@ -133,7 +135,7 @@ class MobileDoseLogController extends BaseApiController
 
         $query = MedicationLog::query()
             ->where('patient_id', $patient->id)
-            ->with('treatmentPlanMedication.medication')
+            ->with(['treatmentPlanMedication.medication', 'latestVotSubmission'])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id');
 
@@ -172,13 +174,10 @@ class MobileDoseLogController extends BaseApiController
 
         $data = $request->validated();
 
-        $medications = $this->regimenMedications($this->activePlan($patient));
-
-        // Never trust the id from the phone: it must be one of this patient's
-        // currently prescribed medicines.
-        $pivot = isset($data['treatment_plan_medication_id'])
-            ? $medications->firstWhere('id', (int) $data['treatment_plan_medication_id'])
-            : $medications->first();
+        $pivot = $this->doseLogs->resolvePivot(
+            $patient,
+            isset($data['treatment_plan_medication_id']) ? (int) $data['treatment_plan_medication_id'] : null,
+        );
 
         if (! $pivot) {
             return $this->error(
@@ -188,57 +187,22 @@ class MobileDoseLogController extends BaseApiController
         }
 
         $scheduledDate = CarbonImmutable::parse($data['scheduled_date'], config('app.timezone'));
-        $takenAt = isset($data['taken_at'])
-            ? CarbonImmutable::parse($data['taken_at'])->setTimezone(config('app.timezone'))
-            : CarbonImmutable::now();
+        $log = $this->doseLogs->fillLog($patient, $pivot, $scheduledDate, $data);
 
-        // Matched with whereDate rather than a raw `=` comparison: the model's
-        // `date` cast writes a full datetime, which a DATE column truncates on
-        // MySQL but quietly keeps on SQLite — so a plain string match would miss
-        // and try to insert a duplicate of that day's row.
-        $log = MedicationLog::query()
-            ->where('patient_id', $patient->id)
-            ->where('treatment_plan_medication_id', $pivot->id)
-            ->whereDate('scheduled_date', $scheduledDate->toDateString())
-            ->first();
-
-        $log ??= new MedicationLog([
-            'patient_id' => $patient->id,
-            'treatment_plan_medication_id' => $pivot->id,
-        ]);
-
-        $log->fill([
-            'scheduled_date' => $scheduledDate->toDateString(),
-            'scheduled_time' => $data['scheduled_time'].':00',
-            'taken_at' => $takenAt,
-            'status' => $data['status']
-                ?? $this->statusFor($takenAt, $scheduledDate, $data['scheduled_time']),
-            'dose_quantity' => $data['dose_quantity'] ?? null,
-            'notes' => $data['notes'] ?? null,
-        ]);
-
-        // Attach a recorded proof clip when one is sent. Only touched when a file
-        // is present, so re-logging the same day via JSON (offline backfill,
-        // retry) never clears a video already stored on an earlier call.
-        if ($request->hasFile('proof_video')) {
-            $file = $request->file('proof_video');
-            $previousPath = $log->proof_video_path;
-
-            $log->proof_video_path = $file->store('proofs/videos/'.$patient->id, 'public');
-            // Content-detected, not the client-claimed type — matches validation.
-            $log->proof_video_mime = $file->getMimeType();
-            $log->proof_video_size = $file->getSize();
-
-            // Replace, don't orphan: drop the old clip once the new one is stored.
-            if ($previousPath && $previousPath !== $log->proof_video_path) {
-                Storage::disk('public')->delete($previousPath);
-            }
+        // A VOT patient's dose needs proof. Logged without it (e.g. synced
+        // from the offline queue), it waits as `awaiting_proof` — held out of
+        // adherence until the proof arrives. Never overwrite a state the proof
+        // flow already set, and a missed/skipped dose has nothing to prove.
+        if ($patient->isVotActive()
+            && in_array($log->status, ['taken', 'late'], true)
+            && $log->verification_status === null) {
+            $log->verification_status = 'awaiting_proof';
         }
 
         $log->save();
 
         return $this->success(
-            data: $this->formatLog($log->load('treatmentPlanMedication.medication')),
+            data: $this->formatLog($log->load(['treatmentPlanMedication.medication', 'latestVotSubmission'])),
             message: 'Dose logged successfully.',
         );
     }
@@ -246,50 +210,6 @@ class MobileDoseLogController extends BaseApiController
     // ─────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * The patient's current regimen — active plan first, else the latest one.
-     */
-    private function activePlan(Patient $patient): ?TreatmentPlan
-    {
-        return $patient->treatmentPlans()
-            ->with('treatmentPlanMedications.medication')
-            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
-            ->orderByDesc('start_date')
-            ->first();
-    }
-
-    /** @return Collection<int, TreatmentPlanMedication> */
-    private function regimenMedications(?TreatmentPlan $plan): Collection
-    {
-        if (! $plan) {
-            return collect();
-        }
-
-        // Stable order: the first prescribed medicine is the one a combined
-        // daily intake is logged against.
-        return $plan->treatmentPlanMedications->sortBy('id')->values();
-    }
-
-    /**
-     * A dose is late once it lands more than the grace period (Settings →
-     * Clinical rules → late-dose threshold) after the scheduled time;
-     * otherwise it is simply taken.
-     */
-    private function statusFor(
-        CarbonImmutable $takenAt,
-        CarbonImmutable $scheduledDate,
-        string $scheduledTime,
-    ): string {
-        $scheduled = CarbonImmutable::parse(
-            $scheduledDate->toDateString().' '.$scheduledTime,
-            config('app.timezone'),
-        );
-
-        return $takenAt->greaterThan($scheduled->addMinutes(AppSettings::int('clinical.late_dose_threshold_minutes', 120)))
-            ? 'late'
-            : 'taken';
-    }
 
     private function formatLog(MedicationLog $log): array
     {
@@ -304,14 +224,20 @@ class MobileDoseLogController extends BaseApiController
             'dose_quantity' => $log->dose_quantity,
             'notes' => $log->notes,
             'medication_name' => $medication?->name,
-            // Logged-by-default: a recorded dose counts. A nurse flag holds it
-            // out for follow-up; otherwise it is simply logged.
             'verified' => $log->observed_by !== null,
             'flagged' => $log->flagged,
             'flag_reason' => $log->flag_reason,
-            // The patient's own recorded proof, so the app can show it back.
+            // VOT review state (null for a non-VOT dose): awaiting_proof,
+            // pending, verified, rejected or resubmission_required.
+            'verification_status' => $log->verification_status,
+            'review_reason' => $log->latestVotSubmission?->review_reason,
+            'proof_attempts' => $log->latestVotSubmission?->attempt ?? 0,
+            // The patient's own proof, so the app can show it back. Signed and
+            // short-lived, like every proof link.
             'has_video' => $log->proof_video_path !== null,
             'proof_video_url' => $log->proof_video_url,
+            'has_photo' => $log->proof_photo !== null,
+            'proof_photo_url' => $log->proof_photo_url,
         ];
     }
 

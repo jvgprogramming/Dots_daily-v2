@@ -10,8 +10,6 @@ use App\Support\Adherence;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Admin medication adherence reports.
@@ -315,7 +313,7 @@ class ReportsController extends BaseApiController
             'taken_at' => $log->taken_at?->toIso8601String(),
             'dose_quantity' => $log->dose_quantity,
             'proof_photo' => $log->proof_photo,
-            'proof_url' => $this->proofUrl($log->proof_photo),
+            'proof_url' => $log->proof_photo_url,
             'proof_video_url' => $log->proof_video_url,
             'has_video' => $log->proof_video_path !== null,
             'notes' => $log->notes,
@@ -324,6 +322,7 @@ class ReportsController extends BaseApiController
             // Logged-by-default review: a dose counts unless a nurse flags it.
             'flagged' => $log->flagged,
             'flag_reason' => $log->flag_reason,
+            'verification_status' => $log->verification_status,
             'flagged_by_name' => $log->flaggedBy?->name,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
@@ -357,24 +356,5 @@ class ReportsController extends BaseApiController
         }
 
         return $unrecorded;
-    }
-
-    /**
-     * Resolve proof photo to a displayable URL.
-     * Accepts full URLs (pass through) or stored paths on the public disk.
-     */
-    private function proofUrl(?string $path): ?string
-    {
-        if (! $path) {
-            return null;
-        }
-        if (Str::startsWith($path, ['http://', 'https://'])) {
-            return $path;
-        }
-        if (Str::startsWith($path, 'storage/')) {
-            return rtrim(config('app.url'), '/').'/'.ltrim($path, '/');
-        }
-
-        return Storage::disk('public')->url(ltrim($path, '/'));
     }
 }

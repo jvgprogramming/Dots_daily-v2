@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Models\Medication;
 use App\Models\MedicationLog;
-use App\Models\MedicationStockMovement;
-use App\Support\AppSettings;
+use App\Services\Medication\DoseStockService;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,9 +24,20 @@ use Illuminate\Support\Facades\DB;
  */
 class DoseVerificationController extends BaseApiController
 {
+    public function __construct(private readonly DoseStockService $stock) {}
+
     public function verify(Request $request, MedicationLog $log): JsonResponse
     {
         $this->ensureVisible($request, $log);
+
+        // A VOT dose is verified by reviewing its proof (Reports → VOT), which
+        // also keeps the submission's review record; don't bypass that here.
+        if ($log->verification_status !== null) {
+            return $this->error(
+                'This is a video-observed therapy dose. Review its proof under Reports → Video-Observed Therapy.',
+                422,
+            );
+        }
 
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -49,7 +58,7 @@ class DoseVerificationController extends BaseApiController
             ])->save();
 
             // First verification only — re-verifying must not deduct twice.
-            return $wasVerified ? null : $this->deductStock($request, $log);
+            return $wasVerified ? null : $this->stock->deductForVerifiedDose($log, $request->user());
         });
 
         $this->audit($request, $log, 'dose.verified', 'Verified dose', $deducted ? ['stock_deducted' => $deducted] : []);
@@ -63,6 +72,10 @@ class DoseVerificationController extends BaseApiController
     public function unverify(Request $request, MedicationLog $log): JsonResponse
     {
         $this->ensureVisible($request, $log);
+
+        if ($log->verification_status !== null) {
+            return $this->error('VOT doses are managed under Reports → Video-Observed Therapy.', 422);
+        }
 
         if ($log->observed_by === null) {
             return $this->error('This dose is not verified.', 422);
@@ -158,6 +171,7 @@ class DoseVerificationController extends BaseApiController
             'notes' => $log->notes,
             'observed_by_name' => $log->observedBy?->name,
             'verified' => $log->observed_by !== null,
+            'verification_status' => $log->verification_status,
             // Logged-by-default review model: a dose counts unless it is flagged.
             'flagged' => $log->flagged,
             'flag_reason' => $log->flag_reason,
@@ -174,46 +188,6 @@ class DoseVerificationController extends BaseApiController
     {
         $patient = $log->patient;
         abort_unless($patient && $patient->isVisibleTo($request->user()), 404, 'Dose log not found.');
-    }
-
-    /**
-     * Settings → Inventory → "Deduct stock when a dose is verified": take the
-     * dose out of the medicine's stock and record it in the stock ledger.
-     * Returns what was deducted, or null when off / nothing to deduct.
-     *
-     * @return array{medication: string, quantity: int}|null
-     */
-    private function deductStock(Request $request, MedicationLog $log): ?array
-    {
-        if (! AppSettings::bool('inventory.auto_deduct_on_verify')) {
-            return null;
-        }
-
-        $medicationId = $log->treatmentPlanMedication?->medication_id;
-        $medication = $medicationId ? Medication::query()->lockForUpdate()->find($medicationId) : null;
-        if (! $medication || $medication->quantity <= 0) {
-            return null;
-        }
-
-        // dose_quantity is free text ("2 tablets"); its leading number is the count.
-        $qty = preg_match('/\d+/', (string) $log->dose_quantity, $m) ? max(1, (int) $m[0]) : 1;
-        $qty = min($qty, (int) $medication->quantity);
-
-        $before = (int) $medication->quantity;
-        $medication->quantity = $before - $qty;
-        $medication->stock_status = $medication->computeStockStatus();
-        $medication->save();
-
-        $medication->stockMovements()->create([
-            'type' => MedicationStockMovement::TYPE_DEDUCTION,
-            'quantity_change' => -$qty,
-            'quantity_before' => $before,
-            'quantity_after' => $before - $qty,
-            'reason' => "Verified dose #{$log->id} (patient #{$log->patient_id})",
-            'user_id' => $request->user()->id,
-        ]);
-
-        return ['medication' => $medication->name, 'quantity' => $qty];
     }
 
     /** Every (un)verification is recorded in the audit trail with who and where. */

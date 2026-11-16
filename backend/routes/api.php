@@ -9,13 +9,17 @@ use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\DoseVerificationController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\MobileDoseLogController;
+use App\Http\Controllers\API\MobileVotController;
 use App\Http\Controllers\API\MonitoringController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\PatientController;
+use App\Http\Controllers\API\ProofMediaController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
 use App\Http\Controllers\API\SettingsController;
 use App\Http\Controllers\API\TreatmentsController;
+use App\Http\Controllers\API\VotEnrollmentController;
+use App\Http\Controllers\API\VotSubmissionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -107,6 +111,20 @@ Route::prefix('v1')->group(function () {
         Route::post('/medication-logs/{log}/unflag', [DoseVerificationController::class, 'unflag'])->middleware('role:admin,staff');
 
         // Treatments hub (Admin + Staff) — records, follow-up schedule, reschedule
+        // Video-Observed Therapy review queue (Reports → VOT) and eligibility.
+        // Policies narrow these further (VotSubmissionPolicy / PatientPolicy).
+        Route::prefix('vot')->middleware('role:admin,staff')->group(function () {
+            Route::get('summary', [VotSubmissionController::class, 'summary']);
+            Route::get('nurses', [VotEnrollmentController::class, 'nurses']);
+            Route::get('submissions', [VotSubmissionController::class, 'index']);
+            Route::get('submissions/{submission}', [VotSubmissionController::class, 'show']);
+            Route::post('submissions/{submission}/verify', [VotSubmissionController::class, 'verify']);
+            Route::post('submissions/{submission}/reject', [VotSubmissionController::class, 'reject']);
+            Route::post('submissions/{submission}/request-resubmission', [VotSubmissionController::class, 'requestResubmission']);
+        });
+        Route::get('/patients/{patient}/vot-enrollment', [VotEnrollmentController::class, 'show'])->middleware('role:admin,staff');
+        Route::put('/patients/{patient}/vot-enrollment', [VotEnrollmentController::class, 'update'])->middleware('role:admin,staff');
+
         Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin,staff');
         Route::put('/treatments/{plan}', [TreatmentsController::class, 'updateTreatment'])->middleware('role:admin,staff');
         Route::post('/treatments/{plan}/reschedule-follow-up', [TreatmentsController::class, 'rescheduleFollowUp'])
@@ -144,6 +162,17 @@ Route::prefix('v1')->group(function () {
     // 3. Mobile Routes (No admin restriction)
     // ──────────────────────────────────────────────
 
+    // ──────────────────────────────────────────────
+    // Private proof media (signed, expiring links)
+    // ──────────────────────────────────────────────
+    // No bearer token here on purpose: <video>/<img> tags cannot send one.
+    // Links are only issued by authenticated, authorised API responses
+    // (App\Support\ProofMedia) and expire after a short time.
+    Route::middleware(['signed', 'throttle:120,1'])->prefix('media')->group(function () {
+        Route::get('proof/{log}/{kind}', [ProofMediaController::class, 'log'])->name('proof-media.log');
+        Route::get('vot/{submission}', [ProofMediaController::class, 'submission'])->name('proof-media.vot');
+    });
+
     Route::prefix('mobile')->group(function () {
 
         // Public
@@ -160,6 +189,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/regimen', [MobileDoseLogController::class, 'regimen']);
             Route::get('/dose-logs', [MobileDoseLogController::class, 'index']);
             Route::post('/dose-logs', [MobileDoseLogController::class, 'store']);
+
+            // Video-Observed Therapy: status + instructions, and proof upload.
+            Route::get('/vot', [MobileVotController::class, 'show']);
+            Route::post('/vot/submissions', [MobileVotController::class, 'store'])->middleware('throttle:20,1');
+
+            // The patient's own in-app inbox (same tables as the portal bell).
+            Route::get('/notifications', [NotificationController::class, 'index']);
+            Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+            Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead'])->whereNumber('id');
         });
 
     });
