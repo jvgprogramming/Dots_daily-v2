@@ -32,6 +32,17 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // AGP 9 enables R8 minification + resource shrinking by default for
+            // release. The shrinker strips res/raw/alarm_sound.wav because the
+            // alarm sound is only referenced by a runtime name lookup
+            // (RawResourceAndroidNotificationSound('alarm_sound')), never as
+            // R.raw.alarm_sound in code — so it looks "unused". That made the
+            // alarm fail only in release with `invalid_sound`. Turn both off so
+            // every bundled resource ships. (A narrower alternative is a
+            // res/raw/keep.xml with tools:keep="@raw/alarm_sound".)
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
