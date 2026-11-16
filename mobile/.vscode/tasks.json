@@ -1,0 +1,21 @@
+{
+  // Local dev tasks (this folder is gitignored — safe for machine-specific paths).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Tunnels the phone's own localhost:8000 back to this PC's localhost:8000
+      // over the USB cable. Lets a real device reach the Laravel backend without
+      // a LAN IP or a firewall rule. Runs automatically before the USB launch config.
+      "label": "adb-reverse",
+      "type": "process",
+      "command": "D:\\sdk\\platform-tools\\adb.exe",
+      "args": ["reverse", "tcp:8000", "tcp:8000"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "close": true
+      }
+    }
+  ]
+}

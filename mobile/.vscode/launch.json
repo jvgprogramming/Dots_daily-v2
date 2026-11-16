@@ -1,0 +1,59 @@
+{
+  // Local run configs (this folder is gitignored). Each one feeds the app its
+  // backend URL via --dart-define=API_BASE_URL, which api_service.dart reads
+  // (ApiService._configuredBaseUrl). This is the mobile equivalent of the web
+  // app's NEXT_PUBLIC_API_URL env var.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // RECOMMENDED for a real phone on USB.
+      // Needs the backend running with plain `composer dev` (localhost is fine).
+      // The adb-reverse task below runs first so the phone can reach localhost:8000.
+      "name": "DOTS Daily — USB (adb reverse)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "preLaunchTask": "adb-reverse",
+      "args": [
+        "--dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1"
+      ]
+    },
+    {
+      // Real phone over Wi-Fi (no USB cable).
+      // Needs: backend started with `composer serve` (binds 0.0.0.0:8000) AND a
+      // firewall rule allowing inbound TCP 8000. Update the IP if DHCP changes it
+      // (run: ipconfig, look for the 192.168.1.x IPv4 address).
+      "name": "DOTS Daily — Wi-Fi (LAN)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://192.168.1.59:8000/api/v1"
+      ]
+    },
+    {
+      // Android emulator only. 10.0.2.2 is the emulator's alias for the host PC.
+      "name": "DOTS Daily — Android emulator",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1"
+      ]
+    },
+    {
+      // Chrome (web) preview. Pinned to port 8080 so the origin is stable;
+      // config/cors.php allows localhost:<any port> in local dev. Needs the
+      // backend running (composer dev is fine — localhost works for web).
+      "name": "DOTS Daily — Chrome (web)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": [
+        "--web-port=8080",
+        "--dart-define=API_BASE_URL=http://localhost:8000/api/v1"
+      ]
+    }
+  ]
+}
