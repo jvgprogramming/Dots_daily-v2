@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/motion.dart';
 import 'alarm_ringing_page.dart';
+import 'vot/vot_instructions_page.dart';
 
 /// `February 16, 2026`-style date for the follow-up card.
 String _formatFollowUpDate(DateTime date) {
@@ -92,6 +93,10 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 FadeSlideIn(index: 3, child: _buildNextDoseCard(context, p, meds)),
                 const SizedBox(height: 16),
+                if (meds.isVotEnrolled) ...[
+                  FadeSlideIn(index: 3, child: _buildVotCard(context, p, meds)),
+                  const SizedBox(height: 16),
+                ],
                 FadeSlideIn(index: 4, child: _buildTreatmentCalendar(p, meds)),
                 const SizedBox(height: 16),
                 FadeSlideIn(index: 5, child: _buildTodayDoses(p, todayAlarms)),
@@ -532,6 +537,123 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // ---------- Video-Observed Therapy ----------
+
+  /// Where today's recorded dose stands with the nurse — or, when the nurse
+  /// asked for it, a direct way to record again.
+  Widget _buildVotCard(BuildContext context, AppPalette p, MedicationsProvider meds) {
+    final needing = meds.doseNeedingProof;
+    final today = meds.votStatusOn(DateTime.now());
+
+    final Color tone;
+    final Color toneBg;
+    final IconData icon;
+    final String title;
+    final String body;
+
+    if (needing != null) {
+      tone = p.warning;
+      toneBg = p.warningBg;
+      icon = Icons.replay_rounded;
+      title = needing.verificationStatus == 'awaiting_proof'
+          ? 'Proof needed for ${needing.formattedDate}'
+          : 'Please record ${needing.formattedDate} again';
+      body = needing.reviewReason?.trim().isNotEmpty == true
+          ? 'Your nurse: ${needing.reviewReason}'
+          : 'Your nurse needs a recording of this dose.';
+    } else if (today == 'verified') {
+      tone = p.success;
+      toneBg = p.successBg;
+      icon = Icons.verified_rounded;
+      title = 'Today’s dose was verified';
+      body = 'Your nurse confirmed your recording. Great job!';
+    } else if (today == 'pending') {
+      tone = p.info;
+      toneBg = p.infoBg;
+      icon = Icons.hourglass_top_rounded;
+      title = 'Waiting for nurse review';
+      body = 'Today’s recording was sent. It already counts toward your '
+          'treatment while your nurse checks it.';
+    } else if (today == 'uploading') {
+      tone = p.textSecondary;
+      toneBg = p.subtle;
+      icon = Icons.cloud_upload_outlined;
+      title = 'Recording not sent yet';
+      body = 'It will upload automatically when you are back online.';
+    } else {
+      tone = p.primaryStrong;
+      toneBg = p.primarySoft;
+      icon = Icons.videocam_rounded;
+      title = 'Video-observed therapy';
+      body = 'Record yourself taking each dose when your alarm rings.';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(p),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: toneBg,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(icon, color: tone, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel('NURSE REVIEW', color: p.textTertiary),
+                    const SizedBox(height: 3),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body,
+                      style: TextStyle(fontSize: 12.5, height: 1.4, color: p.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (needing != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final sent = await startVotFlow(context, existing: needing);
+                  if (sent && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Proof sent — your nurse will review it.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: const Text('Record again'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // ---------- Treatment calendar ----------
 
   /// The month grid from the Calendar tab, simplified: the same taken /
@@ -676,7 +798,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final doses = meds.dosesOnDay(day);
     final taken = doses.isNotEmpty;
-    final flagged = doses.any((log) => log.flagged);
+    // Flagged, or a VOT dose that still needs (new) proof.
+    final flagged = taken && meds.isDayHeld(day);
     final missed = !taken && !isFuture && !beforeStart;
 
     Color background = Colors.transparent;

@@ -50,6 +50,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Notification taps route into the app: open the alarm ringing screen.
     NotificationService.onAlarmTap = (payload) {
+      // A nurse update: opening the app is all it needs (the sync that runs on
+      // resume pulls in the new review state).
+      if (payload == 'vot') return;
       if (payload != null && payload.startsWith('alarm:')) {
         final id = payload.substring('alarm:'.length);
         final alarm = _findAlarmById(id);
@@ -162,8 +165,40 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
+
+  /// Last foreground re-sync, so flipping between apps doesn't spam the API.
+  DateTime? _lastResumeSync;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// There is no push service, so coming back to the app is when a nurse's
+  /// decision (verified / rejected / record again) is picked up: the sync
+  /// uploads queued proofs, reloads the calendar and turns new clinic messages
+  /// into phone notifications.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!context.read<AuthProvider>().isLoggedIn) return;
+    final now = DateTime.now();
+    if (_lastResumeSync != null &&
+        now.difference(_lastResumeSync!) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastResumeSync = now;
+    context.read<MedicationsProvider>().refresh();
+  }
 
   /// Guards the once-per-session pull of the signed-in patient's regimen and
   /// dose history from the backend.

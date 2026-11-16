@@ -175,10 +175,25 @@ class DoseLog {
   final bool flagged;
   final String? flagReason;
 
-  /// Path to a recorded proof clip on this device that still needs uploading.
-  /// Not sent to or stored by the server — it drives the offline upload queue
-  /// and is persisted locally so a force-quit mid-upload doesn't lose the proof.
+  /// Path to a recorded proof (video or photo) on this device that still needs
+  /// uploading. Not sent to or stored by the server — it drives the offline
+  /// upload queue and is persisted locally so a force-quit mid-upload doesn't
+  /// lose the proof. (Named for history: it holds photos too.)
   final String? localVideoPath;
+
+  /// 'video' or 'photo' for a queued VOT proof; null for a plain dose.
+  final String? localProofType;
+  final int? localProofSeconds;
+
+  /// The scheduled day this dose belongs to (YYYY-MM-DD), from the server.
+  final String? scheduledDate;
+
+  /// Video-Observed Therapy review state, null for a non-VOT dose:
+  /// awaiting_proof, pending, verified, rejected, resubmission_required.
+  final String? verificationStatus;
+
+  /// The nurse's reason when proof was rejected or asked for again.
+  final String? reviewReason;
 
   const DoseLog({
     required this.id,
@@ -193,6 +208,11 @@ class DoseLog {
     this.flagged = false,
     this.flagReason,
     this.localVideoPath,
+    this.localProofType,
+    this.localProofSeconds,
+    this.scheduledDate,
+    this.verificationStatus,
+    this.reviewReason,
   });
 
   /// True when the backend recorded that this day's dose was not taken.
@@ -251,10 +271,17 @@ class DoseLog {
       status: json['status'] as String?,
       notes: json['notes'] as String?,
       videoUrl: json['proof_video_url'] as String?,
+      photoUrl: json['proof_photo_url'] as String?,
       flagged: json['flagged'] as bool? ?? false,
       flagReason: json['flag_reason'] as String?,
+      scheduledDate: date.isEmpty ? null : date,
+      verificationStatus: json['verification_status'] as String?,
+      reviewReason: json['review_reason'] as String?,
     );
   }
+
+  /// A queued VOT proof that has not reached the server yet.
+  bool get hasQueuedProof => localVideoPath != null && localProofType != null;
 
   /// Same fields with a few overridden — used when the server row replaces a
   /// local placeholder, or when clearing [localVideoPath] after a successful
@@ -268,6 +295,7 @@ class DoseLog {
     String? flagReason,
     String? localVideoPath,
     bool clearLocalVideoPath = false,
+    String? verificationStatus,
   }) =>
       DoseLog(
         id: id ?? this.id,
@@ -283,6 +311,11 @@ class DoseLog {
         flagReason: flagReason ?? this.flagReason,
         localVideoPath:
             clearLocalVideoPath ? null : (localVideoPath ?? this.localVideoPath),
+        localProofType: clearLocalVideoPath ? null : localProofType,
+        localProofSeconds: clearLocalVideoPath ? null : localProofSeconds,
+        scheduledDate: scheduledDate,
+        verificationStatus: verificationStatus ?? this.verificationStatus,
+        reviewReason: reviewReason,
       );
 
   Map<String, dynamic> toJson() => {
@@ -298,6 +331,11 @@ class DoseLog {
         'flagged': flagged,
         'flagReason': flagReason,
         'localVideoPath': localVideoPath,
+        'localProofType': localProofType,
+        'localProofSeconds': localProofSeconds,
+        'scheduledDate': scheduledDate,
+        'verificationStatus': verificationStatus,
+        'reviewReason': reviewReason,
       };
 
   factory DoseLog.fromJson(Map<String, dynamic> json) => DoseLog(
@@ -313,5 +351,10 @@ class DoseLog {
         flagged: json['flagged'] as bool? ?? false,
         flagReason: json['flagReason'] as String?,
         localVideoPath: json['localVideoPath'] as String?,
+        localProofType: json['localProofType'] as String?,
+        localProofSeconds: json['localProofSeconds'] as int?,
+        scheduledDate: json['scheduledDate'] as String?,
+        verificationStatus: json['verificationStatus'] as String?,
+        reviewReason: json['reviewReason'] as String?,
       );
 }

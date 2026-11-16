@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -185,16 +185,21 @@ class ApiService {
 
   /// POST a `multipart/form-data` request with scalar [fields] and one file.
   ///
-  /// Used to send a dose log together with its recorded proof video. We do NOT
-  /// set `Content-Type` ourselves — `MultipartRequest` sets it with the correct
+  /// Used to upload a VOT proof (video or photo). We do NOT set
+  /// `Content-Type` ourselves — `MultipartRequest` sets it with the correct
   /// multipart boundary — but we keep the same `Accept` + bearer auth and parse
   /// the identical `{ success, message, data }` envelope as [_request].
+  ///
+  /// [onProgress] receives 0.0–1.0 as the file is streamed out. `http` has no
+  /// upload progress of its own, so the file is wrapped in a stream that counts
+  /// the bytes handed to the socket.
   Future<Map<String, dynamic>> postMultipart(
     String path, {
     required Map<String, dynamic> fields,
     required String filePath,
-    String fileField = 'proof_video',
+    String fileField = 'media',
     bool withAuth = true,
+    void Function(double progress)? onProgress,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
 
@@ -211,10 +216,23 @@ class ApiService {
         if (value != null) request.fields[key] = value.toString();
       });
 
-      request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
+      final file = File(filePath);
+      final total = await file.length();
+      var sent = 0;
+      final counted = file.openRead().map((chunk) {
+        sent += chunk.length;
+        if (onProgress != null && total > 0) onProgress(sent / total);
+        return chunk;
+      });
+      request.files.add(http.MultipartFile(
+        fileField,
+        counted,
+        total,
+        filename: filePath.split(Platform.pathSeparator).last,
+      ));
 
-      // Video uploads need a longer ceiling than a plain JSON request.
-      final streamed = await request.send().timeout(const Duration(seconds: 120));
+      // Video uploads need a much longer ceiling than a plain JSON request.
+      final streamed = await request.send().timeout(const Duration(minutes: 5));
       response = await http.Response.fromStream(streamed);
     } on TimeoutException {
       throw ApiException(
@@ -226,7 +244,19 @@ class ApiService {
       throw ApiException('Network error: Could not reach server. ($e)', 0);
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    // A web server limit (e.g. 413 Request Entity Too Large) answers with an
+    // HTML page, not our JSON envelope.
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw ApiException(
+        response.statusCode == 413
+            ? 'The file is too large for the server. Please record a shorter video.'
+            : 'The server could not process the upload (error ${response.statusCode}).',
+        response.statusCode,
+      );
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(

@@ -6,9 +6,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/medication.dart';
 import '../providers/medications_provider.dart';
 import '../services/device_lock_service.dart';
-import '../services/proof_capture_service.dart';
 import '../theme/app_theme.dart';
 import 'app_lock_page.dart';
+import 'vot/vot_instructions_page.dart';
 
 /// Result of the ringing screen interaction.
 enum AlarmDismissAction { taken, snoozed, dismissed }
@@ -92,10 +92,13 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
     super.dispose();
   }
 
-  /// "I took my dose" — the only way to clear the alarm. The patient must
-  /// record a short proof clip; backing out of the recorder leaves the alarm
-  /// ringing. The clip is attached to the dose log and uploaded by the provider
-  /// (queued if offline), so dismissal never depends on the network.
+  /// "I took my dose" — the only way to clear the alarm as taken.
+  ///
+  /// A patient enrolled in Video-Observed Therapy records proof for their
+  /// nurse (instructions → camera → review → upload); backing out of that
+  /// leaves the alarm ringing. Everyone else confirms with one tap. Either way
+  /// the dose is saved by the provider (queued if offline), so dismissal never
+  /// depends on the network.
   Future<void> _onTakeDose() async {
     if (_capturing) return;
 
@@ -105,28 +108,28 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
       return;
     }
 
-    setState(() => _capturing = true);
-    String? videoPath;
-    try {
-      videoPath = await ProofCaptureService().record();
-    } catch (_) {
-      videoPath = null;
-    }
-    if (!mounted) return;
-    setState(() => _capturing = false);
+    final meds = context.read<MedicationsProvider>();
 
-    // No clip = not taken: keep ringing and tell the patient why.
-    if (videoPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Record yourself taking your dose to continue.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (meds.isVotEnrolled) {
+      setState(() => _capturing = true);
+      final submitted = await startVotFlow(context);
+      if (!mounted) return;
+      setState(() => _capturing = false);
+
+      if (!submitted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Record yourself taking your dose to continue.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      await _dismiss(AlarmDismissAction.taken);
       return;
     }
 
-    context.read<MedicationsProvider>().addDoseLog(
+    meds.addDoseLog(
       DoseLog(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         medicationId: widget.alarm.medicationId,
@@ -134,7 +137,6 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
         timestamp: DateTime.now(),
         verified: false,
         notes: 'Logged from alarm',
-        localVideoPath: videoPath,
       ),
     );
 
@@ -161,6 +163,11 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
 
     if (mounted) Navigator.of(context).pop(action);
   }
+
+  /// VOT patients record proof; the label and icon say so. The preview
+  /// always shows the recording variant.
+  bool get _isVot =>
+      widget.preview || context.watch<MedicationsProvider>().isVotEnrolled;
 
   String _two(int n) => n.toString().padLeft(2, '0');
 
@@ -425,11 +432,18 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
                                       color: Color(0xFF0B1220),
                                     ),
                                   )
-                                : const Icon(Icons.videocam_rounded, size: 26),
+                                : Icon(
+                                    _isVot
+                                        ? Icons.videocam_rounded
+                                        : Icons.check_circle_rounded,
+                                    size: 26,
+                                  ),
                             label: Text(
                               _capturing
-                                  ? 'Preparing…'
-                                  : 'Record & take my dose',
+                                  ? 'Recording…'
+                                  : (_isVot
+                                      ? 'Record & take my dose'
+                                      : 'I took my dose'),
                               style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,

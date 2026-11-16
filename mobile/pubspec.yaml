@@ -52,7 +52,6 @@ dependencies:
   local_auth_darwin: ^1.6.0
   # Records the in-app proof-of-intake clip straight from the camera (no gallery
   # pick, for DOTS integrity) and caps its length.
-  image_picker: ^1.1.2
   # Compresses the recorded clip on-device before upload, so a ~30s proof lands
   # at a few MB instead of tens.
   video_compress: ^3.1.4
@@ -61,6 +60,8 @@ dependencies:
   # Persists the chosen reminder time and the offline dose-upload queue across
   # restarts.
   shared_preferences: ^2.3.2
+  camera: ^0.12.2
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:

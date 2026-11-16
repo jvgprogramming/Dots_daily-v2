@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/medication.dart';
+import '../models/vot.dart';
 import '../providers/medications_provider.dart';
 import '../theme/app_theme.dart';
+import 'vot/vot_instructions_page.dart';
 
 const List<String> _monthsShort = [
   'Jan',
@@ -288,7 +290,12 @@ class _CalendarPageState extends State<CalendarPage> {
     // has to render as missed rather than as a logged one.
     final doses = logs.where((log) => !log.isMissed).toList();
     final taken = doses.isNotEmpty;
-    final flagged = doses.any((log) => log.flagged);
+    // Held out of adherence: a nurse flag, or a VOT dose that still needs
+    // (new) proof. Shown amber so the patient knows to act on it.
+    final flagged = taken && meds.isDayHeld(day);
+    final awaitingReview = taken &&
+        !flagged &&
+        (meds.votStatusOn(day) == 'pending' || meds.votStatusOn(day) == 'uploading');
     final missed = !taken && !isFuture && !beforeStart;
 
     Color background = Colors.transparent;
@@ -299,7 +306,12 @@ class _CalendarPageState extends State<CalendarPage> {
     if (taken && !flagged) {
       background = AppColors.primary;
       foreground = Colors.white;
-      marker = const Icon(Icons.check_rounded, size: 10, color: Colors.white);
+      // Counts already; the hourglass says the nurse has not reviewed it yet.
+      marker = Icon(
+        awaitingReview ? Icons.hourglass_top_rounded : Icons.check_rounded,
+        size: 10,
+        color: Colors.white,
+      );
     } else if (flagged) {
       background = AppColors.amber.withValues(alpha: 0.18);
       foreground = AppColors.amber;
@@ -378,7 +390,7 @@ class _CalendarPageState extends State<CalendarPage> {
         runSpacing: 10,
         children: [
           _LegendDot(color: AppColors.primary, label: 'Taken'),
-          _LegendDot(color: AppColors.amber, label: 'Flagged'),
+          _LegendDot(color: AppColors.amber, label: 'Needs attention'),
           _LegendDot(color: AppColors.destructive, label: 'Missed'),
           _LegendDot(color: AppColors.primaryDark, label: 'Today', ring: true),
         ],
@@ -393,7 +405,9 @@ class _CalendarPageState extends State<CalendarPage> {
   Future<void> _showDaySheet(DateTime day, List<DoseLog> doses) async {
     // Without an assigned regimen the backend would have nothing to record the
     // dose against, so the action is withheld rather than failing on tap.
-    final canLog = context.read<MedicationsProvider>().canLogDoses;
+    final meds = context.read<MedicationsProvider>();
+    final canLog = meds.canLogDoses;
+    final isVot = meds.isVotEnrolled;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -453,11 +467,16 @@ class _CalendarPageState extends State<CalendarPage> {
                     height: 50,
                     child: FilledButton.icon(
                       onPressed: canLog
-                          ? () => _logMissedDose(sheetContext, day)
+                          ? () => isVot
+                              ? _recordProof(sheetContext, forDay: day)
+                              : _logMissedDose(sheetContext, day)
                           : null,
-                      icon: const Icon(Icons.add_task_rounded, size: 20),
-                      label: const Text(
-                        'Log this dose',
+                      icon: Icon(
+                        isVot ? Icons.videocam_rounded : Icons.add_task_rounded,
+                        size: 20,
+                      ),
+                      label: Text(
+                        isVot ? 'Record this dose' : 'Log this dose',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -473,8 +492,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   const SizedBox(height: 8),
                   Text(
                     canLog
-                        ? 'Use this if you took your medicine but forgot to log '
-                              'it. It is saved as logged and counts right away.'
+                        ? (isVot
+                            ? 'Use this if you took your medicine but did not '
+                                'record it. Your nurse reviews the recording.'
+                            : 'Use this if you took your medicine but forgot to log '
+                                'it. It is saved as logged and counts right away.')
                         : 'No active treatment regimen is assigned to your '
                               'account yet, so a dose cannot be logged.',
                     style: TextStyle(
@@ -484,7 +506,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                   ),
                 ] else
-                  ...doses.map(_buildLogTile),
+                  ...doses.map((log) => _buildLogTile(log, sheetContext)),
               ],
             ),
           ),
@@ -493,9 +515,43 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _buildLogTile(DoseLog log) {
-    final flagged = log.flagged;
-    final color = flagged ? AppColors.amber : AppColors.emerald;
+  Widget _buildLogTile(DoseLog log, BuildContext sheetContext) {
+    final meds = context.read<MedicationsProvider>();
+    final vot = log.hasQueuedProof ? 'uploading' : log.verificationStatus;
+    final needsProof = VotStatusText.needsNewProof(vot) &&
+        (vot != 'rejected' || meds.vot.allowResubmitAfterReject);
+    final held = log.flagged || VotStatusText.needsNewProof(vot);
+
+    final Color color;
+    final IconData icon;
+    final String badge;
+    if (log.flagged) {
+      color = AppColors.amber;
+      icon = Icons.flag_rounded;
+      badge = 'Flagged';
+    } else if (vot == 'uploading') {
+      color = AppColors.mutedForeground;
+      icon = Icons.cloud_upload_outlined;
+      badge = 'Not sent yet';
+    } else if (vot != null) {
+      color = switch (vot) {
+        'verified' => AppColors.emerald,
+        'pending' => AppColors.primaryDark,
+        _ => AppColors.amber,
+      };
+      icon = switch (vot) {
+        'verified' => Icons.verified_rounded,
+        'pending' => Icons.hourglass_top_rounded,
+        _ => Icons.replay_rounded,
+      };
+      badge = VotStatusText.label(vot);
+    } else {
+      color = held ? AppColors.amber : AppColors.emerald;
+      icon = Icons.check_circle_rounded;
+      badge = 'Logged';
+    }
+
+    final note = log.reviewReason ?? (log.flagged ? log.flagReason : null);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -504,77 +560,111 @@ class _CalendarPageState extends State<CalendarPage> {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(
-              flagged ? Icons.flag_rounded : Icons.check_circle_rounded,
-              color: color,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  log.medicationName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13.5,
-                  ),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  log.formattedDateTime,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.mutedForeground,
-                  ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      log.medicationName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      log.formattedDateTime,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
                 ),
-                if (log.notes != null && log.notes!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    log.notes!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badge,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: color,
                     ),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
+          if (note != null && note.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Nurse: $note',
+              style: const TextStyle(fontSize: 12.5, color: AppColors.foreground),
             ),
-            child: Text(
-              flagged ? 'Flagged' : 'Logged',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color,
+          ],
+          if (vot == 'pending') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Counts toward your treatment while your nurse reviews it.',
+              style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
+            ),
+          ],
+          if (needsProof && meds.isVotEnrolled) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _recordProof(sheetContext, existing: log),
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: Text(vot == 'awaiting_proof' ? 'Record proof' : 'Record again'),
               ),
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Opens the VOT recording flow for a past or re-requested dose.
+  Future<void> _recordProof(
+    BuildContext sheetContext, {
+    DoseLog? existing,
+    DateTime? forDay,
+  }) async {
+    Navigator.of(sheetContext).pop();
+    final sent = await startVotFlow(context, existing: existing, forDay: forDay);
+    if (!sent || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Proof sent — your nurse will review it.'),
+        backgroundColor: AppColors.emerald,
       ),
     );
   }

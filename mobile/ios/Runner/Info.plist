@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DOTS Daily uses the camera so you can record yourself taking your TB medicine for your nurse to review.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DOTS Daily records audio with your dose video so your nurse can hear you state your name and the date.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

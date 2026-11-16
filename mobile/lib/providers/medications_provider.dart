@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/medication.dart';
+import '../models/vot.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 
@@ -58,6 +59,9 @@ class MedicationsProvider extends ChangeNotifier {
   DateTime? _nextFollowUpDate;
   String _nextFollowUpStatus = 'none';
 
+  /// Video-Observed Therapy settings for this patient (GET /mobile/vot).
+  VotConfig _vot = VotConfig.none;
+
   bool _syncing = false;
   String? _syncError;
 
@@ -82,6 +86,13 @@ class MedicationsProvider extends ChangeNotifier {
 
   /// Whether the backend has a regimen this app can log doses against.
   bool get canLogDoses => _canLogDoses;
+
+  /// The clinic's VOT settings for this patient.
+  VotConfig get vot => _vot;
+
+  /// True when each dose is confirmed by recording proof for a nurse (VOT)
+  /// rather than the plain "I took it" confirmation.
+  bool get isVotEnrolled => _vot.enrolled;
 
   /// Scheduled dose days across the whole course, and how many were taken.
   int? get adherenceScheduledDays => _adherenceScheduledDays;
@@ -243,6 +254,35 @@ class MedicationsProvider extends ChangeNotifier {
   bool isDayFlagged(DateTime day) {
     final doses = dosesOnDay(day);
     return doses.isNotEmpty && doses.any((log) => log.flagged);
+  }
+
+  /// The VOT review state of [day]'s dose: null for a non-VOT dose (or none),
+  /// 'uploading' while a recorded proof is still queued on this phone.
+  String? votStatusOn(DateTime day) {
+    for (final log in dosesOnDay(day)) {
+      if (log.hasQueuedProof) return 'uploading';
+      if (log.verificationStatus != null) return log.verificationStatus;
+    }
+    return null;
+  }
+
+  /// Whether [day]'s dose is held out of adherence: flagged by a nurse, or a
+  /// VOT dose still needing (new) proof.
+  bool isDayHeld(DateTime day) =>
+      isDayFlagged(day) || VotStatusText.needsNewProof(votStatusOn(day));
+
+  /// The newest dose the patient can and should send new proof for (proof
+  /// missing, rejected, or asked for again), or null.
+  DoseLog? get doseNeedingProof {
+    if (!_vot.enrolled) return null;
+    for (final log in _doseLogs) {
+      if (log.isMissed || log.hasQueuedProof) continue;
+      final status = log.verificationStatus;
+      if (!VotStatusText.needsNewProof(status)) continue;
+      if (status == 'rejected' && !_vot.allowResubmitAfterReject) continue;
+      return log;
+    }
+    return null;
   }
 
   /// Number of days in [month] with at least one dose actually taken.
@@ -565,6 +605,7 @@ class MedicationsProvider extends ChangeNotifier {
       // includes it.
       await _pushUnsynced();
       await _loadRegimen();
+      await _loadVot();
 
       final response = await _api.get('/mobile/dose-logs');
       final data = response['data'] as Map<String, dynamic>;
@@ -601,6 +642,9 @@ class MedicationsProvider extends ChangeNotifier {
       _syncing = false;
       _safeNotify();
     }
+
+    // Outside the sync lock: a slow inbox must never hold up the calendar.
+    await checkInbox();
   }
 
   /// Fetches the active regimen: which medicine the daily intake is recorded
@@ -634,6 +678,161 @@ class MedicationsProvider extends ChangeNotifier {
     _nextFollowUpStatus = data['next_follow_up_status'] as String? ?? 'none';
   }
 
+  /// VOT settings. A failure keeps the last known config: an enrolled patient
+  /// must not silently fall back to the plain confirmation just because one
+  /// request timed out.
+  Future<void> _loadVot() async {
+    try {
+      final response = await _api.get('/mobile/vot');
+      _vot = VotConfig.fromJson(response['data'] as Map<String, dynamic>);
+    } catch (_) {
+      // Keep the previous value.
+    }
+  }
+
+  /// Uploads a VOT proof for a dose right now, reporting progress.
+  ///
+  /// [existing] is the dose being re-recorded (after a rejection or a request
+  /// for new proof); [forDay] backfills a past day. Otherwise it is today's
+  /// dose. Throws [ApiException] — the caller decides whether to retry or to
+  /// [queueVotProof] for later. Never marks the dose verified: it stays
+  /// "waiting for nurse review" until the clinic decides.
+  Future<void> submitVotProof(
+    VotProof proof, {
+    DoseLog? existing,
+    DateTime? forDay,
+    void Function(double progress)? onProgress,
+  }) async {
+    final log = _proofLog(proof, existing: existing, forDay: forDay);
+
+    final response = await _api.postMultipart(
+      '/mobile/vot/submissions',
+      fields: _votPayload(log),
+      filePath: proof.path,
+      fileField: 'media',
+      onProgress: onProgress,
+    );
+
+    _adoptSubmittedDose(log, response['data'] as Map<String, dynamic>);
+    await _deleteLocalVideo(proof.path);
+    _safeNotify();
+  }
+
+  /// Keeps a proof that could not be uploaded (offline, server down) and sends
+  /// it on the next sync. The dose shows on the calendar meanwhile.
+  Future<void> queueVotProof(
+    VotProof proof, {
+    DoseLog? existing,
+    DateTime? forDay,
+  }) async {
+    final log = _proofLog(proof, existing: existing, forDay: forDay);
+    _doseLogs.removeWhere(
+      (l) => !l.isMissed && dayKey(l.timestamp) == dayKey(log.timestamp),
+    );
+    _doseLogs.add(log);
+    _sortDoseLogs();
+    _unsynced.add(log);
+    await _saveQueue();
+    _safeNotify();
+  }
+
+  DoseLog _proofLog(VotProof proof, {DoseLog? existing, DateTime? forDay}) {
+    DateTime takenAt;
+    if (existing != null) {
+      // Same scheduled dose, same moment it was taken — new proof only.
+      takenAt = existing.timestamp;
+    } else if (forDay != null) {
+      final (hour, minute) = reminder.timeParts;
+      takenAt = DateTime(forDay.year, forDay.month, forDay.day, hour, minute);
+      if (takenAt.isAfter(DateTime.now())) takenAt = DateTime.now();
+    } else {
+      takenAt = DateTime.now();
+    }
+
+    return DoseLog(
+      id: existing?.id ?? 'vot-${DateTime.now().microsecondsSinceEpoch}',
+      medicationId: _medications.isEmpty ? '1' : _medications.first.id,
+      medicationName: medicineFullName,
+      timestamp: takenAt,
+      verified: false,
+      notes: existing?.notes ?? 'Recorded with video-observed therapy',
+      scheduledDate: existing?.scheduledDate ?? dayKey(takenAt),
+      localVideoPath: proof.path,
+      localProofType: proof.mediaType,
+      localProofSeconds: proof.durationSeconds,
+    );
+  }
+
+  void _adoptSubmittedDose(DoseLog local, Map<String, dynamic> data) {
+    final dose = data['dose'] as Map<String, dynamic>;
+    final saved = DoseLog.fromApiJson(dose, medicationName: medicineFullName);
+
+    _doseLogs.removeWhere(
+      (l) =>
+          !l.isMissed &&
+          (l.id == local.id ||
+              l.id == saved.id ||
+              dayKey(l.timestamp) == dayKey(local.timestamp)),
+    );
+    _doseLogs.add(saved);
+    _sortDoseLogs();
+  }
+
+  Map<String, dynamic> _votPayload(DoseLog log) => {
+        'scheduled_date': log.scheduledDate ?? dayKey(log.timestamp),
+        'scheduled_time': reminder.time,
+        'taken_at': log.timestamp.toIso8601String(),
+        'media_type': log.localProofType ?? 'video',
+        if (log.localProofSeconds != null)
+          'duration_seconds': log.localProofSeconds,
+        if (_primaryPivotId != null)
+          'treatment_plan_medication_id': _primaryPivotId,
+      };
+
+  // ---------- In-app inbox -> phone notifications ----------
+
+  bool _checkingInbox = false;
+
+  /// Shows the clinic's new messages (proof verified, rejected, record again,
+  /// VOT enrolment changes) as phone notifications, then marks them read so
+  /// each appears once. There is no push service: this runs on every sync and
+  /// whenever the app comes back to the foreground.
+  Future<void> checkInbox() async {
+    if (_api.token == null || _checkingInbox) return;
+    _checkingInbox = true;
+    var reviewChanged = false;
+    try {
+      final response = await _api.get('/mobile/notifications?unread=1');
+      final data = response['data'] as Map<String, dynamic>;
+      final items = (data['notifications'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      for (final n in items.reversed) {
+        final type = '${n['type'] ?? ''}';
+        // "Proof submitted" was already shown on the confirmation screen.
+        if (type != 'vot.received') {
+          await NotificationService().showInfo(
+            id: (n['id'] as num).toInt(),
+            title: '${n['title'] ?? 'DOTS Daily'}',
+            body: '${n['body'] ?? ''}',
+          );
+        }
+        if (type.startsWith('vot.') && type != 'vot.received') {
+          reviewChanged = true;
+        }
+        await _api.post('/mobile/notifications/${n['id']}/read');
+      }
+    } catch (_) {
+      // The inbox is a convenience; a failure must never surface as an error.
+    } finally {
+      _checkingInbox = false;
+    }
+
+    // A review decision changes the calendar (and enrolment the flow) — pull
+    // it in.
+    if (reviewChanged && !_syncing) await refresh();
+  }
+
   /// Sends one dose and adopts the server's row on success.
   Future<void> _persist(DoseLog log) async {
     // Signed out, or a unit test — there is nothing to authenticate with.
@@ -654,43 +853,52 @@ class MedicationsProvider extends ChangeNotifier {
   Future<void> _pushUnsynced() async {
     for (final log in List<DoseLog>.from(_unsynced)) {
       try {
-        // A dose carrying a recorded clip goes up as multipart; a plain dose
-        // (backfill, or a dose whose local file went missing) stays JSON.
-        final hasVideo =
-            log.localVideoPath != null && File(log.localVideoPath!).existsSync();
+        final proofOnDisk =
+            log.hasQueuedProof && File(log.localVideoPath!).existsSync();
 
-        final response = hasVideo
-            ? await _api.postMultipart(
-                '/mobile/dose-logs',
-                fields: _dosePayload(log),
-                filePath: log.localVideoPath!,
-                fileField: 'proof_video',
-              )
-            : await _api.post(
-                '/mobile/dose-logs',
-                body: _dosePayload(log),
-              );
+        if (proofOnDisk) {
+          // A queued VOT proof: upload it to the nurse's review queue.
+          final response = await _api.postMultipart(
+            '/mobile/vot/submissions',
+            fields: _votPayload(log),
+            filePath: log.localVideoPath!,
+            fileField: 'media',
+          );
+          _adoptSubmittedDose(log, response['data'] as Map<String, dynamic>);
+        } else {
+          // A plain confirmation (or a proof whose file went missing — the
+          // backend then records it as awaiting proof for a VOT patient).
+          final response = await _api.post(
+            '/mobile/dose-logs',
+            body: _dosePayload(log),
+          );
+          final saved = DoseLog.fromApiJson(
+            response['data'] as Map<String, dynamic>,
+            medicationName: medicineFullName,
+          );
+          final index = _doseLogs.indexWhere(
+            (existing) => dayKey(existing.timestamp) == dayKey(log.timestamp),
+          );
+          if (index != -1) _doseLogs[index] = saved;
+        }
 
-        final saved = DoseLog.fromApiJson(
-          response['data'] as Map<String, dynamic>,
-          medicationName: medicineFullName,
-        );
-
-        // Swap the local placeholder for the stored row (server id + status).
-        final index = _doseLogs.indexWhere(
-          (existing) => dayKey(existing.timestamp) == dayKey(log.timestamp),
-        );
-        if (index != -1) _doseLogs[index] = saved;
-
-        // The clip is uploaded (or was already gone) — drop the local file so
-        // proof videos don't accumulate on the device.
+        // Uploaded (or already gone) — don't let proof files pile up.
         await _deleteLocalVideo(log.localVideoPath);
-
         _unsynced.remove(log);
         await _saveQueue();
         _syncError = null;
       } on ApiException catch (e) {
-        _syncError = e.message;
+        _syncError = e.displayMessage;
+        // 409: this dose already has proof on the server — nothing left to
+        // send. 403/422: the server will never accept this item as it is (not
+        // enrolled, file too long...); retrying forever would block every dose
+        // queued behind it.
+        if (e.statusCode == 409 || e.statusCode == 403 || e.statusCode == 422) {
+          await _deleteLocalVideo(log.localVideoPath);
+          _unsynced.remove(log);
+          await _saveQueue();
+          continue;
+        }
         return;
       } catch (_) {
         _syncError =
@@ -761,7 +969,7 @@ class MedicationsProvider extends ChangeNotifier {
 
   /// The body the backend's `/mobile/dose-logs` endpoint expects.
   Map<String, dynamic> _dosePayload(DoseLog log) => {
-        'scheduled_date': dayKey(log.timestamp),
+        'scheduled_date': log.scheduledDate ?? dayKey(log.timestamp),
         // The app's reminder is the schedule the patient actually follows.
         'scheduled_time': reminder.time,
         'taken_at': log.timestamp.toIso8601String(),

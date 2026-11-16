@@ -1,75 +1,84 @@
 import 'dart:io';
 
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
 
-/// Captures the patient's proof-of-intake video for a dose.
+import '../models/vot.dart';
+
+/// Prepares a proof recorded by the in-app camera (VotCameraPage) for upload.
 ///
-/// Opens the camera recorder directly (no gallery pick, so an old clip can't be
-/// submitted — important for DOTS integrity), caps the length, compresses the
-/// result on-device, and stores it under the app documents directory so a
-/// queued/offline clip survives a force-quit and OS temp cleanup.
+/// Videos are compressed on-device so a dose clip lands at a few MB instead of
+/// tens; photos are kept as taken. Either way the file is moved into the app
+/// documents directory, so a proof queued while offline survives a force-quit
+/// and the OS clearing its temp/cache folder.
 class ProofCaptureService {
   ProofCaptureService._();
   static final ProofCaptureService instance = ProofCaptureService._();
   factory ProofCaptureService() => instance;
 
-  final ImagePicker _picker = ImagePicker();
-
-  /// Records and returns a durable local path to the compressed clip, or null
-  /// if the patient backed out of recording (the caller must then NOT mark the
-  /// dose as taken / dismiss the alarm).
-  Future<String?> record({
-    Duration maxDuration = const Duration(seconds: 30),
+  Future<VotProof> prepare({
+    required String rawPath,
+    required String mediaType,
+    int? durationSeconds,
   }) async {
-    final XFile? raw = await _picker.pickVideo(
-      source: ImageSource.camera,
-      maxDuration: maxDuration,
-      preferredCameraDevice: CameraDevice.front,
-    );
-    if (raw == null) return null;
+    final isVideo = mediaType == 'video';
+    var sourcePath = rawPath;
+    File? compressed;
 
-    // Compress on-device; fall back to the raw file if compression fails.
-    String sourcePath = raw.path;
-    File? compressedFile;
-    try {
-      final info = await VideoCompress.compressVideo(
-        raw.path,
-        quality: VideoQuality.LowQuality,
-        deleteOrigin: true,
-        includeAudio: true,
-      );
-      final file = info?.file;
-      if (file != null) {
-        compressedFile = file;
-        sourcePath = file.path;
+    if (isVideo) {
+      try {
+        final info = await VideoCompress.compressVideo(
+          rawPath,
+          quality: VideoQuality.MediumQuality,
+          deleteOrigin: false,
+          includeAudio: true,
+        );
+        if (info?.file != null) {
+          compressed = info!.file!;
+          sourcePath = compressed.path;
+        }
+      } catch (_) {
+        // Keep the original recording when the compressor is unavailable.
       }
-    } catch (_) {
-      // Keep the raw recording when the compressor is unavailable.
     }
 
-    // Move into app-docs under a stable name.
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final proofsDir = Directory('${dir.path}/proof_videos');
-      if (!await proofsDir.exists()) {
-        await proofsDir.create(recursive: true);
-      }
-      final dest =
-          '${proofsDir.path}/dose_${DateTime.now().millisecondsSinceEpoch}.mp4';
-      final saved = await File(sourcePath).copy(dest);
+    final dir = await getApplicationDocumentsDirectory();
+    final proofsDir = Directory('${dir.path}/proofs');
+    if (!await proofsDir.exists()) await proofsDir.create(recursive: true);
 
-      // Drop the compressor's cache copy once it's safely moved.
-      if (compressedFile != null && compressedFile.path != saved.path) {
-        try {
-          await compressedFile.delete();
-        } catch (_) {}
-      }
-      return saved.path;
+    final ext = isVideo ? 'mp4' : _extension(rawPath, fallback: 'jpg');
+    final dest =
+        '${proofsDir.path}/dose_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final saved = await File(sourcePath).copy(dest);
+
+    // The durable copy exists; drop the camera's and compressor's temp files.
+    await _tryDelete(rawPath);
+    if (compressed != null) await _tryDelete(compressed.path);
+
+    return VotProof(
+      path: saved.path,
+      mediaType: mediaType,
+      durationSeconds: durationSeconds,
+    );
+  }
+
+  /// Deletes a recording the patient discarded (retake / cancel).
+  Future<void> discard(String? path) async {
+    if (path != null) await _tryDelete(path);
+  }
+
+  String _extension(String path, {required String fallback}) {
+    final dot = path.lastIndexOf('.');
+    if (dot == -1 || dot < path.length - 6) return fallback;
+    return path.substring(dot + 1).toLowerCase();
+  }
+
+  Future<void> _tryDelete(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
     } catch (_) {
-      // If the move failed, hand back whatever path we do have.
-      return sourcePath;
+      // A leftover temp file is harmless.
     }
   }
 }

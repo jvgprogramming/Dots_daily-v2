@@ -13,6 +13,10 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
+  /// Calm channel for clinic messages (proof verified / rejected / record
+  /// again). Kept apart from the alarm channel, which is full-screen and loud.
+  static const String updatesChannelId = 'vot_updates';
+
   /// Channel id for medication reminders. Versioned because Android freezes a
   /// channel's sound once it has been created, so bumping the id is the only
   /// reliable way to make the alarm sound apply on already-installed devices.
@@ -92,6 +96,14 @@ class NotificationService {
       );
       await androidPlugin?.createNotificationChannel(alarmChannel);
 
+      const updatesChannel = AndroidNotificationChannel(
+        updatesChannelId,
+        'Nurse updates',
+        description: 'When your nurse reviews the proof of a dose',
+        importance: Importance.high,
+      );
+      await androidPlugin?.createNotificationChannel(updatesChannel);
+
       // Request notification permission (Android 13+).
       await androidPlugin?.requestNotificationsPermission();
       // Request the ability to schedule exact alarms (Android 12+).
@@ -138,6 +150,38 @@ class NotificationService {
     android: _alarmAndroidDetails(),
     iOS: _alarmIosDetails,
   );
+
+  /// A message from the clinic (e.g. "Dose verified"), on the calm updates
+  /// channel. Tapping it just opens the app (payload `vot`).
+  Future<void> showInfo({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await _ensureInitialized();
+    await _plugin.show(
+      id: id & 0x7FFFFFFF,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          updatesChannelId,
+          'Nurse updates',
+          channelDescription: 'When your nurse reviews the proof of a dose',
+          importance: Importance.high,
+          priority: Priority.high,
+          styleInformation: BigTextStyleInformation(body),
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: 'vot',
+    );
+  }
 
   /// Show an instant notification (used for demos / tests).
   Future<void> showNotification({
