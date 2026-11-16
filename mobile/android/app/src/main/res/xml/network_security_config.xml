@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release builds block cleartext (http://) traffic by default. The DOTS Daily
+  backend runs over plain HTTP on the local network during development, so this
+  permits cleartext ONLY to the known local addresses. Add your PC's current
+  LAN IP here if DHCP changes it, or point the app at an HTTPS URL for a real
+  deployment and remove these entries.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Android emulator alias for the host machine -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- This PC's LAN IP (update if it changes) -->
+        <domain includeSubdomains="false">192.168.1.59</domain>
+    </domain-config>
+</network-security-config>

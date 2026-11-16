@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\FollowUpReschedule;
 use App\Models\Medication;
 use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -54,10 +58,10 @@ class MobileDoseLogTest extends TestCase
 
         // The plan's month-1 anchor is moved three weeks out — the app must
         // show the rescheduled date, exactly like the admin treatments hub.
-        \App\Models\FollowUpReschedule::create([
+        FollowUpReschedule::create([
             'treatment_plan_id' => $plan->id,
             'patient_id' => $plan->patient_id,
-            'original_date' => \Carbon\Carbon::parse($plan->start_date)->addMonth()->toDateString(),
+            'original_date' => Carbon::parse($plan->start_date)->addMonth()->toDateString(),
             'new_date' => now()->addDays(21)->toDateString(),
             'rescheduled_at' => now()->toDateString(),
             'reason' => 'Clinic closed',
@@ -79,11 +83,11 @@ class MobileDoseLogTest extends TestCase
         // The hub reschedules from the date it currently displays, so the
         // second move quotes the first move's output. The schedule must follow
         // the chain to its latest agreed date, not snap back to the anchor.
-        $anchor = \Carbon\Carbon::parse($plan->start_date)->addMonth()->toDateString();
+        $anchor = Carbon::parse($plan->start_date)->addMonth()->toDateString();
         $firstMove = now()->addDays(10)->toDateString();
         $secondMove = now()->addDays(20)->toDateString();
 
-        \App\Models\FollowUpReschedule::create([
+        FollowUpReschedule::create([
             'treatment_plan_id' => $plan->id,
             'patient_id' => $plan->patient_id,
             'original_date' => $anchor,
@@ -91,7 +95,7 @@ class MobileDoseLogTest extends TestCase
             'rescheduled_at' => now()->toDateString(),
             'rescheduled_by' => $this->admin()->id,
         ]);
-        \App\Models\FollowUpReschedule::create([
+        FollowUpReschedule::create([
             'treatment_plan_id' => $plan->id,
             'patient_id' => $plan->patient_id,
             'original_date' => $firstMove,
@@ -221,6 +225,72 @@ class MobileDoseLogTest extends TestCase
             ->assertJsonPath('data.logs.0.scheduled_time', '07:00')
             ->assertJsonPath('data.logs.0.notes', 'Logged from alarm')
             ->assertJsonPath('data.logs.0.verified', false);
+    }
+
+    public function test_a_dose_can_be_logged_with_a_proof_video(): void
+    {
+        Storage::fake('public');
+        [$user, $patient] = $this->patientWithRegimen();
+        Sanctum::actingAs($user);
+
+        $response = $this->post('/api/v1/mobile/dose-logs', [
+            'scheduled_date' => now()->toDateString(),
+            'scheduled_time' => '07:00',
+            'taken_at' => now()->setTime(7, 5)->toIso8601String(),
+            'proof_video' => UploadedFile::fake()->create('proof.mp4', 1200, 'video/mp4'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('data.has_video', true)
+            ->assertJsonPath('data.proof_video_url', fn ($url) => $url !== null);
+
+        $log = MedicationLog::where('patient_id', $patient->id)->sole();
+        $this->assertNotNull($log->proof_video_path);
+        $this->assertSame('video/mp4', $log->proof_video_mime);
+        Storage::disk('public')->assertExists($log->proof_video_path);
+    }
+
+    public function test_a_non_video_proof_is_rejected(): void
+    {
+        [$user] = $this->patientWithRegimen();
+        Sanctum::actingAs($user);
+
+        $this->post('/api/v1/mobile/dose-logs', [
+            'scheduled_date' => now()->toDateString(),
+            'scheduled_time' => '07:00',
+            'proof_video' => UploadedFile::fake()->create('not-a-video.pdf', 50, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('proof_video');
+    }
+
+    public function test_relogging_the_day_without_a_video_keeps_the_existing_one(): void
+    {
+        Storage::fake('public');
+        [$user, $patient] = $this->patientWithRegimen();
+        Sanctum::actingAs($user);
+
+        // First call attaches a video.
+        $this->post('/api/v1/mobile/dose-logs', [
+            'scheduled_date' => now()->toDateString(),
+            'scheduled_time' => '07:00',
+            'proof_video' => UploadedFile::fake()->create('proof.mp4', 800, 'video/mp4'),
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $storedPath = MedicationLog::where('patient_id', $patient->id)->sole()->proof_video_path;
+
+        // A later JSON-only retry/backfill for the same day must not wipe it.
+        $this->postJson('/api/v1/mobile/dose-logs', [
+            'scheduled_date' => now()->toDateString(),
+            'scheduled_time' => '07:00',
+            'notes' => 'retry without video',
+        ])->assertOk();
+
+        $this->assertSame(
+            $storedPath,
+            MedicationLog::where('patient_id', $patient->id)->sole()->proof_video_path,
+            'A videoless re-log must keep the proof already stored for that day.',
+        );
     }
 
     public function test_a_dose_cannot_be_logged_against_another_patients_medicine(): void

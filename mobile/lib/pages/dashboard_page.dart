@@ -4,6 +4,7 @@ import '../models/medication.dart';
 import '../providers/medications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/motion.dart';
 import 'alarm_ringing_page.dart';
 
 /// `February 16, 2026`-style date for the follow-up card.
@@ -14,6 +15,9 @@ String _formatFollowUpDate(DateTime date) {
   ];
   return '${months[date.month - 1]} ${date.day}, ${date.year}';
 }
+
+/// White at [alpha] — the translucent "glass" used on the green hero.
+Color _glass(double alpha) => Colors.white.withValues(alpha: alpha);
 
 class DashboardPage extends StatefulWidget {
   final ValueChanged<String>? onViewChange;
@@ -27,6 +31,10 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   /// First day of the month the home calendar shows.
   late DateTime _month;
+
+  /// Direction of the last month change (-1 back, 1 forward), so the grid
+  /// slides in from the matching side.
+  int _monthDirection = 0;
 
   @override
   void initState() {
@@ -42,14 +50,25 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _changeMonth(int delta) {
     if (delta > 0 && !_canGoForward) return;
-    setState(() => _month = DateTime(_month.year, _month.month + delta));
+    setState(() {
+      _monthDirection = delta;
+      _month = DateTime(_month.year, _month.month + delta);
+    });
   }
+
+  BoxDecoration _cardDecoration(AppPalette p) => BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: p.borderLight),
+        boxShadow: p.cardShadow,
+      );
 
   @override
   Widget build(BuildContext context) {
     final meds = context.watch<MedicationsProvider>();
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
+    final p = context.palette;
 
     final now = DateTime.now();
     final today =
@@ -57,31 +76,25 @@ class _DashboardPageState extends State<DashboardPage> {
     final todayAlarms = meds.upcomingAlarms.take(3).toList();
 
     return RefreshIndicator(
+      color: p.primary,
+      backgroundColor: p.card,
       onRefresh: () => meds.refresh(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
         children: [
-          // Hero Section
-          _buildHeroSection(context, user?.fullName ?? '', today, meds),
+          _buildHeroSection(context, p, user?.fullName ?? '', today, meds),
           const SizedBox(height: 12),
-
-          // Content section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Next dose + alarm preview
-                _buildNextDoseCard(context, meds),
+                FadeSlideIn(index: 3, child: _buildNextDoseCard(context, p, meds)),
                 const SizedBox(height: 16),
-
-                // Treatment calendar with day-status legend
-                _buildTreatmentCalendar(meds),
+                FadeSlideIn(index: 4, child: _buildTreatmentCalendar(p, meds)),
                 const SizedBox(height: 16),
-
-                // Today's doses (upcoming reminders only)
-                _buildTodayDoses(context, todayAlarms),
+                FadeSlideIn(index: 5, child: _buildTodayDoses(p, todayAlarms)),
                 const SizedBox(height: 32),
               ],
             ),
@@ -91,64 +104,32 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // ---------- Hero ----------
+
   Widget _buildHeroSection(
     BuildContext context,
+    AppPalette p,
     String userName,
     String today,
     MedicationsProvider meds,
   ) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: AppColors.primaryGradient,
+          colors: p.heroGradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: Stack(
         children: [
-          // Decorative circles
-          Positioned(
-            top: 10,
-            right: 20,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0x19FFFFFF),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 50,
-            left: 10,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0x19FFFFFF),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 60,
-            right: 60,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0x19FFFFFF),
-              ),
-            ),
-          ),
+          const Positioned(top: -30, right: -20, child: _HeroCircle(size: 140)),
+          const Positioned(top: 90, left: -40, child: _HeroCircle(size: 110)),
+          const Positioned(bottom: 70, right: 50, child: _HeroCircle(size: 50)),
 
           Padding(
-            // Top inset keeps the avatar row clear of the status bar / notch,
-            // the same way the navigation header does.
+            // Top inset keeps the avatar row clear of the status bar / notch.
             padding: EdgeInsets.fromLTRB(
               16,
               MediaQuery.of(context).padding.top + 16,
@@ -158,363 +139,11 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Welcome row
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        color: AppColors.primary,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome back,',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            userName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            today,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Settings icon
-                    GestureDetector(
-                      onTap: () => widget.onViewChange?.call('profile'),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(21),
-                        ),
-                        child: const Icon(
-                          Icons.settings,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Treatment status card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    color: Colors.white.withValues(alpha: 0.15),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.shield,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'TREATMENT STATUS',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final bool isNarrow = constraints.maxWidth < 300;
-                          if (isNarrow) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${meds.progressPercentage}%',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  meds.totalScheduledDays != null
-                                      ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
-                                      : '${meds.treatmentDays} days taken',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.local_fire_department,
-                                      size: 14,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${meds.doseLogs.length} day streak',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${meds.progressPercentage}%',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      meds.totalScheduledDays != null
-                                          ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
-                                          : '${meds.treatmentDays} days taken',
-                                      style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.8),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'STREAK',
-                                      style: TextStyle(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.7),
-                                        fontSize: 8,
-                                        letterSpacing: 1,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 1),
-                                    Text(
-                                      '${meds.doseLogs.length}d',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      // Progress bar
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          height: 8,
-                          color: Colors.white.withValues(alpha: 0.2),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: (meds.treatmentDays / 180).clamp(
-                              0.0,
-                              1.0,
-                            ),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.white, Color(0xFFBBF7D0)],
-                                ),
-                                borderRadius: BorderRadius.horizontal(
-                                  right: Radius.circular(6),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Text(
-                          'Complete your full course for successful recovery.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                FadeSlideIn(child: _buildWelcomeRow(p, userName, today)),
+                const SizedBox(height: 18),
+                FadeSlideIn(index: 1, child: _buildStatusCard(meds)),
                 const SizedBox(height: 12),
-
-                // Next follow-up card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    color: Colors.white.withValues(alpha: 0.15),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.calendar_today,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'NEXT FOLLOW-UP',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        meds.nextFollowUpDate != null
-                            ? _formatFollowUpDate(meds.nextFollowUpDate!)
-                            : 'No follow-up scheduled',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        meds.nextFollowUpStatus == 'overdue'
-                            ? 'A follow-up is overdue — contact your clinic.'
-                            : meds.nextFollowUpStatus == 'due'
-                                ? 'Your check-up is coming up soon.'
-                                : 'Keep your review appointments on schedule.',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'MEDICATION PLAN',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 9,
-                                letterSpacing: 1,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              meds.upcomingMedicationNames.isNotEmpty
-                                  ? meds.upcomingMedicationNames
-                                  : 'Your medication list will appear here.',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                FadeSlideIn(index: 2, child: _buildFollowUpCard(meds)),
               ],
             ),
           ),
@@ -531,10 +160,8 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               child: Container(
                 height: 20,
-                color: AppColors.background,
-                child: CustomPaint(
-                  painter: _CurvePainter(AppColors.background),
-                ),
+                color: p.background,
+                child: CustomPaint(painter: _CurvePainter(p.background)),
               ),
             ),
           ),
@@ -543,83 +170,364 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildNextDoseCard(BuildContext context, MedicationsProvider meds) {
-    final next = meds.nextAlarm;
+  Widget _buildWelcomeRow(AppPalette p, String userName, String today) {
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : null;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: _glass(0.35), width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: initial != null
+              ? Text(
+                  initial,
+                  style: TextStyle(
+                    color: AppPalette.light.brandAction,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                )
+              : Icon(Icons.person, color: AppPalette.light.brandAction),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Welcome back,',
+                style: TextStyle(color: _glass(0.75), fontSize: 13),
+              ),
+              Text(
+                userName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              Text(
+                today,
+                style: TextStyle(color: _glass(0.7), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        PressableScale(
+          pressedScale: 0.9,
+          child: Material(
+            color: _glass(0.16),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => widget.onViewChange?.call('profile'),
+              child: const SizedBox(
+                width: 42,
+                height: 42,
+                child: Icon(Icons.settings_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusCard(MedicationsProvider meds) {
+    final daysLabel = meds.totalScheduledDays != null
+        ? '${meds.treatmentDays} of ${meds.totalScheduledDays} days taken'
+        : '${meds.treatmentDays} days taken';
+    final progress = (meds.treatmentDays / 180).clamp(0.0, 1.0);
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _HeroLabel(icon: Icons.shield_rounded, text: 'TREATMENT STATUS'),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final percent = AnimatedCount(
+                value: meds.progressPercentage,
+                suffix: '%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                  height: 1.05,
+                ),
+              );
+              final days = Text(
+                daysLabel,
+                style: TextStyle(color: _glass(0.8), fontSize: 12),
+              );
+              final streak = _StreakChip(days: meds.doseLogs.length);
+
+              if (constraints.maxWidth < 300) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [percent, days, const SizedBox(height: 8), streak],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [percent, days],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  streak,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          // Progress bar that fills from empty when the screen opens.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              height: 8,
+              color: _glass(0.18),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: progress),
+                duration: Motion.reduced(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 1100),
+                curve: Motion.emphasized,
+                builder: (context, value, _) => FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: value,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFA7E2BE), Colors.white],
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Complete your full course for successful recovery.',
+            style: TextStyle(color: _glass(0.75), fontSize: 11.5),
           ),
         ],
       ),
-      child: Row(
+    );
+  }
+
+  Widget _buildFollowUpCard(MedicationsProvider meds) {
+    final status = meds.nextFollowUpStatus;
+    final isOverdue = status == 'overdue';
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: AppColors.primaryGradient),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.alarm_rounded,
+          Row(
+            children: [
+              const Expanded(
+                child: _HeroLabel(
+                  icon: Icons.event_rounded,
+                  text: 'NEXT FOLLOW-UP',
+                ),
+              ),
+              if (status == 'overdue' || status == 'due')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isOverdue
+                        ? const Color(0xFFFCEFEC)
+                        : const Color(0xFFFBF3E2),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    isOverdue ? 'Overdue' : 'Soon',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isOverdue
+                          ? const Color(0xFF8C3226)
+                          : const Color(0xFF7C5713),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            meds.nextFollowUpDate != null
+                ? _formatFollowUpDate(meds.nextFollowUpDate!)
+                : 'No follow-up scheduled',
+            style: const TextStyle(
               color: Colors.white,
-              size: 26,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            isOverdue
+                ? 'A follow-up is overdue — contact your clinic.'
+                : status == 'due'
+                    ? 'Your check-up is coming up soon.'
+                    : 'Keep your review appointments on schedule.',
+            style: TextStyle(color: _glass(0.8), fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _glass(0.12),
+              borderRadius: BorderRadius.circular(AppRadius.md + 2),
+            ),
+            child: Row(
               children: [
-                Text(
-                  'NEXT DOSE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1,
-                    color: AppColors.mutedForeground,
+                Icon(Icons.medication_rounded, size: 18, color: _glass(0.85)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'MEDICATION PLAN',
+                        style: TextStyle(
+                          color: _glass(0.7),
+                          fontSize: 9.5,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        meds.upcomingMedicationNames.isNotEmpty
+                            ? meds.upcomingMedicationNames
+                            : 'Your medication list will appear here.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  next != null ? next.displayTime : 'No alarm set',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  next != null
-                      ? '${next.label} • ${next.medicationName}'
-                      : 'Tap Reminder to set your time',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.mutedForeground,
-                  ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton.outlined(
-            onPressed: next == null
-                ? null
-                : () => AlarmRingingPage.open(context, next),
-            tooltip: 'Preview alarm',
-            icon: const Icon(Icons.play_circle_outline_rounded),
-          ),
         ],
+      ),
+    );
+  }
+
+  // ---------- Next dose ----------
+
+  Widget _buildNextDoseCard(
+    BuildContext context,
+    AppPalette p,
+    MedicationsProvider meds,
+  ) {
+    final next = meds.nextAlarm;
+
+    return PressableScale(
+      enabled: next != null,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: _cardDecoration(p),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [p.brandAction, p.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                boxShadow: [
+                  BoxShadow(
+                    color: p.primary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.alarm_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionLabel('NEXT DOSE', color: p.textTertiary),
+                  const SizedBox(height: 3),
+                  Text(
+                    next != null ? next.displayTime : 'No alarm set',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                      letterSpacing: -0.4,
+                      color: p.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    next != null
+                        ? '${next.label} • ${next.medicationName}'
+                        : 'Tap Reminder to set your time',
+                    style: TextStyle(fontSize: 12, color: p.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              onPressed: next == null
+                  ? null
+                  : () => AlarmRingingPage.open(context, next),
+              tooltip: 'Preview alarm',
+              style: IconButton.styleFrom(
+                backgroundColor: p.primarySoft,
+                foregroundColor: p.primaryStrong,
+              ),
+              icon: const Icon(Icons.play_arrow_rounded),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -628,42 +536,48 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// The month grid from the Calendar tab, simplified: the same taken /
   /// pending / missed coloring the clinic sees, with a legend underneath.
-  Widget _buildTreatmentCalendar(MedicationsProvider meds) {
+  Widget _buildTreatmentCalendar(AppPalette p, MedicationsProvider meds) {
     final firstOfMonth = DateTime(_month.year, _month.month);
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final leadingBlanks = firstOfMonth.weekday % 7; // Sunday-first
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+      decoration: _cardDecoration(p),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.calendar_month_rounded,
-                size: 18,
-                color: AppColors.primary,
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: p.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  size: 18,
+                  color: p.primaryStrong,
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  _monthLabel,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                child: AnimatedSwitcher(
+                  duration: Motion.medium,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [...previous, ?current],
+                  ),
+                  child: Text(
+                    _monthLabel,
+                    key: ValueKey(_month),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: p.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -689,7 +603,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.mutedForeground,
+                        color: p.textTertiary,
                       ),
                     ),
                   ),
@@ -697,35 +611,55 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
           const SizedBox(height: 6),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
-            childAspectRatio: 1.0,
-            children: [
-              for (var i = 0; i < leadingBlanks; i++) const SizedBox.shrink(),
-              for (var day = 1; day <= daysInMonth; day++)
-                _buildDayCell(meds, DateTime(_month.year, _month.month, day)),
-            ],
+          // The grid slides in from the side of the month change.
+          AnimatedSwitcher(
+            duration: Motion.reduced(context) ? Duration.zero : Motion.medium,
+            switchInCurve: Motion.emphasized,
+            switchOutCurve: Curves.easeIn,
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.topCenter,
+              children: [...previous, ?current],
+            ),
+            transitionBuilder: (child, animation) {
+              final incoming = child.key == ValueKey(_month);
+              final dx = 0.12 * _monthDirection * (incoming ? 1 : -1);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(dx, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: GridView.count(
+              key: ValueKey(_month),
+              crossAxisCount: 7,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              childAspectRatio: 1.0,
+              children: [
+                for (var i = 0; i < leadingBlanks; i++) const SizedBox.shrink(),
+                for (var day = 1; day <= daysInMonth; day++)
+                  _buildDayCell(p, meds, DateTime(_month.year, _month.month, day)),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
-          const Wrap(
+          Divider(height: 1, color: p.borderLight),
+          const SizedBox(height: 12),
+          Wrap(
             spacing: 14,
             runSpacing: 8,
             children: [
-              _LegendDot(
-                color: AppColors.primary,
-                label: 'Taken',
-              ),
-              _LegendDot(
-                color: AppColors.amber,
-                label: 'Pending',
-                ring: true,
-              ),
-              _LegendDot(color: AppColors.destructive, label: 'Missed'),
-              _LegendDot(color: AppColors.primaryDark, label: 'Today', ring: true),
+              _LegendDot(color: p.primary, label: 'Taken'),
+              _LegendDot(color: p.warning, label: 'Flagged', ring: true),
+              _LegendDot(color: p.danger, label: 'Missed'),
+              _LegendDot(color: p.primaryStrong, label: 'Today', ring: true),
             ],
           ),
         ],
@@ -733,7 +667,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildDayCell(MedicationsProvider meds, DateTime day) {
+  Widget _buildDayCell(AppPalette p, MedicationsProvider meds, DateTime day) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final isToday = day == today;
@@ -742,35 +676,35 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final doses = meds.dosesOnDay(day);
     final taken = doses.isNotEmpty;
-    final unverified = doses.any((log) => !log.verified);
+    final flagged = doses.any((log) => log.flagged);
     final missed = !taken && !isFuture && !beforeStart;
 
     Color background = Colors.transparent;
-    Color foreground = AppColors.foreground;
+    Color foreground = p.textPrimary;
     Color borderColor = Colors.transparent;
 
-    if (taken && !unverified) {
-      background = AppColors.primary;
-      foreground = Colors.white;
-    } else if (unverified) {
-      background = AppColors.amber.withValues(alpha: 0.18);
-      foreground = AppColors.amber;
-      borderColor = AppColors.amber.withValues(alpha: 0.6);
+    if (taken && !flagged) {
+      background = p.primary;
+      foreground = p.onPrimary;
+    } else if (flagged) {
+      background = p.warningBg;
+      foreground = p.warning;
+      borderColor = p.warning.withValues(alpha: 0.6);
     } else if (missed) {
-      background = AppColors.destructive.withValues(alpha: 0.08);
-      foreground = AppColors.mutedForeground;
-      borderColor = AppColors.destructive.withValues(alpha: 0.4);
+      background = p.dangerBg;
+      foreground = p.danger;
+      borderColor = p.danger.withValues(alpha: 0.35);
     } else {
       // Future days and days before the regimen started.
-      foreground = AppColors.mutedForeground.withValues(alpha: 0.45);
+      foreground = p.textMuted;
     }
 
     return Container(
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(AppRadius.md - 1),
         border: Border.all(
-          color: isToday ? AppColors.primaryDark : borderColor,
+          color: isToday ? p.primaryStrong : borderColor,
           width: isToday ? 2 : 1,
         ),
       ),
@@ -785,7 +719,7 @@ class _DashboardPageState extends State<DashboardPage> {
               '${day.day}',
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                 color: foreground,
               ),
             ),
@@ -795,60 +729,74 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  /// A slim row of today's remaining doses, kept because the hero card
-  /// replaced the old schedule section.
-  Widget _buildTodayDoses(BuildContext context, List<Alarm> alarms) {
+  // ---------- Today ----------
+
+  /// A slim list of today's remaining doses.
+  Widget _buildTodayDoses(AppPalette p, List<Alarm> alarms) {
     if (alarms.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+      decoration: _cardDecoration(p),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'TODAY',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...alarms.map(
-            (alarm) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${alarm.displayTime} · ${alarm.medicationName}',
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
+          _SectionLabel('TODAY', color: p.textTertiary),
+          const SizedBox(height: 6),
+          for (var i = 0; i < alarms.length; i++)
+            FadeSlideIn(
+              index: 6 + i,
+              offset: 10,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: p.primarySoft,
+                        borderRadius: BorderRadius.circular(AppRadius.sm + 2),
+                      ),
+                      child: Icon(
+                        Icons.access_time_rounded,
+                        size: 16,
+                        color: p.primaryStrong,
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => widget.onViewChange?.call('reminder'),
-                    child: const Text('Details'),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: alarms[i].displayTime,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: p.textPrimary,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '  ·  ${alarms[i].medicationName}',
+                              style: TextStyle(color: p.textSecondary),
+                            ),
+                          ],
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => widget.onViewChange?.call('reminder'),
+                      child: const Text('Details'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -872,6 +820,128 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
+/// Translucent card that sits on the green hero.
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+
+  const _GlassCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _glass(0.12),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: _glass(0.18)),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Small caps label with an icon, for cards on the hero.
+class _HeroLabel extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _HeroLabel({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: Colors.white),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: _glass(0.9),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StreakChip extends StatelessWidget {
+  final int days;
+
+  const _StreakChip({required this.days});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _glass(0.14),
+        borderRadius: BorderRadius.circular(AppRadius.md + 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.local_fire_department_rounded,
+            size: 16,
+            color: Color(0xFFFFC56B),
+          ),
+          const SizedBox(width: 4),
+          AnimatedCount(
+            value: days,
+            suffix: ' day streak',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _SectionLabel(this.text, {required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.1,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _HeroCircle extends StatelessWidget {
+  final double size;
+
+  const _HeroCircle({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: _glass(0.07)),
+    );
+  }
+}
+
 class _MiniMonthButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
@@ -880,19 +950,22 @@ class _MiniMonthButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primary.withValues(alpha: onTap == null ? 0.06 : 0.12),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: Icon(
-            icon,
-            color: AppColors.primary,
-            size: 20,
+    final p = context.palette;
+    final enabled = onTap != null;
+
+    return AnimatedOpacity(
+      duration: Motion.fast,
+      opacity: enabled ? 1 : 0.4,
+      child: Material(
+        color: p.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(icon, color: p.primaryStrong, size: 20),
           ),
         ),
       ),
@@ -928,10 +1001,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11.5,
-            color: AppColors.mutedForeground,
-          ),
+          style: TextStyle(fontSize: 11.5, color: context.palette.textSecondary),
         ),
       ],
     );
@@ -960,5 +1030,6 @@ class _CurvePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CurvePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

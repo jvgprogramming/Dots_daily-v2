@@ -242,13 +242,15 @@ final class Adherence
             ->whereIn('patient_id', $ids)
             ->whereDate('scheduled_date', '>=', $from->toDateString())
             ->whereDate('scheduled_date', '<=', $to->toDateString())
-            ->get(['patient_id', 'scheduled_date', 'status']);
+            ->get(['patient_id', 'scheduled_date', 'status', 'flagged_at']);
 
         $sets = [];
         foreach ($rows as $row) {
             $patientId = (int) $row->patient_id;
             $date = $row->scheduled_date->toDateString();
-            $status = $row->status;
+            // A flagged dose is held out of adherence until the flag is cleared,
+            // so it is treated as a non-counting day rather than a taken one.
+            $status = $row->flagged_at !== null ? 'flagged' : $row->status;
 
             if (! isset($sets[$patientId][$date]) || self::countsAsTaken($status)) {
                 $sets[$patientId][$date] = $status;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Models\FollowUpReschedule;
 use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
@@ -192,7 +193,7 @@ class ReportsController extends BaseApiController
             return [
                 'id' => (int) $id,
                 'name' => $patient
-                    ? (trim(($patient->first_name ?? '') . ' ' . ($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'))
+                    ? (trim(($patient->first_name ?? '').' '.($patient->last_name ?? '')) ?: ($patient->user?->name ?? 'Unnamed patient'))
                     : 'Unknown patient',
                 'status' => $patient?->status ?? 'registered',
                 'total_doses' => (int) ($row->total_doses ?? 0),
@@ -211,7 +212,7 @@ class ReportsController extends BaseApiController
         $unrecordedDays = $this->countUnrecordedDays($from, $to, $dailyRows, $patientId);
 
         // ── Rescheduled follow-ups in range (from the reschedule audit) ──
-        $reschedulesQuery = \App\Models\FollowUpReschedule::query()
+        $reschedulesQuery = FollowUpReschedule::query()
             ->with(['patient.user', 'treatmentPlan', 'rescheduledBy'])
             ->orderByDesc('rescheduled_at')
             ->orderByDesc('id')
@@ -223,7 +224,7 @@ class ReportsController extends BaseApiController
             'id' => $r->id,
             'patient_id' => $r->patient_id,
             'patient_name' => $r->patient
-                ? (trim(($r->patient->first_name ?? '') . ' ' . ($r->patient->last_name ?? '')) ?: ($r->patient->user?->name ?? 'Unnamed patient'))
+                ? (trim(($r->patient->first_name ?? '').' '.($r->patient->last_name ?? '')) ?: ($r->patient->user?->name ?? 'Unnamed patient'))
                 : 'Unknown patient',
             'treatment_plan_id' => $r->treatment_plan_id,
             'plan_name' => $r->treatmentPlan?->plan_name,
@@ -240,7 +241,7 @@ class ReportsController extends BaseApiController
 
         // ── Recent medication logs (the live feed from mobile confirmations) ──
         $recentLogs = (clone $baseQuery)
-            ->with(['patient.user', 'treatmentPlanMedication.medication', 'observedBy'])
+            ->with(['patient.user', 'treatmentPlanMedication.medication', 'observedBy', 'flaggedBy'])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('taken_at')
             ->orderByDesc('id')
@@ -249,11 +250,14 @@ class ReportsController extends BaseApiController
             ->map($logPayload)
             ->values();
 
-        // ── Proof uploads (logs that include photo evidence) ──────────
+        // ── Proof uploads (logs with photo or video evidence) ──────────
         $proofUploads = (clone $baseQuery)
-            ->whereNotNull('proof_photo')
-            ->where('proof_photo', '!=', '')
-            ->with(['patient.user', 'treatmentPlanMedication.medication', 'observedBy'])
+            ->where(function ($q) {
+                $q->where(function ($q) {
+                    $q->whereNotNull('proof_photo')->where('proof_photo', '!=', '');
+                })->orWhereNotNull('proof_video_path');
+            })
+            ->with(['patient.user', 'treatmentPlanMedication.medication', 'observedBy', 'flaggedBy'])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('taken_at')
             ->orderByDesc('id')
@@ -300,10 +304,10 @@ class ReportsController extends BaseApiController
             'id' => $log->id,
             'patient_id' => $log->patient_id,
             'patient_name' => $log->patient
-                ? (trim(($log->patient->first_name ?? '') . ' ' . ($log->patient->last_name ?? '')) ?: ($log->patient->user?->name ?? 'Unnamed patient'))
+                ? (trim(($log->patient->first_name ?? '').' '.($log->patient->last_name ?? '')) ?: ($log->patient->user?->name ?? 'Unnamed patient'))
                 : 'Unknown patient',
             'medication_name' => $medication?->name
-                ? trim($medication->name . ($medication->strength ? " {$medication->strength}" : ''))
+                ? trim($medication->name.($medication->strength ? " {$medication->strength}" : ''))
                 : null,
             'scheduled_date' => $log->scheduled_date?->toDateString(),
             'scheduled_time' => $log->scheduled_time,
@@ -312,11 +316,15 @@ class ReportsController extends BaseApiController
             'dose_quantity' => $log->dose_quantity,
             'proof_photo' => $log->proof_photo,
             'proof_url' => $this->proofUrl($log->proof_photo),
+            'proof_video_url' => $log->proof_video_url,
+            'has_video' => $log->proof_video_path !== null,
             'notes' => $log->notes,
             'observed_by_name' => $log->observedBy?->name,
-            // Confirmed by a DOTS observer — what the admin can toggle from this
-            // same table, and what the calendars read for their green/pending split.
             'verified' => $log->observed_by !== null,
+            // Logged-by-default review: a dose counts unless a nurse flags it.
+            'flagged' => $log->flagged,
+            'flag_reason' => $log->flag_reason,
+            'flagged_by_name' => $log->flaggedBy?->name,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
     }
@@ -326,20 +334,20 @@ class ReportsController extends BaseApiController
      * medication time but no medication log row → "unrecorded". Derived live
      * from active treatment plans; no separate storage.
      */
-    private function countUnrecordedDays(\Carbon\CarbonImmutable $from, \Carbon\CarbonImmutable $to, $dailyRows, ?int $patientId): int
+    private function countUnrecordedDays(CarbonImmutable $from, CarbonImmutable $to, $dailyRows, ?int $patientId): int
     {
-        $plansQuery = \App\Models\TreatmentPlan::query()->where('status', 'active');
+        $plansQuery = TreatmentPlan::query()->where('status', 'active');
         if ($patientId) {
             $plansQuery->where('patient_id', $patientId);
         }
         $plans = $plansQuery->get(['id', 'patient_id', 'start_date', 'expected_end_date']);
 
         $unrecorded = 0;
-        $today = \Carbon\CarbonImmutable::today();
+        $today = CarbonImmutable::today();
 
         foreach ($plans as $plan) {
-            $start = \Carbon\CarbonImmutable::parse($plan->start_date)->max($from);
-            $end = \Carbon\CarbonImmutable::parse($plan->expected_end_date)->min($to)->min($today);
+            $start = CarbonImmutable::parse($plan->start_date)->max($from);
+            $end = CarbonImmutable::parse($plan->expected_end_date)->min($to)->min($today);
 
             for ($d = $start->copy(); $d->lte($end); $d = $d->addDay()) {
                 if (! $dailyRows->has($d->toDateString())) {
@@ -364,7 +372,7 @@ class ReportsController extends BaseApiController
             return $path;
         }
         if (Str::startsWith($path, 'storage/')) {
-            return rtrim(config('app.url'), '/') . '/' . ltrim($path, '/');
+            return rtrim(config('app.url'), '/').'/'.ltrim($path, '/');
         }
 
         return Storage::disk('public')->url(ltrim($path, '/'));

@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/medication.dart';
 import '../providers/medications_provider.dart';
 import '../services/device_lock_service.dart';
+import '../services/proof_capture_service.dart';
 import '../theme/app_theme.dart';
 import 'app_lock_page.dart';
 
@@ -55,6 +56,10 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
   Timer? _clock;
   DateTime _now = DateTime.now();
 
+  /// True while the camera/compression round-trip is in progress, so the button
+  /// shows a busy state and can't be tapped twice.
+  bool _capturing = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,20 +92,57 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
     super.dispose();
   }
 
-  Future<void> _finish(AlarmDismissAction action) async {
-    if (action == AlarmDismissAction.taken && !widget.preview) {
-      context.read<MedicationsProvider>().addDoseLog(
-        DoseLog(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          medicationId: widget.alarm.medicationId,
-          medicationName: widget.alarm.medicationName,
-          timestamp: DateTime.now(),
-          verified: false,
-          notes: 'Logged from alarm',
-        ),
-      );
+  /// "I took my dose" — the only way to clear the alarm. The patient must
+  /// record a short proof clip; backing out of the recorder leaves the alarm
+  /// ringing. The clip is attached to the dose log and uploaded by the provider
+  /// (queued if offline), so dismissal never depends on the network.
+  Future<void> _onTakeDose() async {
+    if (_capturing) return;
+
+    // The demo/preview never records or logs anything.
+    if (widget.preview) {
+      await _dismiss(AlarmDismissAction.taken);
+      return;
     }
 
+    setState(() => _capturing = true);
+    String? videoPath;
+    try {
+      videoPath = await ProofCaptureService().record();
+    } catch (_) {
+      videoPath = null;
+    }
+    if (!mounted) return;
+    setState(() => _capturing = false);
+
+    // No clip = not taken: keep ringing and tell the patient why.
+    if (videoPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Record yourself taking your dose to continue.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    context.read<MedicationsProvider>().addDoseLog(
+      DoseLog(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        medicationId: widget.alarm.medicationId,
+        medicationName: widget.alarm.medicationName,
+        timestamp: DateTime.now(),
+        verified: false,
+        notes: 'Logged from alarm',
+        localVideoPath: videoPath,
+      ),
+    );
+
+    await _dismiss(AlarmDismissAction.taken);
+  }
+
+  /// Closes the ringing screen (after the lock gate), without logging anything.
+  Future<void> _dismiss(AlarmDismissAction action) async {
     // The activity is showWhenLocked, so after the alarm closes the whole app
     // would sit exposed over the keyguard. Park the lock gate underneath this
     // page first (push), then pop — the user only ever sees: alarm → PIN.
@@ -160,255 +202,277 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1220),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0B1220), Color(0xFF10233A), Color(0xFF0B1220)],
+    // The alarm cannot be swiped or backed away: the only exits are recording
+    // the dose or snoozing.
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0B1220),
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0B1220), Color(0xFF10233A), Color(0xFF0B1220)],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Scrollable + centred: the alarm must stay fully usable and
-              // un-clipped on short screens and with large system text.
-              return SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 20),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Scrollable + centred: the alarm must stay fully usable and
+                // un-clipped on short screens and with large system text.
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 20),
 
-                      // Pulsing med badge
-                      AnimatedBuilder(
-                        animation: Listenable.merge([_pulse, _breath]),
-                        builder: (context, _) {
-                          return SizedBox(
-                            width: 220,
-                            height: 220,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                _Ripple(
-                                  pulse: _pulse.value,
-                                  color: AppColors.primary,
-                                ),
-                                _Ripple(
-                                  pulse: (_pulse.value + 0.5) % 1.0,
-                                  color: AppColors.greenLight,
-                                ),
-                                ScaleTransition(
-                                  scale: Tween(begin: 0.94, end: 1.06).animate(
-                                    CurvedAnimation(
-                                      parent: _breath,
-                                      curve: Curves.easeInOut,
-                                    ),
+                        // Pulsing med badge
+                        AnimatedBuilder(
+                          animation: Listenable.merge([_pulse, _breath]),
+                          builder: (context, _) {
+                            return SizedBox(
+                              width: 220,
+                              height: 220,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  _Ripple(
+                                    pulse: _pulse.value,
+                                    color: AppColors.primary,
                                   ),
-                                  child: Container(
-                                    width: 120,
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: const LinearGradient(
-                                        colors: AppColors.primaryGradient,
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.55,
+                                  _Ripple(
+                                    pulse: (_pulse.value + 0.5) % 1.0,
+                                    color: AppColors.greenLight,
+                                  ),
+                                  ScaleTransition(
+                                    scale: Tween(begin: 0.94, end: 1.06)
+                                        .animate(
+                                          CurvedAnimation(
+                                            parent: _breath,
+                                            curve: Curves.easeInOut,
                                           ),
-                                          blurRadius: 40 + 20 * _breath.value,
-                                          spreadRadius: 2,
                                         ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.medication_rounded,
-                                      color: Colors.white,
-                                      size: 56,
+                                    child: Container(
+                                      width: 120,
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: const LinearGradient(
+                                          colors: AppColors.primaryGradient,
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.55,
+                                            ),
+                                            blurRadius: 40 + 20 * _breath.value,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.medication_rounded,
+                                        color: Colors.white,
+                                        size: 56,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Label pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
+                        const SizedBox(height: 28),
+
+                        // Label pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.alarm,
+                                color: AppColors.accent,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  widget.alarm.label,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        const SizedBox(height: 16),
+
+                        // Medication name
+                        Text(
+                          'Time to take',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.alarm.medicationName,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Live clock
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
-                              Icons.alarm,
-                              color: AppColors.accent,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
                             Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _timeText,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 72,
+                                    fontWeight: FontWeight.w200,
+                                    letterSpacing: 2,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8, height: 72),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 14),
                               child: Text(
-                                widget.alarm.label,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
+                                _ampm,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Medication name
-                      Text(
-                        'Time to take',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 15,
+                        const SizedBox(height: 4),
+                        Text(
+                          _dateText,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.alarm.medicationName,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          height: 1.15,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
 
-                      // Live clock
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                _timeText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 72,
-                                  fontWeight: FontWeight.w200,
-                                  letterSpacing: 2,
-                                  height: 1.0,
-                                ),
+                        const SizedBox(height: 28),
+
+                        // Take dose button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 60,
+                          child: ElevatedButton.icon(
+                            onPressed: _capturing ? null : _onTakeDose,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0B1220),
+                              disabledBackgroundColor: Colors.white70,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            icon: _capturing
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Color(0xFF0B1220),
+                                    ),
+                                  )
+                                : const Icon(Icons.videocam_rounded, size: 26),
+                            label: Text(
+                              _capturing
+                                  ? 'Preparing…'
+                                  : 'Record & take my dose',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8, height: 72),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 14),
-                            child: Text(
-                              _ampm,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Snooze button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: OutlinedButton.icon(
+                            onPressed: _capturing
+                                ? null
+                                : () => _dismiss(AlarmDismissAction.snoozed),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            icon: const Icon(Icons.snooze_rounded, size: 24),
+                            label: const Text(
+                              'Snooze 5 minutes',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.8),
-                                fontSize: 22,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _dateText,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
-                          fontSize: 14,
                         ),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // Take dose button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 60,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _finish(AlarmDismissAction.taken),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF0B1220),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
-                          icon: const Icon(Icons.check_rounded, size: 26),
-                          label: const Text(
-                            'I took my dose',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Snooze button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _finish(AlarmDismissAction.snoozed),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
-                          icon: const Icon(Icons.snooze_rounded, size: 24),
-                          label: const Text(
-                            'Snooze 5 minutes',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

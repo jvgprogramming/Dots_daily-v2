@@ -31,8 +31,7 @@ class _ReminderPageState extends State<ReminderPage> {
   bool? _fsiAllowed;
   bool _fsiAsking = false;
 
-  int get _notificationId =>
-      MedicationsProvider.reminderId.hashCode & 0x7FFFFFFF;
+  int get _notificationId => MedicationsProvider.reminderNotificationId;
 
   @override
   void initState() {
@@ -300,27 +299,45 @@ class _ReminderPageState extends State<ReminderPage> {
     );
   }
 
+  /// TB treatment depends on taking the dose every day, so the reminder is not
+  /// something to switch off — this card explains that rather than offering a
+  /// toggle that would let the alarm be silenced in one tap.
   Widget _buildEnabledCard() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 10, 6),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(19),
+            ),
+            child: const Icon(
+              Icons.event_repeat_rounded,
+              size: 19,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Remind me every day',
+                  'Every day, before breakfast',
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'You get one reminder each morning.',
+                  'Your TB medicines must be taken daily, so this reminder '
+                  'always stays on. You can change the time above.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.mutedForeground,
@@ -328,11 +345,6 @@ class _ReminderPageState extends State<ReminderPage> {
                 ),
               ],
             ),
-          ),
-          Switch.adaptive(
-            value: _enabled,
-            activeThumbColor: AppColors.primary,
-            onChanged: (v) => setState(() => _enabled = v),
           ),
         ],
       ),

@@ -139,25 +139,26 @@ void main() {
       final day = DateTime.parse(date);
 
       // The regression: a `missed` row used to read as a logged dose, which
-      // turned every missed day into a pending one and drove adherence to 100%.
+      // turned every missed day into a counted one and drove adherence to 100%.
       expect(meds.isDayTaken(day), isFalse, reason: '$date is recorded as missed');
-      expect(meds.isDayUnverified(day), isFalse,
-          reason: '$date must not read as an unverified dose');
+      expect(meds.isDayFlagged(day), isFalse,
+          reason: '$date must not read as a flagged dose');
       expect(meds.dosesOnDay(day), isEmpty, reason: '$date has no dose to show');
     }
 
-    final pending =
-        rows.where((r) => r['status'] != 'missed' && r['verified'] == false).toList();
-    expect(pending, isNotEmpty,
-        reason: 'the demo history should contain unverified doses');
+    // Logged-by-default: a non-missed dose counts and is not flagged unless the
+    // clinic flagged it (nothing is flagged in the default seed).
+    final logged = rows.where((r) => r['status'] != 'missed').toList();
+    expect(logged, isNotEmpty,
+        reason: 'the demo history should contain logged doses');
 
-    for (final row in pending) {
+    for (final row in logged) {
       final date = row['scheduled_date'] as String;
       final day = DateTime.parse(date);
 
       expect(meds.isDayTaken(day), isTrue);
-      expect(meds.isDayUnverified(day), isTrue,
-          reason: '$date is awaiting verification');
+      expect(meds.isDayFlagged(day), isFalse,
+          reason: '$date is logged and not flagged');
     }
   });
 

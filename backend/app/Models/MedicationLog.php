@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\ProofMedia;
+use Database\Factories\MedicationLogFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,14 +19,43 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'status',
     'dose_quantity',
     'proof_photo',
+    'proof_video_path',
+    'proof_video_mime',
+    'proof_video_size',
     'daily_monitoring_id',
     'notes',
     'observed_by',
+    'flagged_at',
+    'flagged_by',
+    'flag_reason',
 ])]
 class MedicationLog extends Model
 {
-    /** @use HasFactory<\Database\Factories\MedicationLogFactory> */
+    /** @use HasFactory<MedicationLogFactory> */
     use HasFactory;
+
+    /** True once a nurse has flagged this dose's proof as suspicious. */
+    protected function flagged(): Attribute
+    {
+        return Attribute::get(fn () => $this->flagged_at !== null);
+    }
+
+    public function flaggedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'flagged_by');
+    }
+
+    /** Displayable URL for the stored proof video (null when none). */
+    protected function proofVideoUrl(): Attribute
+    {
+        return Attribute::get(fn () => ProofMedia::url($this->proof_video_path));
+    }
+
+    /** Displayable URL for the stored proof photo (null when none). */
+    protected function proofPhotoUrl(): Attribute
+    {
+        return Attribute::get(fn () => ProofMedia::url($this->proof_photo));
+    }
 
     public function treatmentPlanMedication(): BelongsTo
     {
@@ -51,6 +83,7 @@ class MedicationLog extends Model
             'scheduled_date' => 'date',
             'scheduled_time' => 'string',
             'taken_at' => 'datetime',
+            'flagged_at' => 'datetime',
         ];
     }
 }

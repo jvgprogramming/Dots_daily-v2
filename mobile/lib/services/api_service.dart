@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
@@ -8,6 +9,19 @@ class ApiException implements Exception {
   final Map<String, dynamic>? errors;
 
   ApiException(this.message, this.statusCode, [this.errors]);
+
+  /// The most useful line to show the user: the first field-validation error
+  /// (e.g. "The provided credentials are incorrect.") when there is one,
+  /// otherwise the top-level message (which is often just "Validation failed.").
+  String get displayMessage {
+    final fieldErrors = errors;
+    if (fieldErrors != null && fieldErrors.isNotEmpty) {
+      final first = fieldErrors.values.first;
+      if (first is List && first.isNotEmpty) return first.first.toString();
+      if (first is String) return first;
+    }
+    return message;
+  }
 
   @override
   String toString() => message;
@@ -83,6 +97,12 @@ class ApiService {
     return headers;
   }
 
+  /// How long to wait for a normal JSON request before giving up. Without this
+  /// a request to an unreachable server hangs for the OS default (often a
+  /// minute or more), which reads to the user as "stuck loading" — so a wrong
+  /// password or an unreachable backend now fails in seconds with a clear error.
+  static const Duration _timeout = Duration(seconds: 15);
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -96,31 +116,42 @@ class ApiService {
     try {
       switch (method) {
         case 'GET':
-          response = await http.get(uri, headers: _headers(withAuth: withAuth));
+          response = await http
+              .get(uri, headers: _headers(withAuth: withAuth))
+              .timeout(_timeout);
           break;
         case 'POST':
-          response = await http.post(
-            uri,
-            headers: _headers(withAuth: withAuth),
-            body: body != null ? jsonEncode(body) : null,
-          );
+          response = await http
+              .post(
+                uri,
+                headers: _headers(withAuth: withAuth),
+                body: body != null ? jsonEncode(body) : null,
+              )
+              .timeout(_timeout);
           break;
         case 'PUT':
-          response = await http.put(
-            uri,
-            headers: _headers(withAuth: withAuth),
-            body: body != null ? jsonEncode(body) : null,
-          );
+          response = await http
+              .put(
+                uri,
+                headers: _headers(withAuth: withAuth),
+                body: body != null ? jsonEncode(body) : null,
+              )
+              .timeout(_timeout);
           break;
         case 'DELETE':
-          response = await http.delete(
-            uri,
-            headers: _headers(withAuth: withAuth),
-          );
+          response = await http
+              .delete(uri, headers: _headers(withAuth: withAuth))
+              .timeout(_timeout);
           break;
         default:
           throw ApiException('Unsupported method: $method', 0);
       }
+    } on TimeoutException {
+      throw ApiException(
+        'The server took too long to respond. Check your connection and that '
+        'the server is running.',
+        0,
+      );
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException('Network error: Could not reach server. ($e)', 0);
@@ -151,4 +182,60 @@ class ApiService {
       _request('PUT', path, body: body);
 
   Future<Map<String, dynamic>> delete(String path) => _request('DELETE', path);
+
+  /// POST a `multipart/form-data` request with scalar [fields] and one file.
+  ///
+  /// Used to send a dose log together with its recorded proof video. We do NOT
+  /// set `Content-Type` ourselves — `MultipartRequest` sets it with the correct
+  /// multipart boundary — but we keep the same `Accept` + bearer auth and parse
+  /// the identical `{ success, message, data }` envelope as [_request].
+  Future<Map<String, dynamic>> postMultipart(
+    String path, {
+    required Map<String, dynamic> fields,
+    required String filePath,
+    String fileField = 'proof_video',
+    bool withAuth = true,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+
+    late http.Response response;
+
+    try {
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Accept'] = 'application/json';
+      if (withAuth && _token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+
+      fields.forEach((key, value) {
+        if (value != null) request.fields[key] = value.toString();
+      });
+
+      request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
+
+      // Video uploads need a longer ceiling than a plain JSON request.
+      final streamed = await request.send().timeout(const Duration(seconds: 120));
+      response = await http.Response.fromStream(streamed);
+    } on TimeoutException {
+      throw ApiException(
+        'The upload took too long. Check your connection and try again.',
+        0,
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Network error: Could not reach server. ($e)', 0);
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        (data['message'] as String?) ?? 'An error occurred',
+        response.statusCode,
+        data['errors'] as Map<String, dynamic>?,
+      );
+    }
+
+    return data;
+  }
 }

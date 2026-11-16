@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/motion.dart';
 import 'providers/auth_provider.dart';
 import 'providers/medications_provider.dart';
 import 'pages/dashboard_page.dart';
@@ -28,6 +29,12 @@ void main() async {
 
   runApp(MyApp(alarmLaunchPayload: alarmLaunchPayload));
 }
+
+/// Light only until every page reads colors from `context.palette`; pages
+/// still on the light-only `AppColors` constants would look broken in dark
+/// mode. Set to [ThemeMode.system] to preview dark mode on the updated
+/// screens (login, home).
+const ThemeMode appThemeMode = ThemeMode.light;
 
 /// Global navigator key so notification taps can open the ringing screen
 /// even when the app is restored from the background.
@@ -67,13 +74,25 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => MedicationsProvider()),
+        ChangeNotifierProvider(
+          create: (_) {
+            final meds = MedicationsProvider();
+            // Startup restore: re-arm the saved daily reminder (covers reboot
+            // and app updates, which clear scheduled alarms) and resurface any
+            // offline-queued proof uploads so they retry.
+            meds.restoreAndArmReminder();
+            meds.restoreQueue();
+            return meds;
+          },
+        ),
       ],
       child: MaterialApp(
         title: 'DOTS Daily',
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,
         theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: appThemeMode,
         home: AlarmLaunchGate(alarmLaunchPayload: alarmLaunchPayload),
       ),
     );
@@ -210,23 +229,51 @@ class _MainShellState extends State<MainShell> {
       });
     }
 
+    final palette = context.palette;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: palette.background,
       // Reserve space for the footer navigation bar so it never covers the
       // last items of a page.
       extendBody: false,
-      body: _buildTab(_tabs[_currentIndex].$1),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: _onTabTapped,
-        destinations: [
-          for (final tab in _tabs)
-            NavigationDestination(
-              icon: Icon(tab.$3),
-              selectedIcon: Icon(tab.$4),
-              label: tab.$2,
-            ),
-        ],
+      // AnimatedSwitcher cross-fades whenever its child's key changes, so
+      // keying each tab by its index animates tab changes.
+      body: AnimatedSwitcher(
+        duration: Motion.reduced(context) ? Duration.zero : Motion.medium,
+        switchInCurve: Motion.emphasized,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.015),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(
+          key: ValueKey(_currentIndex),
+          child: _buildTab(_tabs[_currentIndex].$1),
+        ),
+      ),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.borderLight)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: _onTabTapped,
+          animationDuration: Motion.medium,
+          destinations: [
+            for (final tab in _tabs)
+              NavigationDestination(
+                icon: Icon(tab.$3),
+                selectedIcon: Icon(tab.$4),
+                label: tab.$2,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -304,6 +351,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   bool _obscure = true;
 
+  /// Bumped on every failed sign-in so the form shakes.
+  int _failures = 0;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -319,10 +369,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = false);
 
     if (!auth.isLoggedIn && auth.error != null) {
+      setState(() => _failures++);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.error!),
-          backgroundColor: AppColors.destructive,
+          backgroundColor: context.palette.danger,
         ),
       );
     }
@@ -330,155 +381,253 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFDCFCE7), AppColors.background],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Logo
-                    Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: AppColors.primaryGradient,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.medication_rounded,
-                        color: Colors.white,
-                        size: 38,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'DOTS Daily',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.foreground,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your TB treatment companion.\nSign in to continue.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
+    final p = context.palette;
 
-                    // Card-wrapped form
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: _emailController,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              hintText: 'you@example.com',
-                              prefixIcon: Icon(Icons.email_outlined),
-                            ),
-                            keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _passwordController,
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              hintText: 'Enter your password',
-                              prefixIcon: const Icon(Icons.lock_outlined),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscure
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _obscure = !_obscure),
-                              ),
-                            ),
-                            obscureText: _obscure,
-                            onSubmitted: (_) => _handleLogin(),
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _loading ? null : _handleLogin,
-                              style: ElevatedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: _loading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Sign In',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+    return Scaffold(
+      backgroundColor: p.background,
+      body: Stack(
+        children: [
+          // Deep green band across the top, like the portal's hero areas.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.42,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: p.heroGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(36),
                 ),
               ),
             ),
           ),
+          const Positioned(top: -60, right: -40, child: _GlowCircle(size: 180)),
+          const Positioned(top: 120, left: -50, child: _GlowCircle(size: 120)),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FadeSlideIn(child: _buildLogo()),
+                      const SizedBox(height: 20),
+                      const FadeSlideIn(
+                        index: 1,
+                        child: Text(
+                          'DOTS Daily',
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      FadeSlideIn(
+                        index: 2,
+                        child: Text(
+                          'Your TB treatment companion',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      FadeSlideIn(
+                        index: 3,
+                        offset: 28,
+                        child: ShakeOnChange(
+                          trigger: _failures,
+                          child: _buildFormCard(p),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeSlideIn(
+                        index: 5,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 14,
+                              color: p.textTertiary,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Use the account your health center gave you',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: p.textTertiary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogo() {
+    return Container(
+      width: 96,
+      height: 96,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          'assets/images/logo.png',
+          fit: BoxFit.cover,
         ),
+      ),
+    );
+  }
+
+  Widget _buildFormCard(AppPalette p) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
+        border: Border.all(color: p.borderLight),
+        boxShadow: p.elevatedShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sign in',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: p.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Welcome back. Enter your details to continue.',
+            style: TextStyle(fontSize: 13, color: p.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              hintText: 'you@example.com',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _passwordController,
+            decoration: InputDecoration(
+              labelText: 'Password',
+              hintText: 'Enter your password',
+              prefixIcon: const Icon(Icons.lock_outlined),
+              suffixIcon: IconButton(
+                icon: AnimatedSwitcher(
+                  duration: Motion.fast,
+                  transitionBuilder: (child, a) =>
+                      ScaleTransition(scale: a, child: child),
+                  child: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    key: ValueKey(_obscure),
+                    color: p.textTertiary,
+                  ),
+                ),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+            obscureText: _obscure,
+            onSubmitted: (_) => _handleLogin(),
+          ),
+          const SizedBox(height: 24),
+          PressableScale(
+            enabled: !_loading,
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _handleLogin,
+                child: AnimatedSwitcher(
+                  duration: Motion.fast,
+                  child: _loading
+                      ? const SizedBox(
+                          key: ValueKey('loading'),
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Row(
+                          key: ValueKey('label'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Sign In'),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward_rounded, size: 18),
+                          ],
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Soft translucent circle used as decoration on green hero areas.
+class _GlowCircle extends StatelessWidget {
+  final double size;
+
+  const _GlowCircle({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: 0.07),
       ),
     );
   }

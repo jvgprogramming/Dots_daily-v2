@@ -79,8 +79,59 @@ class DoseVerificationController extends BaseApiController
     }
 
     /**
+     * Flag a dose whose proof video looks suspicious. The dose stays recorded
+     * but is excluded from adherence until a nurse clears the flag.
+     */
+    public function flag(Request $request, MedicationLog $log): JsonResponse
+    {
+        $this->ensureVisible($request, $log);
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $log->fill([
+            'flagged_at' => now(),
+            'flagged_by' => $request->user()->id,
+            'flag_reason' => $data['reason'] ?? null,
+        ])->save();
+
+        $this->audit(
+            $request,
+            $log,
+            'dose.flagged',
+            'Flagged dose',
+            array_filter(['reason' => $data['reason'] ?? null]),
+        );
+
+        return $this->success(
+            data: $this->formatLog($log->load(['patient.user', 'treatmentPlanMedication.medication', 'flaggedBy'])),
+            message: 'Dose flagged for follow-up.',
+        );
+    }
+
+    /** Clear a flag once the concern has been resolved. */
+    public function unflag(Request $request, MedicationLog $log): JsonResponse
+    {
+        $this->ensureVisible($request, $log);
+
+        if ($log->flagged_at === null) {
+            return $this->error('This dose is not flagged.', 422);
+        }
+
+        $log->fill(['flagged_at' => null, 'flagged_by' => null, 'flag_reason' => null])->save();
+
+        $this->audit($request, $log, 'dose.unflagged', 'Cleared flag on dose');
+
+        return $this->success(
+            data: $this->formatLog($log->load(['patient.user', 'treatmentPlanMedication.medication', 'flaggedBy'])),
+            message: 'Dose flag cleared.',
+        );
+    }
+
+    /**
      * The same shape the reports feed uses, so the admin UI can swap the row
-     * in place after a (un)verify without reshaping anything.
+     * in place after an action without reshaping anything.
      */
     private function formatLog(MedicationLog $log): array
     {
@@ -101,10 +152,16 @@ class DoseVerificationController extends BaseApiController
             'taken_at' => $log->taken_at?->toIso8601String(),
             'dose_quantity' => $log->dose_quantity,
             'proof_photo' => $log->proof_photo,
+            'proof_url' => $log->proof_photo_url,
+            'proof_video_url' => $log->proof_video_url,
+            'has_video' => $log->proof_video_path !== null,
             'notes' => $log->notes,
             'observed_by_name' => $log->observedBy?->name,
-            // What the admin UI toggles from the reports table.
             'verified' => $log->observed_by !== null,
+            // Logged-by-default review model: a dose counts unless it is flagged.
+            'flagged' => $log->flagged,
+            'flag_reason' => $log->flag_reason,
+            'flagged_by_name' => $log->flaggedBy?->name,
             'created_at' => $log->created_at?->toIso8601String(),
         ];
     }

@@ -39,16 +39,17 @@ import {
 } from "recharts";
 import {
   Activity,
-  BadgeCheck,
   CalendarX2,
   Camera,
   Check,
   CheckCircle2,
   ChevronDown,
   Clock,
+  Flag,
   ImageOff,
   Loader2,
   Pill,
+  PlayCircle,
   RefreshCw,
   Search,
   Undo2,
@@ -57,9 +58,9 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  flagMedicationLog,
   getMedicationReports,
-  unverifyMedicationLog,
-  verifyMedicationLog,
+  unflagMedicationLog,
 } from "@/lib/services/dashboard";
 import { getPatientList } from "@/lib/services/patients";
 import type {
@@ -382,15 +383,16 @@ export default function ReportsPage() {
   };
 
   // ── Dose verification (the admin half of the loop) ──
-  // A patient's self-logged dose stays pending until a DOTS observer confirms
-  // it. Proof photos help but are never required — asking for one per dose
-  // would be taxing on the patient.
-  const [verifyingLogId, setVerifyingLogId] = useState<number | null>(null);
+  // Doses are "logged" and count by default. A nurse reviews the proof video and
+  // flags one that looks suspicious; a flagged dose is held out of adherence
+  // until the flag is cleared. This is review-by-exception, not verify-everything.
+  const [flaggingLogId, setFlaggingLogId] = useState<number | null>(null);
+  const [flagReason, setFlagReason] = useState("");
 
-  const toggleVerification = async (log: ReportMedicationLog) => {
+  const toggleFlag = async (log: ReportMedicationLog, reason?: string) => {
     // Update the row in place — a reload would re-fetch the whole report and
     // flash skeletons over perfectly good data.
-    const apply = (updated: ReportMedicationLog) =>
+    const apply = (updated: ReportMedicationLog) => {
       setData((prev) =>
         prev
           ? {
@@ -400,18 +402,21 @@ export default function ReportsPage() {
             }
           : prev
       );
+      setPreviewLog((prev) => (prev && prev.id === updated.id ? updated : prev));
+    };
 
-    setVerifyingLogId(log.id);
+    setFlaggingLogId(log.id);
     setError("");
     try {
-      const res = log.verified
-        ? await unverifyMedicationLog(log.id)
-        : await verifyMedicationLog(log.id);
+      const res = log.flagged
+        ? await unflagMedicationLog(log.id)
+        : await flagMedicationLog(log.id, reason?.trim() || undefined);
       if (res.data) apply(res.data);
+      setFlagReason("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update verification");
+      setError(err instanceof Error ? err.message : "Failed to update the flag");
     } finally {
-      setVerifyingLogId(null);
+      setFlaggingLogId(null);
     }
   };
 
@@ -875,38 +880,47 @@ export default function ReportsPage() {
                   cell: (l) => <StatusBadge status={l.status} />,
                 },
                 {
-                  key: "verified",
-                  header: "Verification",
+                  key: "review",
+                  header: "Review",
                   cell: (l) => (
                     <div className="flex items-center justify-between gap-2">
-                      {l.verified ? (
-                        <Badge variant="success" size="sm">
-                          <BadgeCheck className="h-3 w-3" />
-                          Verified{l.observed_by_name ? ` · ${l.observed_by_name}` : ""}
+                      {l.flagged ? (
+                        <Badge
+                          variant="danger"
+                          size="sm"
+                          title={l.flag_reason ?? undefined}
+                        >
+                          <Flag className="h-3 w-3" />
+                          Flagged{l.flagged_by_name ? ` · ${l.flagged_by_name}` : ""}
                         </Badge>
                       ) : (
-                        <Badge variant="info" size="sm">Pending</Badge>
+                        <Badge variant="success" size="sm">
+                          <Check className="h-3 w-3" />
+                          Logged
+                        </Badge>
                       )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={verifyingLogId === l.id}
-                        onClick={() => toggleVerification(l)}
+                        disabled={flaggingLogId === l.id}
+                        onClick={() =>
+                          l.flagged ? toggleFlag(l) : setPreviewLog(l)
+                        }
                         title={
-                          l.verified
-                            ? "Remove verification"
-                            : "Confirm this dose was taken (DOTS observer)"
+                          l.flagged
+                            ? "Clear this flag"
+                            : "Review the proof and flag if suspicious"
                         }
                       >
-                        {l.verified ? (
+                        {l.flagged ? (
                           <>
                             <Undo2 className="h-3.5 w-3.5" />
-                            Unverify
+                            Clear
                           </>
                         ) : (
                           <>
-                            <BadgeCheck className="h-3.5 w-3.5" />
-                            Verify
+                            <Flag className="h-3.5 w-3.5" />
+                            Review
                           </>
                         )}
                       </Button>
@@ -927,7 +941,15 @@ export default function ReportsPage() {
                   key: "proof",
                   header: "Proof",
                   cell: (l) =>
-                    l.proof_url ? (
+                    l.has_video ? (
+                      <button
+                        onClick={() => setPreviewLog(l)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-border-light bg-bg-subtle text-primary transition-opacity hover:opacity-80"
+                        title="Play proof video"
+                      >
+                        <PlayCircle className="h-5 w-5" />
+                      </button>
+                    ) : l.proof_url ? (
                       <button
                         onClick={() => setPreviewLog(l)}
                         className="block overflow-hidden rounded-[8px] border border-border-light transition-opacity hover:opacity-80"
@@ -1005,33 +1027,51 @@ export default function ReportsPage() {
             />
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              {proofUploads.map((log) =>
-                log.proof_url ? (
-                  <button
-                    key={log.id}
-                    onClick={() => setPreviewLog(log)}
-                    className="matte-surface group overflow-hidden rounded-[16px] border text-left transition-shadow hover:shadow-card-hover"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={log.proof_url}
-                      alt={`Proof by ${log.patient_name}`}
-                      className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-                    />
-                    <div className="space-y-1 p-2.5">
-                      <p className="truncate text-xs font-medium text-text-primary">
-                        {log.patient_name}
-                      </p>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[11px] text-text-tertiary">
-                          {fmtDate(log.scheduled_date)}
-                        </span>
-                        <StatusBadge status={log.status} />
+              {proofUploads.map((log) => (
+                <button
+                  key={log.id}
+                  onClick={() => setPreviewLog(log)}
+                  className="matte-surface group overflow-hidden rounded-[16px] border text-left transition-shadow hover:shadow-card-hover"
+                >
+                  <div className="relative h-28 w-full">
+                    {log.proof_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={log.proof_url}
+                        alt={`Proof by ${log.patient_name}`}
+                        className="h-28 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="flex h-28 w-full items-center justify-center bg-bg-subtle text-primary">
+                        <PlayCircle className="h-8 w-8" />
                       </div>
+                    )}
+                    {log.has_video && (
+                      <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                        <PlayCircle className="h-3 w-3" />
+                        Video
+                      </span>
+                    )}
+                    {log.flagged && (
+                      <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-[10px] font-medium text-white">
+                        <Flag className="h-3 w-3" />
+                        Flagged
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1 p-2.5">
+                    <p className="truncate text-xs font-medium text-text-primary">
+                      {log.patient_name}
+                    </p>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] text-text-tertiary">
+                        {fmtDate(log.scheduled_date)}
+                      </span>
+                      <StatusBadge status={log.status} />
                     </div>
-                  </button>
-                ) : null
-              )}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </CardContent>
@@ -1122,7 +1162,10 @@ export default function ReportsPage() {
       {/* ── Proof preview modal ── */}
       <Modal
         open={previewLog !== null}
-        onClose={() => setPreviewLog(null)}
+        onClose={() => {
+          setPreviewLog(null);
+          setFlagReason("");
+        }}
         title={previewLog ? `Proof — ${previewLog.patient_name}` : undefined}
         description={
           previewLog
@@ -1135,7 +1178,15 @@ export default function ReportsPage() {
       >
         {previewLog && (
           <div className="space-y-4">
-            {previewLog.proof_url ? (
+            {previewLog.proof_video_url ? (
+              <video
+                key={previewLog.proof_video_url}
+                src={previewLog.proof_video_url}
+                controls
+                playsInline
+                className="max-h-[55vh] w-full rounded-[12px] border border-border-light bg-black object-contain"
+              />
+            ) : previewLog.proof_url ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={previewLog.proof_url}
@@ -1144,39 +1195,23 @@ export default function ReportsPage() {
               />
             ) : (
               <div className="flex h-40 items-center justify-center rounded-[12px] border border-dashed border-border-light text-sm text-text-tertiary">
-                No proof photo available
+                No proof uploaded
               </div>
             )}
+
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <StatusBadge status={previewLog.status} />
-              {previewLog.verified ? (
-                <Badge variant="success" size="sm">
-                  <BadgeCheck className="h-3 w-3" />
-                  Verified{previewLog.observed_by_name ? ` · ${previewLog.observed_by_name}` : ""}
+              {previewLog.flagged ? (
+                <Badge variant="danger" size="sm">
+                  <Flag className="h-3 w-3" />
+                  Flagged{previewLog.flagged_by_name ? ` · ${previewLog.flagged_by_name}` : ""}
                 </Badge>
               ) : (
-                <Badge variant="info" size="sm">Pending verification</Badge>
+                <Badge variant="success" size="sm">
+                  <Check className="h-3 w-3" />
+                  Logged
+                </Badge>
               )}
-              {previewLog.status === "taken" || previewLog.status === "late" ? (
-                <Button
-                  variant={previewLog.verified ? "outline" : "primary"}
-                  size="sm"
-                  disabled={verifyingLogId === previewLog.id}
-                  onClick={() => toggleVerification(previewLog)}
-                >
-                  {previewLog.verified ? (
-                    <>
-                      <Undo2 className="h-4 w-4" />
-                      Unverify
-                    </>
-                  ) : (
-                    <>
-                      <BadgeCheck className="h-4 w-4" />
-                      Verify dose
-                    </>
-                  )}
-                </Button>
-              ) : null}
               {previewLog.taken_at && (
                 <span className="text-text-secondary">
                   Taken {fmtDateTime(previewLog.taken_at)}
@@ -1187,16 +1222,55 @@ export default function ReportsPage() {
                   · Dose: {previewLog.dose_quantity}
                 </span>
               )}
-              {previewLog.observed_by_name && !previewLog.verified && (
-                <span className="text-text-secondary">
-                  · Observed by {previewLog.observed_by_name}
-                </span>
-              )}
             </div>
+
             {previewLog.notes && (
               <p className="rounded-[10px] bg-bg-subtle px-4 py-3 text-sm text-text-secondary">
                 {previewLog.notes}
               </p>
+            )}
+
+            {/* Review by exception: flag a suspicious clip, or clear a flag. */}
+            {previewLog.flagged ? (
+              <div className="space-y-2 rounded-[12px] border border-danger/20 bg-danger-bg px-4 py-3">
+                <p className="text-sm text-danger-text">
+                  {previewLog.flag_reason
+                    ? `Flagged: ${previewLog.flag_reason}`
+                    : "This dose is flagged and is not counting toward adherence."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={flaggingLogId === previewLog.id}
+                  onClick={() => toggleFlag(previewLog)}
+                >
+                  <Undo2 className="h-4 w-4" />
+                  Clear flag — count this dose again
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2 rounded-[12px] border border-border-light px-4 py-3">
+                <label className="text-xs font-medium text-text-secondary">
+                  Flag this dose if the video looks wrong (optional reason)
+                </label>
+                <textarea
+                  value={flagReason}
+                  onChange={(e) => setFlagReason(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="e.g. Face not visible / tablets not swallowed"
+                  className="w-full rounded-[10px] border border-border-light bg-bg-subtle px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={flaggingLogId === previewLog.id}
+                  onClick={() => toggleFlag(previewLog, flagReason)}
+                >
+                  <Flag className="h-4 w-4" />
+                  Flag as suspicious
+                </Button>
+              </div>
             )}
           </div>
         )}

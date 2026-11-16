@@ -50,6 +50,17 @@ dependencies:
   # Platform implementations referenced directly for the auth dialog strings.
   local_auth_android: ^1.0.48
   local_auth_darwin: ^1.6.0
+  # Records the in-app proof-of-intake clip straight from the camera (no gallery
+  # pick, for DOTS integrity) and caps its length.
+  image_picker: ^1.1.2
+  # Compresses the recorded clip on-device before upload, so a ~30s proof lands
+  # at a few MB instead of tens.
+  video_compress: ^3.1.4
+  # App-documents directory, so a queued/offline proof clip survives a force-quit.
+  path_provider: ^2.1.4
+  # Persists the chosen reminder time and the offline dose-upload queue across
+  # restarts.
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +83,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

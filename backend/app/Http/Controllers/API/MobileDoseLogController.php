@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Requests\StoreDoseLogRequest;
 use App\Models\MedicationLog;
-use App\Support\AppSettings;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
 use App\Support\Adherence;
+use App\Support\AppSettings;
 use App\Support\FollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Patient-facing dose logging for the Flutter app.
@@ -160,7 +162,7 @@ class MobileDoseLogController extends BaseApiController
      * logging the same day twice — a double tap, or a retry after the phone
      * reconnects — updates that day's row instead of creating a phantom dose.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreDoseLogRequest $request): JsonResponse
     {
         $patient = $request->user()?->patient;
 
@@ -168,15 +170,7 @@ class MobileDoseLogController extends BaseApiController
             return $this->error('This account is not linked to a patient profile.', 403);
         }
 
-        $data = $request->validate([
-            'scheduled_date' => ['required', 'date_format:Y-m-d'],
-            'scheduled_time' => ['required', 'date_format:H:i'],
-            'taken_at' => ['nullable', 'date'],
-            'status' => ['nullable', 'in:taken,late,missed,skipped'],
-            'dose_quantity' => ['nullable', 'string', 'max:50'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-            'treatment_plan_medication_id' => ['nullable', 'integer'],
-        ]);
+        $data = $request->validated();
 
         $medications = $this->regimenMedications($this->activePlan($patient));
 
@@ -221,7 +215,27 @@ class MobileDoseLogController extends BaseApiController
                 ?? $this->statusFor($takenAt, $scheduledDate, $data['scheduled_time']),
             'dose_quantity' => $data['dose_quantity'] ?? null,
             'notes' => $data['notes'] ?? null,
-        ])->save();
+        ]);
+
+        // Attach a recorded proof clip when one is sent. Only touched when a file
+        // is present, so re-logging the same day via JSON (offline backfill,
+        // retry) never clears a video already stored on an earlier call.
+        if ($request->hasFile('proof_video')) {
+            $file = $request->file('proof_video');
+            $previousPath = $log->proof_video_path;
+
+            $log->proof_video_path = $file->store('proofs/videos/'.$patient->id, 'public');
+            // Content-detected, not the client-claimed type — matches validation.
+            $log->proof_video_mime = $file->getMimeType();
+            $log->proof_video_size = $file->getSize();
+
+            // Replace, don't orphan: drop the old clip once the new one is stored.
+            if ($previousPath && $previousPath !== $log->proof_video_path) {
+                Storage::disk('public')->delete($previousPath);
+            }
+        }
+
+        $log->save();
 
         return $this->success(
             data: $this->formatLog($log->load('treatmentPlanMedication.medication')),
@@ -290,8 +304,14 @@ class MobileDoseLogController extends BaseApiController
             'dose_quantity' => $log->dose_quantity,
             'notes' => $log->notes,
             'medication_name' => $medication?->name,
-            // A DOTS observer confirming the dose is what turns a day green.
+            // Logged-by-default: a recorded dose counts. A nurse flag holds it
+            // out for follow-up; otherwise it is simply logged.
             'verified' => $log->observed_by !== null,
+            'flagged' => $log->flagged,
+            'flag_reason' => $log->flag_reason,
+            // The patient's own recorded proof, so the app can show it back.
+            'has_video' => $log->proof_video_path !== null,
+            'proof_video_url' => $log->proof_video_url,
         ];
     }
 

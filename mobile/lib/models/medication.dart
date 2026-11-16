@@ -170,6 +170,16 @@ class DoseLog {
   final String? videoUrl;
   final String? notes;
 
+  /// Logged-by-default review: a nurse flagged this dose's proof as suspicious.
+  /// A flagged dose is held out of adherence until the clinic clears it.
+  final bool flagged;
+  final String? flagReason;
+
+  /// Path to a recorded proof clip on this device that still needs uploading.
+  /// Not sent to or stored by the server — it drives the offline upload queue
+  /// and is persisted locally so a force-quit mid-upload doesn't lose the proof.
+  final String? localVideoPath;
+
   const DoseLog({
     required this.id,
     required this.medicationId,
@@ -180,6 +190,9 @@ class DoseLog {
     this.photoUrl,
     this.videoUrl,
     this.notes,
+    this.flagged = false,
+    this.flagReason,
+    this.localVideoPath,
   });
 
   /// True when the backend recorded that this day's dose was not taken.
@@ -237,8 +250,40 @@ class DoseLog {
       verified: json['verified'] as bool? ?? false,
       status: json['status'] as String?,
       notes: json['notes'] as String?,
+      videoUrl: json['proof_video_url'] as String?,
+      flagged: json['flagged'] as bool? ?? false,
+      flagReason: json['flag_reason'] as String?,
     );
   }
+
+  /// Same fields with a few overridden — used when the server row replaces a
+  /// local placeholder, or when clearing [localVideoPath] after a successful
+  /// upload.
+  DoseLog copyWith({
+    String? id,
+    bool? verified,
+    String? status,
+    String? videoUrl,
+    bool? flagged,
+    String? flagReason,
+    String? localVideoPath,
+    bool clearLocalVideoPath = false,
+  }) =>
+      DoseLog(
+        id: id ?? this.id,
+        medicationId: medicationId,
+        medicationName: medicationName,
+        timestamp: timestamp,
+        verified: verified ?? this.verified,
+        status: status ?? this.status,
+        photoUrl: photoUrl,
+        videoUrl: videoUrl ?? this.videoUrl,
+        notes: notes,
+        flagged: flagged ?? this.flagged,
+        flagReason: flagReason ?? this.flagReason,
+        localVideoPath:
+            clearLocalVideoPath ? null : (localVideoPath ?? this.localVideoPath),
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -250,6 +295,9 @@ class DoseLog {
         'photoUrl': photoUrl,
         'videoUrl': videoUrl,
         'notes': notes,
+        'flagged': flagged,
+        'flagReason': flagReason,
+        'localVideoPath': localVideoPath,
       };
 
   factory DoseLog.fromJson(Map<String, dynamic> json) => DoseLog(
@@ -262,5 +310,8 @@ class DoseLog {
         photoUrl: json['photoUrl'] as String?,
         videoUrl: json['videoUrl'] as String?,
         notes: json['notes'] as String?,
+        flagged: json['flagged'] as bool? ?? false,
+        flagReason: json['flagReason'] as String?,
+        localVideoPath: json['localVideoPath'] as String?,
       );
 }

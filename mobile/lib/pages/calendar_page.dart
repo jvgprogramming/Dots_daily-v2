@@ -288,7 +288,7 @@ class _CalendarPageState extends State<CalendarPage> {
     // has to render as missed rather than as a logged one.
     final doses = logs.where((log) => !log.isMissed).toList();
     final taken = doses.isNotEmpty;
-    final unverified = doses.any((log) => !log.verified);
+    final flagged = doses.any((log) => log.flagged);
     final missed = !taken && !isFuture && !beforeStart;
 
     Color background = Colors.transparent;
@@ -296,16 +296,16 @@ class _CalendarPageState extends State<CalendarPage> {
     Color borderColor = Colors.transparent;
     Widget? marker;
 
-    if (taken && !unverified) {
+    if (taken && !flagged) {
       background = AppColors.primary;
       foreground = Colors.white;
       marker = const Icon(Icons.check_rounded, size: 10, color: Colors.white);
-    } else if (unverified) {
+    } else if (flagged) {
       background = AppColors.amber.withValues(alpha: 0.18);
       foreground = AppColors.amber;
       borderColor = AppColors.amber.withValues(alpha: 0.6);
       marker = const Icon(
-        Icons.schedule_rounded,
+        Icons.flag_rounded,
         size: 10,
         color: AppColors.amber,
       );
@@ -378,7 +378,7 @@ class _CalendarPageState extends State<CalendarPage> {
         runSpacing: 10,
         children: [
           _LegendDot(color: AppColors.primary, label: 'Taken'),
-          _LegendDot(color: AppColors.amber, label: 'Not verified'),
+          _LegendDot(color: AppColors.amber, label: 'Flagged'),
           _LegendDot(color: AppColors.destructive, label: 'Missed'),
           _LegendDot(color: AppColors.primaryDark, label: 'Today', ring: true),
         ],
@@ -474,7 +474,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   Text(
                     canLog
                         ? 'Use this if you took your medicine but forgot to log '
-                              'it. It is saved as pending until it is verified.'
+                              'it. It is saved as logged and counts right away.'
                         : 'No active treatment regimen is assigned to your '
                               'account yet, so a dose cannot be logged.',
                     style: TextStyle(
@@ -494,8 +494,8 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildLogTile(DoseLog log) {
-    final verified = log.verified;
-    final color = verified ? AppColors.emerald : AppColors.amber;
+    final flagged = log.flagged;
+    final color = flagged ? AppColors.amber : AppColors.emerald;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -514,7 +514,7 @@ class _CalendarPageState extends State<CalendarPage> {
               borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(
-              verified ? Icons.check_circle_rounded : Icons.schedule_rounded,
+              flagged ? Icons.flag_rounded : Icons.check_circle_rounded,
               color: color,
               size: 18,
             ),
@@ -566,7 +566,7 @@ class _CalendarPageState extends State<CalendarPage> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              verified ? 'Verified' : 'Pending',
+              flagged ? 'Flagged' : 'Logged',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

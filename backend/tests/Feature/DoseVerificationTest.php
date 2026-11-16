@@ -8,6 +8,7 @@ use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanMedication;
 use App\Models\User;
+use App\Support\Adherence;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -140,6 +141,43 @@ class DoseVerificationTest extends TestCase
     // ─────────────────────────────────────────────────────────────────
 
     private ?User $adminUser = null;
+
+    public function test_a_nurse_can_flag_and_unflag_a_dose(): void
+    {
+        [, $log] = $this->pendingLog();
+        Sanctum::actingAs($this->admin());
+
+        $this->postJson("/api/v1/medication-logs/{$log->id}/flag", [
+            'reason' => 'Patient’s face is not visible in the video.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.flagged', true)
+            ->assertJsonPath('data.flagged_by_name', 'Admin');
+
+        $this->assertNotNull($log->fresh()->flagged_at);
+
+        $this->postJson("/api/v1/medication-logs/{$log->id}/unflag")
+            ->assertOk()
+            ->assertJsonPath('data.flagged', false);
+
+        $this->assertNull($log->fresh()->flagged_at);
+    }
+
+    public function test_a_flagged_dose_is_held_out_of_adherence(): void
+    {
+        [$patient, $log] = $this->pendingLog();
+
+        $taken = fn () => Adherence::planWindowSummary([$patient->id])['summary']['taken'];
+        $this->assertSame(1, $taken(), 'The logged dose should count before it is flagged.');
+
+        Sanctum::actingAs($this->admin());
+        $this->postJson("/api/v1/medication-logs/{$log->id}/flag", ['reason' => 'Suspicious'])->assertOk();
+
+        $this->assertSame(0, $taken(), 'A flagged dose must not count toward adherence.');
+
+        $this->postJson("/api/v1/medication-logs/{$log->id}/unflag")->assertOk();
+        $this->assertSame(1, $taken(), 'Clearing the flag restores the dose to adherence.');
+    }
 
     private function admin(): User
     {

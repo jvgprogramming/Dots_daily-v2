@@ -45,7 +45,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = e.displayMessage;
       _loading = false;
       notifyListeners();
       return false;
@@ -89,7 +89,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = e.displayMessage;
       _loading = false;
       notifyListeners();
       return false;

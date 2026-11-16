@@ -699,10 +699,17 @@ export interface ReportMedicationLog {
   dose_quantity: string | null;
   proof_photo: string | null;
   proof_url: string | null;
+  /** Recorded proof video URL (the DOTS evidence the patient uploads). */
+  proof_video_url: string | null;
+  has_video: boolean;
   notes: string | null;
   observed_by_name: string | null;
-  /** Confirmed by a DOTS observer (admin) — the green/pending split the calendars draw. */
+  /** Confirmed by a DOTS observer (admin) — legacy, kept for compatibility. */
   verified: boolean;
+  /** Logged-by-default review: true once a nurse flags the proof as suspicious. */
+  flagged: boolean;
+  flag_reason: string | null;
+  flagged_by_name: string | null;
   created_at: string | null;
 }
 

@@ -10,10 +10,10 @@ use App\Http\Controllers\API\DoseVerificationController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\MobileDoseLogController;
 use App\Http\Controllers\API\MonitoringController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\PatientController;
 use App\Http\Controllers\API\ReportsController;
 use App\Http\Controllers\API\SearchController;
-use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\SettingsController;
 use App\Http\Controllers\API\TreatmentsController;
 use Illuminate\Support\Facades\Route;
@@ -101,6 +101,10 @@ Route::prefix('v1')->group(function () {
         // `medication_logs.observed_by`, the flag the calendars read for verified/pending.
         Route::post('/medication-logs/{log}/verify', [DoseVerificationController::class, 'verify'])->middleware('role:admin,staff');
         Route::post('/medication-logs/{log}/unverify', [DoseVerificationController::class, 'unverify'])->middleware('role:admin,staff');
+        // Logged-by-default review: flag a suspicious proof video (excludes it
+        // from adherence until cleared), or clear the flag.
+        Route::post('/medication-logs/{log}/flag', [DoseVerificationController::class, 'flag'])->middleware('role:admin,staff');
+        Route::post('/medication-logs/{log}/unflag', [DoseVerificationController::class, 'unflag'])->middleware('role:admin,staff');
 
         // Treatments hub (Admin + Staff) — records, follow-up schedule, reschedule
         Route::get('/treatments', [TreatmentsController::class, 'index'])->middleware('role:admin,staff');

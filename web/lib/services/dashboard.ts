@@ -64,3 +64,27 @@ export async function unverifyMedicationLog(
     `/medication-logs/${logId}/unverify`
   );
 }
+
+/**
+ * Flag a dose whose proof video looks suspicious. Doses are logged (and count)
+ * by default; flagging holds this one out of adherence until it is cleared, so
+ * nurses review by exception instead of confirming every dose.
+ */
+export async function flagMedicationLog(
+  logId: number,
+  reason?: string
+): Promise<ApiResponse<ReportMedicationLog>> {
+  return api.post<ApiResponse<ReportMedicationLog>>(
+    `/medication-logs/${logId}/flag`,
+    reason ? { reason } : undefined
+  );
+}
+
+/** Clear a flag once the concern is resolved — the dose counts again. */
+export async function unflagMedicationLog(
+  logId: number
+): Promise<ApiResponse<ReportMedicationLog>> {
+  return api.post<ApiResponse<ReportMedicationLog>>(
+    `/medication-logs/${logId}/unflag`
+  );
+}

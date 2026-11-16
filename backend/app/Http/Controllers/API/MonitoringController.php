@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\API;
 
 use App\Models\DailyMonitoring;
-use App\Support\AppSettings;
 use App\Models\MedicationLog;
 use App\Models\Patient;
 use App\Support\Adherence;
+use App\Support\AppSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,7 +80,7 @@ class MonitoringController extends BaseApiController
             $doseLogs = MedicationLog::query()
                 ->where('patient_id', $patient->id)
                 ->whereDate('scheduled_date', $selectedDate)
-                ->with(['treatmentPlanMedication.medication', 'observedBy'])
+                ->with(['treatmentPlanMedication.medication', 'observedBy', 'flaggedBy'])
                 ->orderBy('scheduled_time')
                 ->get();
 
@@ -276,11 +276,16 @@ class MonitoringController extends BaseApiController
             'scheduled_time' => $log->scheduled_time,
             'taken_at' => $log->taken_at?->toIso8601String(),
             'status' => $log->status,
-            'proof_status' => $log->proof_photo ? 'provided' : 'none',
+            'proof_status' => ($log->proof_photo || $log->proof_video_path) ? 'provided' : 'none',
             'proof_url' => $log->proof_photo ? $this->proofUrl($log->proof_photo) : null,
+            'proof_video_url' => $log->proof_video_url,
+            'has_video' => $log->proof_video_path !== null,
             'patient_notes' => $log->notes,
             'plan_medication_notes' => $tpm?->notes,
             'observed_by_name' => $log->observedBy?->name,
+            'flagged' => $log->flagged,
+            'flag_reason' => $log->flag_reason,
+            'flagged_by_name' => $log->flaggedBy?->name,
         ];
     }
 

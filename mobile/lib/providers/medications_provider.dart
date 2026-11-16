@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/medication.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 class MedicationsProvider extends ChangeNotifier {
   /// Shared with [AuthProvider] so dose writes carry the signed-in token.
@@ -132,9 +136,9 @@ class MedicationsProvider extends ChangeNotifier {
     // One daily reminder for the whole regimen.
     _alarms = [_defaultReminder];
 
-    // About three months of dose history so the calendar has realistic taken,
-    // missed and unverified days to show. Deterministic (fixed seed) so the
-    // demo looks the same on every launch.
+    // About three months of dose history so the calendar has realistic logged,
+    // missed and flagged days to show. Deterministic (fixed seed) so the demo
+    // looks the same on every launch.
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final rng = Random(7);
@@ -145,7 +149,8 @@ class MedicationsProvider extends ChangeNotifier {
       // taken so the calendar never opens looking broken.
       if (daysAgo != 0 && rng.nextDouble() < 0.09) continue;
 
-      final verified = rng.nextDouble() > 0.12;
+      // A logged dose counts by default; a nurse flags the rare suspicious one.
+      final flagged = daysAgo != 0 && rng.nextDouble() < 0.06;
       _doseLogs.add(
         DoseLog(
           id: 'cal-$daysAgo',
@@ -158,8 +163,9 @@ class MedicationsProvider extends ChangeNotifier {
             6 + rng.nextInt(3), // taken before breakfast
             rng.nextInt(60),
           ),
-          verified: verified,
-          notes: verified ? null : 'Awaiting confirmation',
+          verified: false,
+          flagged: flagged,
+          flagReason: flagged ? 'Under review by your clinic' : null,
         ),
       );
     }
@@ -232,10 +238,11 @@ class MedicationsProvider extends ChangeNotifier {
   bool isDayTaken(DateTime day) =>
       _doseLogs.any((log) => !log.isMissed && _isSameDay(log.timestamp, day));
 
-  /// A day with a dose taken but not yet confirmed by a DOTS observer.
-  bool isDayUnverified(DateTime day) {
+  /// A day whose logged dose a nurse flagged as suspicious (held out of
+  /// adherence until the clinic clears it).
+  bool isDayFlagged(DateTime day) {
     final doses = dosesOnDay(day);
-    return doses.isNotEmpty && doses.any((log) => !log.verified);
+    return doses.isNotEmpty && doses.any((log) => log.flagged);
   }
 
   /// Number of days in [month] with at least one dose actually taken.
@@ -400,7 +407,67 @@ class MedicationsProvider extends ChangeNotifier {
     } else {
       _alarms[index] = updated;
     }
+    _saveReminder(updated);
     notifyListeners();
+  }
+
+  // ---------- Reminder persistence (survives restart & reboot) ----------
+
+  static const String _reminderTimeKey = 'dots.reminder_time';
+
+  /// Stable id for the single daily reminder. Shared with ReminderPage so a
+  /// re-arm from either place replaces the same scheduled alarm (no doubles).
+  static const int reminderNotificationId = 0x5D2A7E;
+
+  Future<void> _saveReminder(Alarm reminder) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_reminderTimeKey, reminder.time);
+    } catch (_) {
+      // Best-effort: failing to persist must not break saving the reminder.
+    }
+  }
+
+  /// Loads the saved reminder time into state (so the UI shows it after a
+  /// restart) and re-schedules the daily alarm. Called once at app launch:
+  /// an app update clears scheduled notifications, and this keeps the Dart
+  /// state and the OS alarm in agreement after a reboot.
+  Future<void> restoreAndArmReminder() async {
+    String? savedTime;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      savedTime = prefs.getString(_reminderTimeKey);
+    } catch (_) {
+      // Fall back to the default reminder time.
+    }
+
+    // Materialize the reminder into _alarms (so an alarm-tap lookup finds it),
+    // using the saved time when present.
+    updateReminder(time: savedTime ?? reminder.time, enabled: true);
+    await armDailyReminder();
+  }
+
+  /// (Re)schedules the single daily reminder from the current reminder time.
+  Future<void> armDailyReminder() async {
+    final service = NotificationService();
+    final current = reminder;
+    final (hour, minute) = current.timeParts;
+
+    try {
+      await service.cancel(reminderNotificationId);
+      if (!current.enabled) return;
+      await service.scheduleDailyAlarm(
+        id: reminderNotificationId,
+        title: '⏰ Time to take your medicines',
+        body: 'Take your medicine now, before breakfast.',
+        hour: hour,
+        minute: minute,
+        payload: 'alarm:$reminderId',
+      );
+    } catch (_) {
+      // Scheduling can fail if permissions were revoked; the Reminder screen
+      // surfaces and re-requests them.
+    }
   }
 
   void deleteAlarm(String id) {
@@ -443,8 +510,8 @@ class MedicationsProvider extends ChangeNotifier {
   /// Backfills a dose on [day] for a patient who took their medicine but forgot
   /// to log it. Returns the new log, or null if that day already has one.
   ///
-  /// Self-reported, so it stays unverified (pending) exactly like a dose
-  /// confirmed from the alarm.
+  /// Logged-by-default: it counts immediately, exactly like a dose recorded
+  /// from the alarm, unless the clinic later flags it.
   DoseLog? logDoseOn(DateTime day, {String? notes}) {
     if (isDayTaken(day)) return null;
 
@@ -484,6 +551,10 @@ class MedicationsProvider extends ChangeNotifier {
   /// [syncError] rather than swallowed. A no-op when signed out (or in tests),
   /// where there is no token to authenticate the request with.
   Future<void> refresh() async {
+    // Bring back anything queued on a previous run before we decide to sync, so
+    // offline-recorded proofs reappear on the calendar even when signed out.
+    await restoreQueue();
+
     if (_api.token == null || _syncing) return;
 
     _syncing = true;
@@ -566,10 +637,13 @@ class MedicationsProvider extends ChangeNotifier {
   /// Sends one dose and adopts the server's row on success.
   Future<void> _persist(DoseLog log) async {
     // Signed out, or a unit test — there is nothing to authenticate with.
-    if (_api.token == null) return;
-
+    // We still queue + persist so a dose recorded while signed out (or offline)
+    // is not lost; it uploads on the next refresh once there is a token.
     _unsynced.add(log);
+    await _saveQueue();
     _safeNotify();
+
+    if (_api.token == null) return;
 
     await _pushUnsynced();
     _safeNotify();
@@ -580,10 +654,23 @@ class MedicationsProvider extends ChangeNotifier {
   Future<void> _pushUnsynced() async {
     for (final log in List<DoseLog>.from(_unsynced)) {
       try {
-        final response = await _api.post(
-          '/mobile/dose-logs',
-          body: _dosePayload(log),
-        );
+        // A dose carrying a recorded clip goes up as multipart; a plain dose
+        // (backfill, or a dose whose local file went missing) stays JSON.
+        final hasVideo =
+            log.localVideoPath != null && File(log.localVideoPath!).existsSync();
+
+        final response = hasVideo
+            ? await _api.postMultipart(
+                '/mobile/dose-logs',
+                fields: _dosePayload(log),
+                filePath: log.localVideoPath!,
+                fileField: 'proof_video',
+              )
+            : await _api.post(
+                '/mobile/dose-logs',
+                body: _dosePayload(log),
+              );
+
         final saved = DoseLog.fromApiJson(
           response['data'] as Map<String, dynamic>,
           medicationName: medicineFullName,
@@ -595,7 +682,12 @@ class MedicationsProvider extends ChangeNotifier {
         );
         if (index != -1) _doseLogs[index] = saved;
 
+        // The clip is uploaded (or was already gone) — drop the local file so
+        // proof videos don't accumulate on the device.
+        await _deleteLocalVideo(log.localVideoPath);
+
         _unsynced.remove(log);
+        await _saveQueue();
         _syncError = null;
       } on ApiException catch (e) {
         _syncError = e.message;
@@ -605,6 +697,65 @@ class MedicationsProvider extends ChangeNotifier {
             'Could not reach the server. Showing only the doses saved on this phone.';
         return;
       }
+    }
+  }
+
+  // ---------- Offline upload queue persistence ----------
+
+  static const String _queueKey = 'dots.unsynced_dose_logs';
+
+  bool _queueRestored = false;
+
+  /// Writes the pending-upload queue to disk so a force-quit between recording
+  /// a proof and uploading it never loses the clip reference.
+  Future<void> _saveQueue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _queueKey,
+        jsonEncode(_unsynced.map((l) => l.toJson()).toList()),
+      );
+    } catch (_) {
+      // Best-effort: a failed persist must not break logging a dose.
+    }
+  }
+
+  /// Reloads doses queued on a previous run (recorded offline, then the app was
+  /// closed) and shows them on the calendar until they upload. Runs once.
+  Future<void> restoreQueue() async {
+    if (_queueRestored) return;
+    _queueRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_queueKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final restored = (jsonDecode(raw) as List<dynamic>)
+          .map((e) => DoseLog.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      for (final pending in restored) {
+        if (_unsynced.any((l) => l.id == pending.id)) continue;
+        _unsynced.add(pending);
+        final onCalendar = _doseLogs.any(
+          (log) => dayKey(log.timestamp) == dayKey(pending.timestamp),
+        );
+        if (!onCalendar) _doseLogs.add(pending);
+      }
+      _sortDoseLogs();
+      _safeNotify();
+    } catch (_) {
+      // A corrupt queue should not stop the app from starting.
+    }
+  }
+
+  Future<void> _deleteLocalVideo(String? path) async {
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // A leftover temp file is harmless; ignore delete failures.
     }
   }
 
