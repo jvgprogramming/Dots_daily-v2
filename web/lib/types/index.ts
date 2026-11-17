@@ -340,8 +340,25 @@ export interface PatientDetailResponse {
     treatment_plans: TreatmentPlan[];
     daily_monitoring: DailyMonitoring[];
     medication_logs: any[];
-    symptom_logs: any[];
+    symptom_logs: ISymptomLog[];
   };
+}
+
+/** A symptom a patient self-reported from the mobile app (recorded_by "patient"). */
+export interface ISymptomLog {
+  id: number;
+  patient_id: number;
+  recorded_date: string;
+  symptom_type: string;
+  /** Human label added by the API (e.g. "Yellow eyes or skin"). */
+  label?: string;
+  severity: "mild" | "moderate" | "severe";
+  /** True when dangerous in itself or rated severe — surfaced to staff. */
+  red_flag?: boolean;
+  duration_hours?: number | null;
+  notes?: string | null;
+  recorded_by: string;
+  created_at?: string;
 }
 
 export interface PatientSelectOption {
@@ -615,6 +632,8 @@ export interface PatientMonitoringData {
   recent_history: DoseLog[];
   selected_date: string | null;
   monitoring_entries: MonitoringEntry[];
+  /** Recent patient-reported symptoms (mobile Symptom Monitor), newest first. */
+  symptom_logs: ISymptomLog[];
   summary: {
     adherence_rate: number | null;
     /** Days a dose was expected — the denominator behind adherence_rate. */

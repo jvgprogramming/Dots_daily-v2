@@ -11,6 +11,7 @@ import 'pages/calendar_page.dart';
 import 'pages/alarm_ringing_page.dart';
 import 'pages/chatbot_page.dart';
 import 'pages/symptoms_page.dart';
+import 'providers/symptoms_provider.dart';
 import 'pages/test_alarm_page.dart';
 import 'pages/profile_page.dart';
 import 'models/medication.dart';
@@ -88,6 +89,7 @@ class MyApp extends StatelessWidget {
             return meds;
           },
         ),
+        ChangeNotifierProvider(create: (_) => SymptomsProvider()),
       ],
       child: MaterialApp(
         title: 'DOTS Daily',

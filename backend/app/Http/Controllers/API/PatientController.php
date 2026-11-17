@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Support\Audit;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
 use App\Http\Resources\PatientResource;
@@ -10,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Patient;
 use App\Models\User;
 use App\Services\PatientRegistrationService;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -297,6 +297,8 @@ class PatientController extends BaseApiController
                     'treatment_plans' => $patient->treatmentPlans,
                     'daily_monitoring' => $patient->dailyMonitoring,
                     'medication_logs' => $patient->medicationLogs,
+                    // Patient-reported symptoms are surfaced on the Monitoring page
+                    // (where the symptom_alert notification deep-links), not here.
                     'symptom_logs' => $patient->symptomLogs,
                 ],
             ],

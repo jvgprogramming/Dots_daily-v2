@@ -9,6 +9,7 @@ use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\DoseVerificationController;
 use App\Http\Controllers\API\MedicationInventoryController;
 use App\Http\Controllers\API\MobileDoseLogController;
+use App\Http\Controllers\API\MobileSymptomController;
 use App\Http\Controllers\API\MobileVotController;
 use App\Http\Controllers\API\MonitoringController;
 use App\Http\Controllers\API\NotificationController;
@@ -193,6 +194,12 @@ Route::prefix('v1')->group(function () {
             // Video-Observed Therapy: status + instructions, and proof upload.
             Route::get('/vot', [MobileVotController::class, 'show']);
             Route::post('/vot/submissions', [MobileVotController::class, 'store'])->middleware('throttle:20,1');
+
+            // Symptom Monitor: the patient self-reports TB symptoms and
+            // medication side effects. Writes land in `symptom_logs`, which the
+            // admin patient profile already reads; red-flag reports alert staff.
+            Route::get('/symptoms', [MobileSymptomController::class, 'index']);
+            Route::post('/symptoms', [MobileSymptomController::class, 'store'])->middleware('throttle:30,1');
 
             // The patient's own in-app inbox (same tables as the portal bell).
             Route::get('/notifications', [NotificationController::class, 'index']);

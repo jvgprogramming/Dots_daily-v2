@@ -474,6 +474,48 @@ export default function MonitoringPage() {
               </div>
             )}
           </div>
+
+          {/* ── Patient-reported symptoms (mobile Symptom Monitor) ── */}
+          {data.symptom_logs && data.symptom_logs.length > 0 && (
+            <div className="matte-surface rounded-[16px] border p-4">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-text-tertiary" />
+                <p className="text-sm font-semibold text-text-primary">Reported Symptoms</p>
+                <span className="text-xs text-text-tertiary">self-reported by the patient from the app</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {data.symptom_logs.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`rounded-[10px] border px-3 py-2.5 ${
+                      s.red_flag ? "border-danger/30 bg-danger-bg/50" : "border-border-light bg-bg-subtle/60"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
+                        {s.red_flag && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-danger" />}
+                        {s.label || s.symptom_type}
+                      </p>
+                      <Badge
+                        variant={s.severity === "severe" ? "danger" : s.severity === "moderate" ? "warning" : "default"}
+                        size="sm"
+                      >
+                        {s.severity.charAt(0).toUpperCase() + s.severity.slice(1)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-text-secondary mt-1">
+                      {new Date(s.recorded_date + "T00:00:00").toLocaleDateString("en-PH", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                      {s.notes ? ` · ${s.notes}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : null}
     </div>

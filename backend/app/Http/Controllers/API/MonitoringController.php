@@ -5,8 +5,10 @@ namespace App\Http\Controllers\API;
 use App\Models\DailyMonitoring;
 use App\Models\MedicationLog;
 use App\Models\Patient;
+use App\Models\SymptomLog;
 use App\Support\Adherence;
 use App\Support\AppSettings;
+use App\Support\Symptoms;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,6 +69,16 @@ class MonitoringController extends BaseApiController
             ->get();
 
         $monitoringByDate = $monitoring->keyBy(fn (DailyMonitoring $m) => $m->recorded_date->toDateString());
+
+        // ── Recent patient-reported symptoms (from the mobile Symptom Monitor) ──
+        // Not range-bound: a symptom_alert notification deep-links here with no
+        // date, so staff should always see the latest reports.
+        $symptomLogs = SymptomLog::query()
+            ->where('patient_id', $patient->id)
+            ->orderByDesc('recorded_date')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
 
         // ── Selected date for the calendar detail panel ──
         $selectedDate = isset($data['date'])
@@ -234,6 +246,17 @@ class MonitoringController extends BaseApiController
                 'oxygen_saturation' => $m->oxygen_saturation,
                 'notes' => $m->notes,
             ]),
+            'symptom_logs' => $symptomLogs->map(fn (SymptomLog $s) => [
+                'id' => $s->id,
+                'recorded_date' => $s->recorded_date->toDateString(),
+                'symptom_type' => $s->symptom_type,
+                'label' => Symptoms::label($s->symptom_type),
+                'severity' => $s->severity,
+                'red_flag' => Symptoms::isRedFlagReport($s->symptom_type, (string) $s->severity),
+                'duration_hours' => $s->duration_hours,
+                'notes' => $s->notes,
+                'recorded_by' => $s->recorded_by,
+            ])->values(),
             'summary' => [
                 'adherence_rate' => $adherenceRate,
                 // Days a dose was expected vs actually taken — the numbers behind
