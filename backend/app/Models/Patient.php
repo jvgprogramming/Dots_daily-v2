@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AppSettings;
 use Database\Factories\PatientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,6 +40,25 @@ class Patient extends Model
 {
     /** @use HasFactory<PatientFactory> */
     use HasFactory, SoftDeletes;
+
+    /**
+     * Dosing is video-observed by default: every new patient starts with an
+     * active VOT enrollment. Staff can still suspend or revoke it per patient,
+     * and the `vot.enroll_by_default` setting turns the default off.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Patient $patient) {
+            if (! AppSettings::bool('vot.enroll_by_default')) {
+                return;
+            }
+            $patient->votEnrollment()->firstOrCreate([], [
+                'status' => VotEnrollment::STATUS_ACTIVE,
+                'eligible_since' => now()->toDateString(),
+                'status_changed_at' => now(),
+            ]);
+        });
+    }
 
     public function user(): BelongsTo
     {

@@ -259,6 +259,8 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
     () => ({ ...emptyRegistrationForm(), ...(draft?.payload ?? {}) })
   );
   const [stepIndex, setStepIndex] = useState(0);
+  /** Furthest step opened so far: every badge up to it can be clicked. */
+  const [maxReached, setMaxReached] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
@@ -293,7 +295,6 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
     switch (id) {
       case "account": {
         if (!form.email.trim()) miss.push("Email is required.");
-        if (!isResume && form.password.length < 8) miss.push("Password must be at least 8 characters.");
         const contact = (form.contact_number || form.phone || "").replace(/[\s-]/g, "");
         if (contact && !PH_PHONE_REGEX.test(contact)) {
           miss.push("Contact number must be a valid Philippine mobile number (e.g., 09123456789 or +639123456789).");
@@ -323,12 +324,40 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
   const goNext = () => {
     const miss = validateStep(currentStep.id);
     setMissing(miss);
-    if (miss.length === 0) setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+    if (miss.length === 0) {
+      const next = Math.min(stepIndex + 1, STEPS.length - 1);
+      setStepIndex(next);
+      setMaxReached((m) => Math.max(m, next));
+    }
   };
 
   const goPrev = () => {
     setMissing([]);
     setStepIndex((i) => Math.max(i - 1, 0));
+  };
+
+  /**
+   * Jump to a step from the badges at the top. Any step already reached can be
+   * opened; going forward first checks the steps in between, stopping on the
+   * first one with missing required fields.
+   */
+  const goToStep = (target: number) => {
+    if (target === stepIndex || target > maxReached) return;
+    if (target < stepIndex) {
+      setMissing([]);
+      setStepIndex(target);
+      return;
+    }
+    for (let i = stepIndex; i < target; i++) {
+      const miss = validateStep(STEPS[i].id);
+      if (miss.length > 0) {
+        setStepIndex(i);
+        setMissing(miss);
+        return;
+      }
+    }
+    setMissing([]);
+    setStepIndex(target);
   };
 
   // Re-validate live while a warning is showing, so it clears as fields are fixed.
@@ -392,17 +421,21 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
         {STEPS.map((s, i) => {
           const Icon = s.icon;
           const active = i === stepIndex;
-          const done = i < stepIndex;
+          const reachable = !active && i <= maxReached;
           return (
             <button
               key={s.id}
-              onClick={() => i < stepIndex && setStepIndex(i)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] text-xs font-medium whitespace-nowrap transition-all duration-150 ${
+              type="button"
+              onClick={() => goToStep(i)}
+              disabled={!active && !reachable}
+              aria-current={active ? "step" : undefined}
+              title={reachable ? `Go to ${s.label}` : undefined}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] text-xs font-medium whitespace-nowrap transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 ${
                 active
-                  ? "bg-primary-500 text-white"
-                  : done
-                  ? "bg-primary-100/60 text-primary-800 cursor-pointer"
-                  : "bg-bg-subtle text-text-tertiary"
+                  ? "bg-primary-500 text-white cursor-default"
+                  : reachable
+                  ? "bg-primary-100/60 text-primary-800 cursor-pointer hover:bg-primary-100 hover:text-primary-900"
+                  : "bg-bg-subtle text-text-tertiary cursor-not-allowed"
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -460,17 +493,12 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
                       onChange={(e) => update("contact_number", sanitizePhoneNumber(e.target.value))}
                     />
                   </Field>
-                  {!isResume && (
-                    <Field label="Password" required hint="Minimum 8 characters — share securely with the patient.">
-                      <Input
-                        type="password"
-                        placeholder="Min. 8 characters"
-                        value={form.password}
-                        onChange={(e) => update("password", e.target.value)}
-                      />
-                    </Field>
-                  )}
                 </div>
+                <p className="mt-3 rounded-lg border border-border-light bg-bg-subtle px-3 py-2.5 text-xs text-text-secondary">
+                  No password is needed. The patient opens the DOTS Daily app, taps{" "}
+                  <span className="font-semibold text-text-primary">Activate your account</span>, and enters the
+                  code sent to this email to create their own password. Double-check the email with the patient.
+                </p>
               </>
             )}
 

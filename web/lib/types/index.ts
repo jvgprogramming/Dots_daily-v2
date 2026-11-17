@@ -271,6 +271,8 @@ export interface PatientListItem {
     name: string;
     email: string;
     phone: string | null;
+    /** Set once the patient activated their account with the emailed code. */
+    email_verified_at?: string | null;
   };
   registered_by_user?: {
     id: number;

@@ -14,6 +14,7 @@ import 'pages/symptoms_page.dart';
 import 'providers/symptoms_provider.dart';
 import 'pages/test_alarm_page.dart';
 import 'pages/profile_page.dart';
+import 'pages/account_setup_page.dart';
 import 'models/medication.dart';
 
 void main() async {
@@ -405,6 +406,13 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
     setState(() => _loading = false);
 
+    // Registered by the health center but never activated: go straight to the
+    // code step for this email instead of showing an error.
+    if (auth.needsActivation) {
+      _openAccountSetup(AccountSetupMode.activate, sendCodeNow: true);
+      return;
+    }
+
     if (!auth.isLoggedIn && auth.error != null) {
       setState(() => _failures++);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -414,6 +422,19 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     }
+  }
+
+  void _openAccountSetup(AccountSetupMode mode, {bool sendCodeNow = false}) {
+    _passwordController.clear();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AccountSetupPage(
+          initialEmail: _emailController.text,
+          mode: mode,
+          sendCodeOnOpen: sendCodeNow,
+        ),
+      ),
+    );
   }
 
   @override
@@ -489,7 +510,32 @@ class _LoginPageState extends State<LoginPage> {
                           child: _buildFormCard(p),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      FadeSlideIn(
+                        index: 4,
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'First time here?',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: p.textSecondary,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  _openAccountSetup(AccountSetupMode.activate),
+                              child: const Text(
+                                'Activate your account',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       FadeSlideIn(
                         index: 5,
                         child: Row(
@@ -612,7 +658,14 @@ class _LoginPageState extends State<LoginPage> {
             obscureText: _obscure,
             onSubmitted: (_) => _handleLogin(),
           ),
-          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => _openAccountSetup(AccountSetupMode.reset),
+              child: const Text('Forgot password?'),
+            ),
+          ),
+          const SizedBox(height: 8),
           PressableScale(
             enabled: !_loading,
             child: SizedBox(

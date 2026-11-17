@@ -57,15 +57,16 @@ const List<FaqEntry> kFaqEntries = [
     category: 'Your Medicines',
     question: 'When should I take my medicine?',
     answer:
-        'Take all of your TB tablets together once a day. You can take them any '
-        'time during the day, but preferably before lunch. The important thing '
+        'Take all of your TB tablets together once a day, on an empty stomach — '
+        'before you eat anything. The important thing '
         'is to take them every single day. Set your reminder time on the '
         'Reminder tab so you don\'t forget.',
     keywords: [
       'when',
       'time',
       'morning',
-      'before lunch',
+      'empty stomach',
+      'before eating',
       'daily',
       'schedule',
     ],
@@ -87,7 +88,7 @@ const List<FaqEntry> kFaqEntries = [
     question: 'What happens if I miss a dose?',
     answer:
         'Missing doses can make TB harder to treat, so try very hard not to. '
-        'If you do miss one, log it honestly and take the next dose on time. '
+        'If you do miss one, take the next dose on time. '
         'If you miss several days in a row, contact your clinic — they may need '
         'to adjust your plan.',
     keywords: ['miss', 'missed', 'skip', 'skipped', 'forgot a day'],
@@ -96,9 +97,9 @@ const List<FaqEntry> kFaqEntries = [
     category: 'Missed Doses',
     question: 'Can I log a dose I took earlier?',
     answer:
-        'Yes. Open the Calendar tab, tap the day you took your medicine, and '
-        'choose to log it. Days you have not recorded appear so you can keep '
-        'your history accurate.',
+        'No. Each dose must be recorded on video on the day you take it, so a '
+        'past day cannot be logged later. If you took your medicine but did '
+        'not record it, tell your nurse.',
     keywords: ['backfill', 'calendar', 'previous day', 'log later', 'history'],
   ),
 

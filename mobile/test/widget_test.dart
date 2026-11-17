@@ -273,7 +273,7 @@ void main() {
       expect(find.text('Missed'), findsWidgets);
     });
 
-    testWidgets('a missed day can be logged retroactively from the sheet', (
+    testWidgets('a missed past day cannot be logged from the sheet', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(const Size(400, 900));
@@ -282,8 +282,8 @@ void main() {
       final meds = MedicationsProvider();
       final now = DateTime.now();
 
-      // Force the 1st of this month to be missed, then log it back.
-      final day = DateTime(now.year, now.month, 1);
+      // Force a past day to be missed (yesterday, so it is never today).
+      final day = DateTime(now.year, now.month, now.day - 1);
       for (final log in meds.logsOnDay(day)) {
         meds.deleteDoseLog(log.id);
       }
@@ -302,23 +302,25 @@ void main() {
         ),
       );
 
+      // Yesterday may sit in last month's grid; skip the check if so.
+      if (day.month != now.month) return;
+
       await tester.tap(
-        find.descendant(of: find.byType(GridView), matching: find.text('1')),
+        find.descendant(
+          of: find.byType(GridView),
+          matching: find.text('${day.day}'),
+        ),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('No dose logged for this day'), findsOneWidget);
-      expect(find.text('Log this dose'), findsOneWidget);
-
-      await tester.tap(find.text('Log this dose'));
-      await tester.pumpAndSettle();
-
-      expect(meds.isDayTaken(day), isTrue);
-      expect(meds.logsOnDay(day).single.verified, isFalse);
-
-      // Let the confirmation snack bar expire so no timer is left pending.
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
+      expect(find.text('Log this dose'), findsNothing);
+      expect(find.text('Record this dose'), findsNothing);
+      expect(
+        find.textContaining('only be recorded on the day you take them'),
+        findsOneWidget,
+      );
+      expect(meds.isDayTaken(day), isFalse);
     });
   });
 }

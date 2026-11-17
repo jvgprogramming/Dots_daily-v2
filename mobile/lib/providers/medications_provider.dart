@@ -16,7 +16,7 @@ class MedicationsProvider extends ChangeNotifier {
   /// The patient only needs one reminder a day — all TB medicines are taken
   /// together, once daily — so alarms are represented by this single, fixed
   /// entry instead of one alarm per medication. The dose can be taken any time
-  /// during the day; the reminder just nudges them, preferably before lunch.
+  /// during the day; the reminder nudges them to take it on an empty stomach.
   static const String reminderId = 'daily-reminder';
 
   static const Alarm _defaultReminder = Alarm(
@@ -136,7 +136,7 @@ class MedicationsProvider extends ChangeNotifier {
         dosage: medicineDosage,
         frequency: 'Once daily',
         instructions:
-            'Take all 4 tablets together, once a day — any time during the day, preferably before lunch.',
+            'Take all 4 tablets together, once a day, on an empty stomach — before eating anything.',
         prescribedBy: 'Dr. Sarah Johnson',
         startDate: '2024-01-01',
         endDate: '2024-07-01',
@@ -396,6 +396,30 @@ class MedicationsProvider extends ChangeNotifier {
   /// How many days of treatment the patient has a dose recorded for.
   int get treatmentDays => _doseLogs.where((log) => !log.isMissed).length;
 
+  /// Consecutive days, ending today, with a dose actually taken. Any day with
+  /// no dose (never logged, or recorded as missed) resets it to zero.
+  ///
+  /// Today only counts once its dose is logged: until then the streak runs up
+  /// to yesterday, so it doesn't drop to zero every morning before the dose.
+  int get currentStreak {
+    final takenDays = <String>{
+      for (final log in _doseLogs)
+        if (!log.isMissed) dayKey(log.timestamp),
+    };
+
+    var day = _dayOnly(DateTime.now());
+    if (!takenDays.contains(dayKey(day))) {
+      day = DateTime(day.year, day.month, day.day - 1);
+    }
+
+    var streak = 0;
+    while (takenDays.contains(dayKey(day))) {
+      streak++;
+      day = DateTime(day.year, day.month, day.day - 1);
+    }
+    return streak;
+  }
+
   /// Course progress: how much of the scheduled course has elapsed, matching
   /// the backend's plan window (start → scheduled end). Falls back to the old
   /// "days logged of 180" heuristic only when no plan data has been synced.
@@ -517,7 +541,7 @@ class MedicationsProvider extends ChangeNotifier {
       await service.scheduleDailyAlarm(
         id: reminderNotificationId,
         title: '⏰ Time for your daily dose',
-        body: 'Take your medicine today — preferably before lunch.',
+        body: 'Take your medicine on an empty stomach, before eating anything.',
         hour: hour,
         minute: minute,
         payload: 'alarm:$reminderId',

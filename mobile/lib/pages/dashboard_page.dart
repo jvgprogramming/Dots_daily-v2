@@ -287,7 +287,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 daysLabel,
                 style: TextStyle(color: _glass(0.8), fontSize: 12),
               );
-              final streak = _StreakChip(days: meds.doseLogs.length);
+              final streak = _StreakChip(days: meds.currentStreak);
 
               if (constraints.maxWidth < 300) {
                 return Column(
@@ -535,8 +535,8 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 4),
           Text(
             isVot
-                ? 'Record yourself taking your medicine — any time today, preferably before lunch.'
-                : 'Take your medicine any time today — preferably before lunch — then tap below.',
+                ? 'Record yourself taking your medicine on an empty stomach, before eating anything.'
+                : 'Take your medicine on an empty stomach, before eating anything — then tap below.',
             style: TextStyle(fontSize: 13, height: 1.4, color: _glass(0.85)),
           ),
           const SizedBox(height: 16),

@@ -156,7 +156,7 @@ class _AlarmRingingPageState extends State<AlarmRingingPage>
         await NotificationService().scheduleNotification(
           id: _snoozeNotificationId,
           title: '⏰ Time for your daily dose',
-          body: 'Take your medicine today — preferably before lunch.',
+          body: 'Take your medicine on an empty stomach, before eating anything.',
           scheduledDate: DateTime.now().add(const Duration(minutes: 5)),
           payload: 'alarm:${MedicationsProvider.reminderId}',
         );

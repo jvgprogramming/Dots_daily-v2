@@ -24,6 +24,13 @@ class MobileDoseLogTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests cover plain (non-VOT) logging; VOT is enabled by hand.
+        $this->storeSetting('vot.enroll_by_default', '0');
+    }
+
     public function test_a_patient_receives_their_active_regimen(): void
     {
         [$user, , , $pivot] = $this->patientWithRegimen();

@@ -51,7 +51,7 @@ class _AlarmDemoPageState extends State<AlarmDemoPage> {
       await NotificationService().scheduleNotification(
         id: _demoNotificationId,
         title: '⏰ Time for your daily dose',
-        body: 'Take your medicine today — preferably before lunch.',
+        body: 'Take your medicine on an empty stomach, before eating anything.',
         scheduledDate: DateTime.now().add(const Duration(seconds: 10)),
         payload: 'alarm:${MedicationsProvider.reminderId}',
       );

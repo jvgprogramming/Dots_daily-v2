@@ -379,7 +379,13 @@ export function VotSettingsSection({ form }: { form: GroupForm }) {
             <BoundInput form={form} k="max_photo_mb" type="number" min={1} max={25} />
           </SettingField>
         </div>
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
+          <ToggleRow
+            label="Enroll new patients in VOT by default"
+            hint="When on, every new patient must record a video of each dose. You can still pause or revoke VOT for one patient from their profile."
+            checked={form.bool("enroll_by_default")}
+            onChange={(v) => form.set("enroll_by_default", v)}
+          />
           <ToggleRow
             label="Allow new proof after a rejection"
             hint="When off, a rejected dose stays rejected and the patient is told to contact their nurse."

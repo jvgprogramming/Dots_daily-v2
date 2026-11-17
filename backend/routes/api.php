@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\Auth\AuthController;
 use App\Http\Controllers\API\Auth\EmailVerificationController;
 use App\Http\Controllers\API\Auth\ForgotPasswordController;
+use App\Http\Controllers\API\Auth\MobileActivationController;
 use App\Http\Controllers\API\Auth\MobileAuthController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\DashboardController;
@@ -178,6 +179,11 @@ Route::prefix('v1')->group(function () {
 
         // Public
         Route::post('/login', [MobileAuthController::class, 'login']);
+
+        // Account activation / password reset by emailed one-time code.
+        Route::post('/otp/request', [MobileActivationController::class, 'request'])->middleware('throttle:5,1');
+        Route::post('/otp/verify', [MobileActivationController::class, 'verify'])->middleware('throttle:10,1');
+        Route::post('/otp/complete', [MobileActivationController::class, 'complete'])->middleware('throttle:5,1');
 
         // Protected
         Route::middleware('auth:sanctum')->group(function () {

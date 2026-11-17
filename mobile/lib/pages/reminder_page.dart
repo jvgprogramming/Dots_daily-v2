@@ -11,7 +11,7 @@ import 'alarm_demo_page.dart';
 /// TB patients take all of their medicines together, once a day — so instead
 /// of a list of alarms this screen simply lets the patient pick the one time
 /// they want to be reminded each day. The dose can be taken any time that day
-/// (preferably before lunch); the reminder is just the nudge.
+/// (on an empty stomach, before eating); the reminder is just the nudge.
 class ReminderPage extends StatefulWidget {
   final ValueChanged<String>? onViewChange;
 
@@ -163,7 +163,7 @@ class _ReminderPageState extends State<ReminderPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text(
-              'Take your medicine once a day — preferably before lunch.',
+              'Take your medicine once a day, on an empty stomach — before eating anything.',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 12.5,
@@ -339,8 +339,8 @@ class _ReminderPageState extends State<ReminderPage> {
                 const SizedBox(height: 2),
                 Text(
                   'Your TB medicines must be taken daily, so this reminder '
-                  'always stays on. Take the dose any time that day — '
-                  'preferably before lunch. You can change the time above.',
+                  'always stays on. Take the dose on an empty stomach, '
+                  'before eating anything. You can change the time above.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.mutedForeground,
@@ -573,7 +573,7 @@ class _ReminderPageState extends State<ReminderPage> {
     await service.scheduleDailyAlarm(
       id: _notificationId,
       title: '⏰ Time for your daily dose',
-      body: 'Take your medicine today — preferably before lunch.',
+      body: 'Take your medicine on an empty stomach, before eating anything.',
       hour: time.hour,
       minute: time.minute,
       payload: 'alarm:${MedicationsProvider.reminderId}',

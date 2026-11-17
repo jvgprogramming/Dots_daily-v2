@@ -341,6 +341,13 @@ class PatientController extends BaseApiController
             if (! empty($userData) && $patient->user) {
                 $patient->user->update($userData);
                 $changes += Audit::diff($patient->user)['changes'] ?? [];
+
+                // A new sign-in email must be confirmed by the patient again:
+                // sign them out so the app asks them to activate with a code.
+                if ($patient->user->wasChanged('email')) {
+                    $patient->user->forceFill(['email_verified_at' => null])->save();
+                    $patient->user->tokens()->delete();
+                }
             }
 
             // Update password if provided

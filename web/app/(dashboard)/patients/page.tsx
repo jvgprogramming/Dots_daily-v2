@@ -695,17 +695,22 @@ export default function PatientsPage() {
                     onChange={(e) => updateField("phone", e.target.value)}
                   />
                 </div>
-                {(isAdmin || modalMode !== "edit") && (
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-medium text-text-secondary mb-1.5 block">
-                      New Password <span className="text-text-tertiary font-normal">(blank = keep current)</span>
-                    </label>
-                    <Input
-                      type="password"
-                      placeholder="Enter new password"
-                      value={formData.password}
-                      onChange={(e) => updateField("password", e.target.value)}
-                    />
+                {modalMode === "edit" && selectedPatient?.user && (
+                  <div className="sm:col-span-2 rounded-lg border border-border-light bg-bg-subtle px-3 py-2.5">
+                    <p className="text-xs font-medium text-text-secondary">
+                      App account:{" "}
+                      {selectedPatient.user.email_verified_at ? (
+                        <span className="text-success">Activated</span>
+                      ) : (
+                        <span className="text-warning">Not activated yet</span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-[11.5px] text-text-tertiary">
+                      {selectedPatient.user.email_verified_at
+                        ? "The patient chose their own password. If they forget it, they can reset it from the app with a code sent to their email."
+                        : "The patient activates the account in the DOTS Daily app with a code sent to this email, then creates their own password."}
+                      {isAdmin && " Changing the email signs the patient out and asks them to activate again."}
+                    </p>
                   </div>
                 )}
               </div>

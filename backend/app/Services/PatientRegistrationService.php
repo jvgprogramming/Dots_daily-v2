@@ -23,15 +23,18 @@ class PatientRegistrationService
         return DB::transaction(function () use ($request, $data, $status) {
             $isDraft = $status === 'draft';
 
-            // ── User account — only created when real credentials were provided ──
-            // (drafts without a password defer account creation to completion)
+            // ── User account ──
+            // A finished registration always gets one; a draft only when a
+            // password was given (otherwise it waits for completion). With no
+            // password the account gets a random one nobody knows: the patient
+            // activates it from the app with an emailed code and picks their own.
             $user = null;
-            if (!empty($data['email']) && !empty($data['password'])) {
+            if (!empty($data['email']) && (!$isDraft || !empty($data['password']))) {
                 $user = User::create([
                     'name' => trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['name'] ?? 'Patient'),
                     'email' => $data['email'],
                     'phone' => $data['phone'] ?? $data['contact_number'] ?? null,
-                    'password' => Hash::make($data['password']),
+                    'password' => Hash::make($data['password'] ?? \Illuminate\Support\Str::password(32)),
                     'role' => 'patient',
                     'is_active' => true,
                 ]);

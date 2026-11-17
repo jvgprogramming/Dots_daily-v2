@@ -21,6 +21,16 @@ class MobileAuthController extends BaseApiController
     {
         $user = User::where('email', $request->email)->first();
 
+        // A patient whose email was never confirmed has no password of their
+        // own yet (staff registered them), so send the app into activation.
+        if ($user && $user->is_active && $user->canUseMobile() && $user->email_verified_at === null) {
+            return $this->error(
+                message: 'Your account needs to be activated first. We will email you a code.',
+                code: 403,
+                data: ['reason' => 'activation_required'],
+            );
+        }
+
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],

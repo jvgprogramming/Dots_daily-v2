@@ -8,7 +8,15 @@ class ApiException implements Exception {
   final int statusCode;
   final Map<String, dynamic>? errors;
 
-  ApiException(this.message, this.statusCode, [this.errors]);
+  /// Machine-readable reason the server gave (`data.reason`), e.g.
+  /// `activation_required`, so the app can react instead of just showing text.
+  final String? reason;
+
+  /// Extra numbers the server sent with the error (`data`), e.g. `resend_in`.
+  final Map<String, dynamic>? data;
+
+  ApiException(this.message, this.statusCode, [this.errors, this.data])
+      : reason = data?['reason'] as String?;
 
   /// The most useful line to show the user: the first field-validation error
   /// (e.g. "The provided credentials are incorrect.") when there is one,
@@ -160,10 +168,12 @@ class ApiService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      final extra = data['data'];
       throw ApiException(
         (data['message'] as String?) ?? 'An error occurred',
         response.statusCode,
         data['errors'] as Map<String, dynamic>?,
+        extra is Map<String, dynamic> ? extra : null,
       );
     }
 

@@ -124,6 +124,7 @@ final class AppSettings
             'vot.max_video_mb' => '64',
             'vot.max_photo_mb' => '10',
             'vot.allow_resubmit_after_reject' => '1',                     // may a rejected dose get new proof?
+            'vot.enroll_by_default' => '1',                               // new patients start enrolled in VOT
 
             // ── Reports ──
             'reports.default_range_days' => '30',

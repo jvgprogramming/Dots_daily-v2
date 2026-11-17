@@ -33,6 +33,23 @@ class VotTest extends TestCase
     {
         parent::setUp();
         Storage::fake('local');
+        // These tests drive enrollment by hand, so start from opt-in.
+        $this->storeSetting('vot.enroll_by_default', '0');
+    }
+
+    public function test_new_patients_are_enrolled_by_default(): void
+    {
+        $this->storeSetting('vot.enroll_by_default', '1');
+        $patient = Patient::factory()->create();
+
+        $this->assertTrue($patient->fresh()->isVotActive());
+    }
+
+    public function test_the_default_enrollment_can_be_turned_off(): void
+    {
+        $patient = Patient::factory()->create();
+
+        $this->assertFalse($patient->fresh()->isVotActive());
     }
 
     // ── Eligibility ─────────────────────────────────────────────────

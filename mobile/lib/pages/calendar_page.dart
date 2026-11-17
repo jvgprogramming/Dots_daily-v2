@@ -400,6 +400,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
   // ---------- Day detail ----------
 
+  /// Whether a patient may log a dose for a past day with nothing recorded.
+  /// Off: dosing is strictly video-observed, so a dose can only be recorded on
+  /// the day it is taken. Set to true to bring the backfill button back.
+  static const bool _allowPastDayLogging = false;
+
   /// [doses] are only the doses actually taken — a day the backend marked
   /// `missed` correctly arrives here empty, so it offers the backfill action.
   Future<void> _showDaySheet(DateTime day, List<DoseLog> doses) async {
@@ -407,6 +412,10 @@ class _CalendarPageState extends State<CalendarPage> {
     // dose against, so the action is withheld rather than failing on tap.
     final meds = context.read<MedicationsProvider>();
     final canLog = meds.canLogDoses;
+    final now = DateTime.now();
+    final isToday =
+        day.year == now.year && day.month == now.month && day.day == now.day;
+    final showLogButton = _allowPastDayLogging || isToday;
     final isVot = meds.isVotEnrolled;
 
     await showModalBottomSheet<void>(
@@ -462,6 +471,18 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  if (!showLogButton)
+                    Text(
+                      'Doses can only be recorded on the day you take them. '
+                      'If you took your medicine on this day, please tell '
+                      'your nurse.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: AppColors.mutedForeground,
+                      ),
+                    )
+                  else ...[
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -505,6 +526,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       color: AppColors.mutedForeground,
                     ),
                   ),
+                  ],
                 ] else
                   ...doses.map((log) => _buildLogTile(log, sheetContext)),
               ],
