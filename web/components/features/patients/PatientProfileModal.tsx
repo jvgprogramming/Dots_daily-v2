@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle, Pencil, PlayCircle, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, Pencil, PlayCircle, RefreshCw, FileEdit } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,11 +123,13 @@ export interface PatientProfileModalProps {
   onClose: () => void;
   onEdit: (patientId: number) => void;
   onResumeDraft: (patientId: number) => void;
+  /** Opens the official registration record for correction (registered patients). */
+  onCorrectRecord?: (detail: PatientDetailResponse) => void;
   /** Opens the treatment lifecycle update flow (Treatments tab workflow). */
   onUpdateTreatment?: (planId: number) => void;
 }
 
-export function PatientProfileModal({ open, patientId, onClose, onEdit, onResumeDraft, onUpdateTreatment }: PatientProfileModalProps) {
+export function PatientProfileModal({ open, patientId, onClose, onEdit, onResumeDraft, onCorrectRecord, onUpdateTreatment }: PatientProfileModalProps) {
   const [data, setData] = useState<PatientDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -420,6 +422,15 @@ export function PatientProfileModal({ open, patientId, onClose, onEdit, onResume
                 <Button variant="primary" onClick={() => onResumeDraft(p.id)}>
                   <PlayCircle className="h-4 w-4" />
                   Resume Registration
+                </Button>
+              ) : onCorrectRecord && data ? (
+                <Button
+                  variant="outline"
+                  onClick={() => onCorrectRecord(data)}
+                  title="Fix notification, diagnosis, classification, lab results, treatment start or close contacts"
+                >
+                  <FileEdit className="h-4 w-4" />
+                  Correct Record
                 </Button>
               ) : null}
               <Button variant="outline" onClick={() => onEdit(p.id)}>

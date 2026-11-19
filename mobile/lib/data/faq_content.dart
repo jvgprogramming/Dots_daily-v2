@@ -1,4 +1,4 @@
-/// Curated, offline answers for ChatDoti — the patient-facing help assistant.
+/// Curated, offline answers for Ask DOTi — the patient-facing help assistant.
 ///
 /// This is intentionally a static knowledge base (no network, no LLM) so it is
 /// dependable, free, and safe to show a TB patient. The chat layer reads this

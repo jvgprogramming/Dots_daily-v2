@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Tunnels the phone's localhost:8000 to this PC's localhost:8000 over USB.
+      // Runs automatically before the "USB (adb reverse)" launch config.
+      "label": "adb-reverse",
+      "type": "process",
+      "command": "${env:LOCALAPPDATA}\\Android\\Sdk\\platform-tools\\adb.exe",
+      "args": ["reverse", "tcp:8000", "tcp:8000"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true }
+    }
+  ]
+}

@@ -5,12 +5,19 @@ namespace App\Services;
 use App\Models\Patient;
 use App\Models\TreatmentPlan;
 use App\Models\User;
+use App\Services\Medication\RegimenPrescriber;
+use App\Support\AppSettings;
+use App\Support\Audit;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class PatientRegistrationService
 {
+    public function __construct(private RegimenPrescriber $prescriber) {}
+
     /**
      * Create a patient account + patient record + all TB registration records
      * (notification, lab tests, diagnosis, classification, treatment plan,
@@ -159,97 +166,241 @@ class PatientRegistrationService
      */
     private function createRelatedRecords(Patient $patient, array $data, ?int $assignedBy = null): void
     {
-        // ── TB Notification ──
         if (!empty($data['notification'])) {
-            $patient->tbNotifications()->create([
-                'reason' => $data['notification']['reason'] ?? 'new',
-                'facility_name' => $data['notification']['facility_name'] ?? null,
-                'ntp_facility_code' => $data['notification']['ntp_facility_code'] ?? null,
-                'province_huc' => $data['notification']['province_huc'] ?? null,
-                'region' => $data['notification']['region'] ?? null,
-            ]);
+            $patient->tbNotifications()->create(self::notificationAttributes($data['notification']));
         }
 
-        // ── Laboratory tests ──
         foreach ($data['laboratory_tests'] ?? [] as $test) {
-            $patient->laboratoryTests()->create([
-                'test_type' => $test['test_type'],
-                'test_name' => $test['test_name'] ?? null,
-                'test_date' => $test['test_date'] ?? null,
-                'result' => $test['result'] ?? null,
-                'status' => $test['status'] ?? 'done',
-                'remarks' => $test['remarks'] ?? null,
-            ]);
+            $patient->laboratoryTests()->create(self::labTestAttributes($test));
         }
 
-        // ── Diagnosis ──
         if (!empty($data['diagnosis'])) {
-            $patient->diagnoses()->create([
-                'diagnosis_type' => $data['diagnosis']['diagnosis_type'],
-                'diagnosis_date' => $data['diagnosis']['diagnosis_date'] ?? null,
-                'notification_date' => $data['diagnosis']['notification_date'] ?? null,
-                'case_number' => $data['diagnosis']['case_number'] ?? null,
-                'attending_physician' => $data['diagnosis']['attending_physician'] ?? null,
-                'referral_name' => $data['diagnosis']['referral_name'] ?? null,
-                'referral_address' => $data['diagnosis']['referral_address'] ?? null,
-                'referral_facility_code' => $data['diagnosis']['referral_facility_code'] ?? null,
-                'referral_province_huc' => $data['diagnosis']['referral_province_huc'] ?? null,
-                'referral_region' => $data['diagnosis']['referral_region'] ?? null,
-            ]);
+            $patient->diagnoses()->create(self::diagnosisAttributes($data['diagnosis']));
         }
 
-        // ── TB Classification ──
         if (!empty($data['classification'])) {
-            $patient->tbClassification()->create([
-                'bacteriological_status' => $data['classification']['bacteriological_status'] ?? null,
-                'anatomical_site' => $data['classification']['anatomical_site'] ?? null,
-                'extrapulmonary_site' => $data['classification']['extrapulmonary_site'] ?? null,
-                'drug_resistance_status' => $data['classification']['drug_resistance_status'] ?? null,
-                'registration_group' => $data['classification']['registration_group'] ?? null,
-            ]);
+            $patient->tbClassification()->create(self::classificationAttributes($data['classification']));
         }
 
         // ── Treatment plan (start info only; outcome fields filled later) ──
         if (!empty($data['treatment']['start_date'])) {
-            $startDate = \Carbon\Carbon::parse($data['treatment']['start_date']);
-
-            // Course length comes from Settings → Treatment protocols for the
-            // chosen regimen; unknown/individualized regimens keep the
-            // standard 6-month default.
-            $regimen = \App\Support\AppSettings::regimen($data['treatment']['regimen_type'] ?? null);
-            $intensiveDays = (int) ($regimen['intensive_days'] ?? 0);
-            $courseDays = $intensiveDays + (int) ($regimen['continuation_days'] ?? 0);
-            $expectedEnd = $courseDays > 0
-                ? $startDate->copy()->addDays($courseDays)
-                : $startDate->copy()->addMonths(6);
-
-            TreatmentPlan::create([
-                'patient_id' => $patient->id,
-                'assigned_by' => $assignedBy ?? $patient->registered_by,
-                'plan_name' => 'TB Treatment — ' . ($data['classification']['registration_group'] ?? 'new'),
-                'regimen_type' => $data['treatment']['regimen_type'] ?? null,
-                // A regimen with no intensive phase (e.g. TB infection) starts in continuation.
-                'phase' => ($regimen && $intensiveDays === 0 && $courseDays > 0) ? 'continuation' : 'intensive',
-                'start_date' => $startDate->toDateString(),
-                'expected_end_date' => $expectedEnd->toDateString(),
-                'status' => 'active',
-                'draft_reason' => null,
-                'notes' => $data['treatment']['notes'] ?? null,
-            ]);
+            $this->createTreatmentPlan($patient, $data, $assignedBy);
         }
 
-        // ── Close contacts ──
         foreach ($data['close_contacts'] ?? [] as $contact) {
-            $patient->closeContacts()->create([
-                'full_name' => $contact['full_name'],
-                'age' => $contact['age'] ?? null,
-                'sex' => $contact['sex'] ?? null,
-                'relationship' => $contact['relationship'] ?? null,
-                'screening_date' => $contact['screening_date'] ?? null,
-                'followup_date' => $contact['followup_date'] ?? null,
-                'remarks' => $contact['remarks'] ?? null,
-            ]);
+            $patient->closeContacts()->create(self::contactAttributes($contact));
         }
+    }
+
+    /**
+     * Correct a registered patient's official record in place.
+     *
+     * The single-record sections (notification, diagnosis, classification,
+     * treatment) update the record registration created — the oldest one.
+     * Lab tests and close contacts are synced by id: entries with an id are
+     * updated, new entries are added, and entries left out are removed.
+     * The treatment plan keeps its id, so dose logs and medications stay
+     * attached; only its start date, starting regimen and notes change.
+     *
+     * @return array<string, mixed> What changed, per section, for the audit trail.
+     */
+    public function correctRegistration(Request $request, Patient $patient, array $data): array
+    {
+        return DB::transaction(function () use ($request, $patient, $data) {
+            $changes = [];
+
+            $sections = [
+                'notification' => [$patient->tbNotifications(), self::notificationAttributes($data['notification'])],
+                'diagnosis' => [$patient->diagnoses(), self::diagnosisAttributes($data['diagnosis'])],
+                'classification' => [$patient->tbClassification(), self::classificationAttributes($data['classification'])],
+            ];
+            foreach ($sections as $name => [$relation, $attributes]) {
+                $record = $relation->oldest('id')->first();
+                if ($record) {
+                    $record->update($attributes);
+                    if ($diff = Audit::diff($record)['changes'] ?? []) {
+                        $changes[$name] = $diff;
+                    }
+                } else {
+                    $relation->create($attributes);
+                    $changes[$name] = 'added';
+                }
+            }
+
+            // ── Treatment plan: the one registration created ──
+            $plan = $patient->treatmentPlans()->oldest('id')->first();
+            if ($plan) {
+                $plan->fill([
+                    'start_date' => $data['treatment']['start_date'],
+                    'regimen_type' => $data['treatment']['regimen_type'],
+                    'notes' => $data['treatment']['notes'] ?? null,
+                ]);
+                // A new start date or regimen moves the expected end date with it.
+                if ($plan->isDirty(['start_date', 'regimen_type'])) {
+                    $plan->expected_end_date = self::expectedEndDate($data['treatment']['start_date'], $data['treatment']['regimen_type'])->toDateString();
+                }
+                $plan->save();
+                if ($diff = Audit::diff($plan)['changes'] ?? []) {
+                    $changes['treatment'] = $diff;
+                }
+                // Plans registered before medicines were auto-prescribed have
+                // none; give them their regimen's now. No-op when it has some.
+                if ($added = $this->prescriber->prescribe($plan)) {
+                    $changes['treatment_medications'] = "added {$added}";
+                }
+            } else {
+                $this->createTreatmentPlan($patient, $data, $request->user()->id);
+                $changes['treatment'] = 'added';
+            }
+
+            if ($list = $this->syncList($patient->laboratoryTests(), $data['laboratory_tests'] ?? [], self::labTestAttributes(...))) {
+                $changes['laboratory_tests'] = $list;
+            }
+            if ($list = $this->syncList($patient->closeContacts(), $data['close_contacts'] ?? [], self::contactAttributes(...))) {
+                $changes['close_contacts'] = $list;
+            }
+
+            return $changes;
+        });
+    }
+
+    /**
+     * Make a patient's list of records match the submitted entries: update
+     * those with a known id, add the rest, remove the ones no longer listed.
+     * An id that is not one of this patient's records is treated as new.
+     *
+     * @return array{added?: int, updated?: int, removed?: int}
+     */
+    private function syncList(HasMany $relation, array $entries, callable $attributes): array
+    {
+        $existing = $relation->get()->keyBy('id');
+        $kept = [];
+        $counts = ['added' => 0, 'updated' => 0, 'removed' => 0];
+
+        foreach ($entries as $entry) {
+            $record = isset($entry['id']) ? $existing->get((int) $entry['id']) : null;
+            if ($record) {
+                $record->update($attributes($entry));
+                $kept[] = $record->id;
+                if ($record->wasChanged()) {
+                    $counts['updated']++;
+                }
+            } else {
+                $relation->create($attributes($entry));
+                $counts['added']++;
+            }
+        }
+
+        foreach ($existing->except($kept) as $record) {
+            $record->delete();
+            $counts['removed']++;
+        }
+
+        return array_filter($counts);
+    }
+
+    private function createTreatmentPlan(Patient $patient, array $data, ?int $assignedBy): TreatmentPlan
+    {
+        $regimen = AppSettings::regimen($data['treatment']['regimen_type'] ?? null);
+        $intensiveDays = (int) ($regimen['intensive_days'] ?? 0);
+        $courseDays = $intensiveDays + (int) ($regimen['continuation_days'] ?? 0);
+
+        $plan = TreatmentPlan::create([
+            'patient_id' => $patient->id,
+            'assigned_by' => $assignedBy ?? $patient->registered_by,
+            'plan_name' => 'TB Treatment — ' . ($data['classification']['registration_group'] ?? 'new'),
+            'regimen_type' => $data['treatment']['regimen_type'] ?? null,
+            // A regimen with no intensive phase (e.g. TB infection) starts in continuation.
+            'phase' => ($regimen && $intensiveDays === 0 && $courseDays > 0) ? 'continuation' : 'intensive',
+            'start_date' => Carbon::parse($data['treatment']['start_date'])->toDateString(),
+            'expected_end_date' => self::expectedEndDate($data['treatment']['start_date'], $data['treatment']['regimen_type'] ?? null)->toDateString(),
+            'status' => 'active',
+            'draft_reason' => null,
+            'notes' => $data['treatment']['notes'] ?? null,
+        ]);
+
+        // Doses are logged against a prescribed medicine — without these the
+        // patient's app reports "no active treatment regimen".
+        $this->prescriber->prescribe($plan);
+
+        return $plan;
+    }
+
+    /**
+     * Course length comes from Settings → Treatment protocols for the chosen
+     * regimen; unknown/individualized regimens keep the standard 6 months.
+     */
+    private static function expectedEndDate(string $startDate, ?string $regimenType): Carbon
+    {
+        $start = Carbon::parse($startDate);
+        $regimen = AppSettings::regimen($regimenType);
+        $courseDays = (int) ($regimen['intensive_days'] ?? 0) + (int) ($regimen['continuation_days'] ?? 0);
+
+        return $courseDays > 0 ? $start->copy()->addDays($courseDays) : $start->copy()->addMonths(6);
+    }
+
+    private static function notificationAttributes(array $n): array
+    {
+        return [
+            'reason' => $n['reason'] ?? 'new',
+            'facility_name' => $n['facility_name'] ?? null,
+            'ntp_facility_code' => $n['ntp_facility_code'] ?? null,
+            'province_huc' => $n['province_huc'] ?? null,
+            'region' => $n['region'] ?? null,
+        ];
+    }
+
+    private static function labTestAttributes(array $test): array
+    {
+        return [
+            'test_type' => $test['test_type'],
+            'test_name' => $test['test_name'] ?? null,
+            'test_date' => $test['test_date'] ?? null,
+            'result' => $test['result'] ?? null,
+            'status' => $test['status'] ?? 'done',
+            'remarks' => $test['remarks'] ?? null,
+        ];
+    }
+
+    private static function diagnosisAttributes(array $d): array
+    {
+        return [
+            'diagnosis_type' => $d['diagnosis_type'],
+            'diagnosis_date' => $d['diagnosis_date'] ?? null,
+            'notification_date' => $d['notification_date'] ?? null,
+            'case_number' => $d['case_number'] ?? null,
+            'attending_physician' => $d['attending_physician'] ?? null,
+            'referral_name' => $d['referral_name'] ?? null,
+            'referral_address' => $d['referral_address'] ?? null,
+            'referral_facility_code' => $d['referral_facility_code'] ?? null,
+            'referral_province_huc' => $d['referral_province_huc'] ?? null,
+            'referral_region' => $d['referral_region'] ?? null,
+        ];
+    }
+
+    private static function classificationAttributes(array $c): array
+    {
+        return [
+            'bacteriological_status' => $c['bacteriological_status'] ?? null,
+            'anatomical_site' => $c['anatomical_site'] ?? null,
+            // Only extra-pulmonary TB has a site; switching to pulmonary clears it.
+            'extrapulmonary_site' => ($c['anatomical_site'] ?? null) === 'extrapulmonary' ? ($c['extrapulmonary_site'] ?? null) : null,
+            'drug_resistance_status' => $c['drug_resistance_status'] ?? null,
+            'registration_group' => $c['registration_group'] ?? null,
+        ];
+    }
+
+    private static function contactAttributes(array $contact): array
+    {
+        return [
+            'full_name' => $contact['full_name'],
+            'age' => $contact['age'] ?? null,
+            'sex' => $contact['sex'] ?? null,
+            'relationship' => $contact['relationship'] ?? null,
+            'screening_date' => $contact['screening_date'] ?? null,
+            'followup_date' => $contact['followup_date'] ?? null,
+            'remarks' => $contact['remarks'] ?? null,
+        ];
     }
 
     /**

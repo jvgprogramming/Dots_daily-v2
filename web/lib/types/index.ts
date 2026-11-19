@@ -77,6 +77,8 @@ export interface NotificationSection {
 }
 
 export interface LaboratoryTestEntry {
+  /** Set for a saved test, so a correction updates it instead of adding a new one. */
+  id?: number;
   test_type: LaboratoryTestType;
   test_name?: string;
   test_date: string;
@@ -113,6 +115,8 @@ export interface TreatmentSection {
 }
 
 export interface CloseContactEntry {
+  /** Set for a saved contact, so a correction updates it instead of adding a new one. */
+  id?: number;
   full_name: string;
   age: string;
   sex: "" | "male" | "female";
@@ -155,6 +159,15 @@ export interface PatientRegistrationPayload {
   treatment: TreatmentSection;
   close_contacts: CloseContactEntry[];
 }
+
+/** Correction of a registered patient's official record (PUT /patients/{id}/registration). */
+export type RegistrationCorrectionPayload = Pick<
+  PatientRegistrationPayload,
+  "notification" | "laboratory_tests" | "diagnosis" | "classification" | "treatment" | "close_contacts"
+> & {
+  /** Why the record is being corrected — kept in the audit trail. */
+  reason: string;
+};
 
 // ── Patient ──
 export interface TbNotification {

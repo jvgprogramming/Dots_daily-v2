@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/faq_content.dart';
 
-/// The result of asking ChatDoti a question.
+/// The result of asking DOTi a question.
 class ChatAnswer {
   final String text;
 
@@ -35,7 +35,7 @@ class ChatTurn {
         answer = a;
 }
 
-/// ChatDoti's brain.
+/// Ask DOTi's brain.
 ///
 /// Today it answers from the curated [kFaqEntries] by keyword overlap — offline,
 /// free, and safe. [ask] is the single seam: to add a real AI assistant later,
@@ -48,7 +48,7 @@ class ChatProvider extends ChangeNotifier {
 
   bool get hasConversation => _turns.isNotEmpty;
 
-  /// Adds the patient's message and ChatDoti's reply to the transcript.
+  /// Adds the patient's message and Ask DOTi's reply to the transcript.
   Future<void> send(String query) async {
     final q = query.trim();
     if (q.isEmpty) return;

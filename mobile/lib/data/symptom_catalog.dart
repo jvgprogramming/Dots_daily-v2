@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The curated list of symptoms a patient can report, mirroring the backend's
 /// App\Support\Symptoms catalogue (slugs must match exactly). Kept here so the

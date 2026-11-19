@@ -154,6 +154,8 @@ Route::prefix('v1')->group(function () {
             Route::post('{patient}/update-draft', [PatientController::class, 'updateDraft']);
             Route::get('{patient}', [PatientController::class, 'show']);
             Route::put('{patient}', [PatientController::class, 'update']);
+            // Correct the official TB registration record (reason required, audited).
+            Route::put('{patient}/registration', [PatientController::class, 'updateRegistration']);
             // Deleting a patient record stays admin-only.
             Route::delete('{patient}', [PatientController::class, 'destroy'])->middleware('role:admin');
         });

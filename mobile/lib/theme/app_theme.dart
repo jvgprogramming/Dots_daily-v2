@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // Colors, radii and shadows mirror the web portal's tokens in
 // web/app/globals.css so the app and the portal read as one product.

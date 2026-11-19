@@ -1,5 +1,5 @@
-{
-  // Local dev tasks (this folder is gitignored — safe for machine-specific paths).
+﻿{
+  // Local dev tasks (this folder is gitignored â€” safe for machine-specific paths).
   "version": "2.0.0",
   "tasks": [
     {
@@ -8,7 +8,7 @@
       // a LAN IP or a firewall rule. Runs automatically before the USB launch config.
       "label": "adb-reverse",
       "type": "process",
-      "command": "D:\\sdk\\platform-tools\\adb.exe",
+      "command": "${env:LOCALAPPDATA}\\Android\\Sdk\\platform-tools\\adb.exe",
       "args": ["reverse", "tcp:8000", "tcp:8000"],
       "problemMatcher": [],
       "presentation": {

@@ -185,6 +185,85 @@ class PatientController extends BaseApiController
             'contact_number' => ['nullable', 'string', 'max:20'],
             'philhealth_number' => ['nullable', 'string', 'max:30'],
 
+            ...self::registrationRecordRules(),
+        ]);
+
+        try {
+            $patient = $service->completeDraft($request, $patient, $data);
+
+            $patient->load(['user', 'registeredBy']);
+
+            Audit::log($request, 'patient.registered', 'Completed registration of '.self::auditName($patient), $patient);
+
+            return $this->success(
+                data: [
+                    'patient' => new PatientResource($patient),
+                    'user' => $patient->user ? new UserResource($patient->user) : null,
+                ],
+                message: 'Patient registration completed successfully.',
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                message: 'Failed to complete registration. '.$e->getMessage(),
+                code: 500,
+            );
+        }
+    }
+
+    /**
+     * Correct the official registration record of a registered patient —
+     * notification, laboratory tests, diagnosis, TB classification, starting
+     * treatment and close contacts — when something was logged wrongly.
+     *
+     * Records are corrected in place (never deleted and re-created), so dose
+     * logs and medications stay attached to the same treatment plan. Every
+     * correction needs a reason and is written to the audit trail with the
+     * before/after of each changed field.
+     */
+    public function updateRegistration(Request $request, Patient $patient, PatientRegistrationService $service): JsonResponse
+    {
+        $this->ensureVisible($request, $patient);
+
+        if ($patient->status === 'draft') {
+            return $this->error(message: 'This patient is still a draft. Resume the registration to complete it instead.', code: 422);
+        }
+
+        $data = $request->validate([
+            ...self::registrationRecordRules(),
+            'laboratory_tests.*.id' => ['nullable', 'integer'],
+            'close_contacts.*.id' => ['nullable', 'integer'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        try {
+            $changes = $service->correctRegistration($request, $patient, $data);
+        } catch (\Exception $e) {
+            return $this->error(message: 'Failed to update the registration record. '.$e->getMessage(), code: 500);
+        }
+
+        if ($changes !== []) {
+            Audit::log(
+                $request,
+                'patient.registration_corrected',
+                'Corrected registration record of '.self::auditName($patient).' ('.implode(', ', array_keys($changes)).')',
+                $patient,
+                ['reason' => $data['reason'], 'changes' => $changes],
+            );
+        }
+
+        return $this->success(
+            data: ['changed_sections' => array_keys($changes)],
+            message: $changes === [] ? 'No changes to save.' : 'Registration record updated.',
+        );
+    }
+
+    /**
+     * Validation for the official TB registration record, shared by
+     * completing a draft and correcting a registered patient's record.
+     */
+    private static function registrationRecordRules(): array
+    {
+        return [
             'notification' => ['required', 'array'],
             'notification.reason' => ['required', 'string', 'in:new,update,final_outcome'],
             'notification.facility_name' => ['nullable', 'string', 'max:255'],
@@ -232,28 +311,7 @@ class PatientController extends BaseApiController
             'close_contacts.*.screening_date' => ['nullable', 'date'],
             'close_contacts.*.followup_date' => ['nullable', 'date'],
             'close_contacts.*.remarks' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        try {
-            $patient = $service->completeDraft($request, $patient, $data);
-
-            $patient->load(['user', 'registeredBy']);
-
-            Audit::log($request, 'patient.registered', 'Completed registration of '.self::auditName($patient), $patient);
-
-            return $this->success(
-                data: [
-                    'patient' => new PatientResource($patient),
-                    'user' => $patient->user ? new UserResource($patient->user) : null,
-                ],
-                message: 'Patient registration completed successfully.',
-            );
-        } catch (\Exception $e) {
-            return $this->error(
-                message: 'Failed to complete registration. '.$e->getMessage(),
-                code: 500,
-            );
-        }
+        ];
     }
 
     /**

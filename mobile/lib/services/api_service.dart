@@ -49,15 +49,19 @@ class ApiService {
 
   /// Default backend URL based on the current platform. Only used when
   /// `API_BASE_URL` is not supplied via `--dart-define`.
-  /// - Android emulator uses 10.0.2.2 (special alias for host machine's localhost).
+  /// - Android (phone or emulator) uses the dev PC's LAN IP ([_devLanHost]).
   /// - iOS simulator uses 127.0.0.1 (localhost).
   /// - Real devices: pass `--dart-define=API_BASE_URL=...` with either the host
   ///   machine's LAN IP, or `http://127.0.0.1:8000/api/v1` combined with
   ///   `adb reverse tcp:8000 tcp:8000`.
+  /// Dev PC's LAN IP, used by plain `flutter run` on Android (real phones and
+  /// emulators can both reach it). Update when your network changes (ipconfig).
+  static const String _devLanHost = '192.168.254.148';
+
   static String get defaultBaseUrl {
     try {
       if (Platform.isAndroid) {
-        return 'http://10.0.2.2:8000/api/v1';
+        return 'http://$_devLanHost:8000/api/v1';
       }
       if (Platform.isIOS) {
         return 'http://127.0.0.1:8000/api/v1';

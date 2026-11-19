@@ -1,4 +1,4 @@
-{
+﻿{
   // Local run configs (this folder is gitignored). Each one feeds the app its
   // backend URL via --dart-define=API_BASE_URL, which api_service.dart reads
   // (ApiService._configuredBaseUrl). This is the mobile equivalent of the web
@@ -28,7 +28,7 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=API_BASE_URL=http://192.168.1.59:8000/api/v1"
+        "--dart-define=API_BASE_URL=http://192.168.254.148:8000/api/v1"
       ]
     },
     {

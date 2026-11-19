@@ -46,9 +46,7 @@ class MobileActivationController extends BaseApiController
         }
 
         $otp = EmailOtp::firstWhere('user_id', $user->id);
-        if ($otp && $otp->updated_at->diffInSeconds(now()) < EmailOtp::RESEND_COOLDOWN_SECONDS) {
-            $wait = EmailOtp::RESEND_COOLDOWN_SECONDS - (int) $otp->updated_at->diffInSeconds(now());
-
+        if ($otp && ($wait = $otp->resendIn()) > 0) {
             return $this->error(
                 message: "Please wait {$wait} seconds before asking for another code.",
                 code: 429,
@@ -63,7 +61,7 @@ class MobileActivationController extends BaseApiController
             'attempts' => 0,
             'verified_at' => null,
             'setup_token_hash' => null,
-        ])->touch();
+        ]);
 
         $user->notify(new PatientOtpNotification($code, activating: $user->email_verified_at === null));
         Audit::log($request, 'auth.otp_sent', "Sent a sign-in code to {$user->email}", $user, userId: $user->id);
@@ -82,21 +80,12 @@ class MobileActivationController extends BaseApiController
         $otp = $user ? EmailOtp::firstWhere('user_id', $user->id) : null;
 
         if (! $otp || $otp->isExpired()) {
-            return $this->error(message: 'This code has expired. Tap "Send a new code" to get another.', code: 422);
+            return $this->error(message: 'This code has expired. Tap "Resend code" to get another.', code: 422);
         }
-        if ($otp->attempts >= EmailOtp::MAX_ATTEMPTS) {
-            return $this->error(message: 'Too many wrong tries. Tap "Send a new code" to get another.', code: 422);
-        }
+        // A wrong guess leaves the code usable until it expires; the route's
+        // throttle (10/min) is what limits guessing.
         if (! Hash::check($data['code'], $otp->code_hash)) {
-            $otp->increment('attempts');
-            $left = EmailOtp::MAX_ATTEMPTS - $otp->attempts;
-
-            return $this->error(
-                message: $left > 0
-                    ? "That code isn't right. {$left} ".Str::plural('try', $left).' left.'
-                    : 'Too many wrong tries. Tap "Send a new code" to get another.',
-                code: 422,
-            );
+            return $this->error(message: "That code isn't right. Check the email and try again.", code: 422);
         }
 
         $setupToken = Str::random(64);

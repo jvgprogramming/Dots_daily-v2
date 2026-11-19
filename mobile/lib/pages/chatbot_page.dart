@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../data/faq_content.dart';
 import '../providers/chat_provider.dart';
 import '../theme/app_theme.dart';
 
-/// ChatDoti — a patient-facing help assistant. It answers frequently asked
+/// Ask DOTi — a patient-facing help assistant. It answers frequently asked
 /// questions about TB treatment from a curated, offline knowledge base. The
 /// chat is powered by [ChatProvider.ask], a seam that an AI backend can replace
 /// later without changing this screen.
@@ -109,7 +109,7 @@ class _ChatViewState extends State<_ChatView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ChatDoti',
+                  'Ask DOTi',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -156,7 +156,7 @@ class _ChatViewState extends State<_ChatView> {
                   Icon(Icons.waving_hand_rounded, color: p.primary, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Hi! I’m ChatDoti',
+                    'Hi! I’m DOTi',
                     style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w700,

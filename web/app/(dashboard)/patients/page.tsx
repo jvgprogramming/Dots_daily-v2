@@ -11,10 +11,13 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
-  Lock,
+  FileEdit,
   X,
 } from "lucide-react";
-import { PatientRegistrationWizard } from "@/components/features/patients/PatientRegistrationWizard";
+import {
+  PatientRegistrationWizard,
+  registrationFromPatient,
+} from "@/components/features/patients/PatientRegistrationWizard";
 import { PatientProfileModal } from "@/components/features/patients/PatientProfileModal";
 import type { PatientRegistrationPayload } from "@/lib/types";
 import { getPatient } from "@/lib/services/patients";
@@ -36,6 +39,7 @@ import {
 } from "@/lib/services/patients";
 import type {
   PatientListItem,
+  PatientDetailResponse,
   CreatePatientPayload,
   UpdatePatientPayload,
   PaginatedResponse,
@@ -45,6 +49,8 @@ import type {
 interface WizardState {
   open: boolean;
   draft: { patientId: number; payload: Partial<PatientRegistrationPayload> } | null;
+  /** Set when correcting a registered patient's official record. */
+  correction?: { patientId: number; payload: PatientRegistrationPayload } | null;
 }
 
 // ─── Profile modal state ───
@@ -225,6 +231,32 @@ export default function PatientsPage() {
       setWizard({ open: true, draft: { patientId: patient.id, payload: draftData } });
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to load draft");
+    }
+  };
+
+  // ── Correct a registered patient's official record ──
+  const openCorrection = (detail: PatientDetailResponse) => {
+    setProfile({ open: false, patientId: null });
+    setModalMode(null);
+    setWizardKey((k) => k + 1);
+    setWizard({
+      open: true,
+      draft: null,
+      correction: { patientId: detail.patient.id, payload: registrationFromPatient(detail) },
+    });
+  };
+
+  const [loadingCorrection, setLoadingCorrection] = useState(false);
+  const openCorrectionFor = async (patientId: number) => {
+    setFormError("");
+    setLoadingCorrection(true);
+    try {
+      const res = await getPatient(patientId);
+      if (res.data) openCorrection(res.data);
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to load the registration record");
+    } finally {
+      setLoadingCorrection(false);
     }
   };
 
@@ -585,9 +617,17 @@ export default function PatientsPage() {
       <Modal
         open={wizard.open}
         onClose={() => setWizard({ open: false, draft: null })}
-        title={wizard.draft ? "Complete Patient Registration" : "Register New Patient"}
+        title={
+          wizard.correction
+            ? "Correct Registration Record"
+            : wizard.draft
+            ? "Complete Patient Registration"
+            : "Register New Patient"
+        }
         description={
-          wizard.draft
+          wizard.correction
+            ? "Fix entries that were logged wrongly. Every correction is recorded in the audit trail."
+            : wizard.draft
             ? "Resume the saved draft and complete the TB registration."
             : "Complete the digital TB/DOTS registration form — the patient's baseline record."
         }
@@ -598,10 +638,14 @@ export default function PatientsPage() {
           open={wizard.open}
           onClose={() => setWizard({ open: false, draft: null })}
           draft={wizard.draft}
+          correction={wizard.correction}
           onSaved={(msg) => {
+            const corrected = wizard.correction?.patientId;
             setWizard({ open: false, draft: null });
             setFormSuccess(msg);
             fetchPatients();
+            // Show the corrected record straight away.
+            if (corrected) setProfile({ open: true, patientId: corrected });
           }}
         />
       </Modal>
@@ -620,18 +664,30 @@ export default function PatientsPage() {
 
           {/* ── Scrollable form body ── */}
           <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-4">
-            {/* Locked registration notice — clinical fields are managed via the registration record */}
+            {/* Clinical fields live in the official registration record, corrected separately */}
             <div className="flex items-start gap-3 rounded-[10px] bg-info-bg p-4">
-              <Lock className="h-4 w-4 text-info-text mt-0.5 shrink-0" />
-              <div>
+              <FileEdit className="h-4 w-4 text-info-text mt-0.5 shrink-0" />
+              <div className="flex-1">
                 <p className="text-sm font-medium text-info-text">
-                  Only personal and account information can be edited here.
+                  This form edits personal and account information.
                 </p>
                 <p className="text-xs text-info-text/80 mt-0.5">
-                  Notification, diagnosis, TB classification, laboratory results, treatment regimen and close contacts
-                  are part of the official registration record — they are locked after submission and shown on the
-                  patient profile.
+                  Notification, diagnosis, TB classification, laboratory results, treatment start and close contacts
+                  are part of the official registration record. If something there was logged wrongly, correct it
+                  with a reason — every correction is kept in the audit trail.
                 </p>
+                {selectedPatient && selectedPatient.status !== "draft" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2.5"
+                    onClick={() => openCorrectionFor(selectedPatient.id)}
+                    disabled={loadingCorrection}
+                  >
+                    {loadingCorrection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileEdit className="h-3.5 w-3.5" />}
+                    Correct Registration Record
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -878,6 +934,7 @@ export default function PatientsPage() {
         open={profile.open}
         patientId={profile.patientId}
         onClose={() => setProfile({ open: false, patientId: null })}
+        onCorrectRecord={openCorrection}
         onEdit={(id) => {
           setProfile({ open: false, patientId: null });
           const target = patients?.data.find((pt) => pt.id === id);

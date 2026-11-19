@@ -50,7 +50,7 @@ The patient logs in once on their phone. Across the bottom of the app are five t
 
 - **Calendar** — a month-by-month history of the patient's doses, showing taken days, and days a nurse has flagged for review.
 
-- **Chat (ChatDoti)** — a built-in help section that answers common questions about TB and the medicine (for example, "When should I take my medicine?" or "What are the side effects?"). It works even without internet, because the answers are stored in the app.
+- **Chat (Ask DOTi)** — a built-in help section that answers common questions about TB and the medicine (for example, "When should I take my medicine?" or "What are the side effects?"). It works even without internet, because the answers are stored in the app.
 
 - **Symptoms (Symptom Monitor)** — where the patient tells the clinic how they feel. They can tap any TB symptoms (cough, fever, night sweats, coughing up blood, and so on) or any medicine side effects (nausea, yellow eyes, rash, blurred vision, numbness, and more), and rate each one as mild, moderate, or severe. When they submit, the report goes to the clinic and appears on that patient's Monitoring page. If they report something dangerous — or mark anything as severe — the app immediately warns them to contact the clinic, and the clinic staff get an alert.
 
@@ -86,7 +86,7 @@ To put our work in context, these are the capabilities the project focused on:
 
 - **A dependable daily alarm:** the reminder rings full-screen like a real alarm, survives the phone restarting, and nudges the patient to take their one daily dose (preferably before lunch) without ever locking them out of the rest of the app.
 
-- **ChatDoti:** an easy, offline question-and-answer helper for patients.
+- **Ask DOTi:** an easy, offline question-and-answer helper for patients.
 
 - **Symptom Monitor:** patients can report TB symptoms and medicine side effects; dangerous reports warn the patient and alert the clinic, and all reports appear on the patient's Monitoring page.
 

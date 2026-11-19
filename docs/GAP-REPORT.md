@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** 2026-11-16
-**Baseline commit:** `d73b655` (plus the in-progress video-proof and ChatDoti work on this branch)
+**Baseline commit:** `d73b655` (plus the in-progress video-proof and Ask DOTi work on this branch)
 **Author:** Engineering
 
 ---
@@ -33,7 +33,7 @@ and `docs/Features.md` exist but are **empty**.
 | # | Area | Spec says | Code does | Severity | Recommendation |
 |---|------|-----------|-----------|----------|----------------|
 | 1 | Proof of intake | Photo only (`proof_photo`) | **Video** proof added (`proof_video_path`), photo retained | High | Update spec + ERD to include video |
-| 2 | Patient help | Generic "AI Chat" (LLM, `ai_conversations`) | **ChatDoti** — curated offline FAQ with an LLM-ready seam | Medium | Document ChatDoti; keep AI tables as "future" |
+| 2 | Patient help | Generic "AI Chat" (LLM, `ai_conversations`) | **Ask DOTi** — curated offline FAQ with an LLM-ready seam | Medium | Document Ask DOTi; keep AI tables as "future" |
 | 3 | Roles | `ENUM('admin','patient')` | `admin` / `staff` (portal) + `patient` (mobile) | High | Rewrite role model in `Database.md` + constitution |
 | 4 | Tech stack | Next 15 / Laravel 12 / shadcn+Axios+Zod+RHF+TanStack | Next 16.2.9 / Laravel ^13.8 / plain `fetch()` | Medium | Correct stack sections; remove uninstalled libs |
 | 5 | Alarm/reminder | Backend "notifications" module only | Full on-device alarm engine (undocumented) | Medium | Document the mobile alarm as a first-class feature |
@@ -81,20 +81,20 @@ oversight mechanism.
 
 ---
 
-## 4. Patient help: "AI Chat" (spec) vs. ChatDoti FAQ (implemented)
+## 4. Patient help: "AI Chat" (spec) vs. Ask DOTi FAQ (implemented)
 
 **Spec.** `Roadmap.md` lists "AI Chat" and "AI Recommendations"; `Database.md`
 §9–11 models `ai_conversations`, `ai_messages`, `ai_recommendations` for a
-free-form LLM assistant. The name "ChatDoti" appears nowhere in the docs.
+free-form LLM assistant. The name "Ask DOTi" appears nowhere in the docs.
 
-**Implementation (this branch).** The Chat tab is now **ChatDoti**, a curated,
+**Implementation (this branch).** The Chat tab is now **Ask DOTi**, a curated,
 **offline** FAQ (`mobile/lib/data/faq_content.dart`) answered through a single
 `ChatProvider.ask()` seam (`mobile/lib/providers/chat_provider.dart`). It uses
 no network and no LLM, which is dependable and safe for medical content. The seam
 is designed so an LLM backend can replace `ask()` later without UI changes; the
 `ai_*` tables remain unused by mobile.
 
-**Recommendation.** Document ChatDoti as the shipped help feature, and keep the
+**Recommendation.** Document Ask DOTi as the shipped help feature, and keep the
 `ai_*` tables explicitly marked "future / not yet wired."
 
 ---
@@ -159,7 +159,7 @@ uninstalled libraries, or add a one-line "as-built stack" box pointing readers t
 **Documentation edits**
 - [ ] `Database.md`: add video proof columns + ERD; rewrite role model to `admin`/`staff`/`patient`.
 - [ ] `project_constitution.md`: correct Next/Laravel versions; remove uninstalled web libraries.
-- [ ] `Roadmap.md`: add video proof and ChatDoti to the scope; mark `ai_*` tables "future."
+- [ ] `Roadmap.md`: add video proof and Ask DOTi to the scope; mark `ai_*` tables "future."
 - [ ] Fill `docs/API.md` (at least `/api/v1/mobile/*`) and `docs/Features.md`, or delete the empty stubs.
 - [ ] Document the mobile alarm + dose-sync behavior.
 

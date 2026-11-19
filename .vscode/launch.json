@@ -1,0 +1,36 @@
+{
+  // Run configs for the Flutter app when VS Code is opened at the repo root.
+  // Mirrors mobile/.vscode/launch.json (used when opening mobile/ directly).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Real phone on USB. Runs `adb reverse tcp:8000 tcp:8000` first, so the
+      // phone's localhost:8000 reaches this PC's Laravel backend.
+      "name": "DOTS Daily — USB (adb reverse)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "mobile",
+      "program": "lib/main.dart",
+      "preLaunchTask": "adb-reverse",
+      "args": ["--dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1"]
+    },
+    {
+      // Real phone over Wi-Fi. Backend must bind 0.0.0.0:8000 and the firewall
+      // must allow inbound TCP 8000. Update the IP if it changes (ipconfig).
+      "name": "DOTS Daily — Wi-Fi (LAN)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "mobile",
+      "program": "lib/main.dart",
+      "args": ["--dart-define=API_BASE_URL=http://192.168.254.148:8000/api/v1"]
+    },
+    {
+      "name": "DOTS Daily — Android emulator",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "mobile",
+      "program": "lib/main.dart",
+      "args": ["--dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1"]
+    }
+  ]
+}

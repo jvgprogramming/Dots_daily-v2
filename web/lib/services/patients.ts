@@ -9,6 +9,7 @@ import type {
   PatientSelectOption,
   PatientRegistrationPayload,
   PatientStatus,
+  RegistrationCorrectionPayload,
 } from "@/lib/types";
 
 export interface PatientListParams {
@@ -75,6 +76,18 @@ export async function updatePatientDraft(
   payload: PatientRegistrationPayload
 ): Promise<ApiResponse> {
   return api.post<ApiResponse>(`/patients/${patientId}/update-draft`, payload);
+}
+
+/**
+ * Correct a registered patient's official TB record (notification, lab tests,
+ * diagnosis, classification, starting treatment, close contacts). Needs a
+ * reason; the change is written to the audit trail.
+ */
+export async function correctPatientRegistration(
+  patientId: number,
+  payload: RegistrationCorrectionPayload
+): Promise<ApiResponse<{ changed_sections: string[] }>> {
+  return api.put<ApiResponse<{ changed_sections: string[] }>>(`/patients/${patientId}/registration`, payload);
 }
 
 export async function updatePatient(id: number, payload: UpdatePatientPayload): Promise<ApiResponse> {

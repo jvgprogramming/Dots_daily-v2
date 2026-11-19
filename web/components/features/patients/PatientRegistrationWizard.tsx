@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
-import { registerPatient, completePatientDraft } from "@/lib/services/patients";
+import { registerPatient, completePatientDraft, correctPatientRegistration } from "@/lib/services/patients";
 import { ApiError } from "@/lib/services/api";
 import { useClinicSettings } from "@/lib/hooks/useClinicSettings";
 import { regimenOptionsFrom } from "@/lib/treatment-options";
@@ -51,6 +51,7 @@ import type {
   DrugResistanceStatus,
   RegistrationGroup,
   PatientStatus,
+  PatientDetailResponse,
 } from "@/lib/types";
 
 // ─── Wizard steps ───
@@ -66,7 +67,17 @@ const STEPS = [
   { id: "review", label: "Review", icon: ClipboardCheck },
 ] as const;
 
-type StepId = (typeof STEPS)[number]["id"];
+type Step = (typeof STEPS)[number];
+type StepId = Step["id"];
+
+/**
+ * Correcting a registered patient covers only the official TB record; name,
+ * demographics and the sign-in account are edited from "Edit Info".
+ */
+const CORRECTION_STEPS: readonly Step[] = STEPS.filter((s) => s.id !== "account" && s.id !== "demographics");
+
+/** Shortest reason the server accepts for a correction. */
+const MIN_REASON_LENGTH = 5;
 
 const SELECT_CLASSES =
   "flex h-11 w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500";
@@ -208,6 +219,93 @@ export function emptyRegistrationForm(): PatientRegistrationPayload {
   };
 }
 
+/**
+ * A date from the API as the yyyy-mm-dd a date input needs. Dates arrive as
+ * UTC timestamps of local midnight (5 Mar → "2026-03-04T16:00:00Z" in
+ * Manila), so the calendar day must be read in local time, not sliced.
+ */
+function toDateInput(value: string | null | undefined): string {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * The wizard form filled from a registered patient's saved record, for
+ * correcting it. Single-record sections use the record registration created
+ * (the oldest), matching what the server corrects.
+ */
+export function registrationFromPatient(detail: PatientDetailResponse): PatientRegistrationPayload {
+  const p = detail.patient;
+  const base = emptyRegistrationForm();
+  const notification = p.tb_notifications?.[0];
+  const diagnosis = p.diagnoses?.[0];
+  const classification = p.tb_classification?.[0];
+  const plans = detail.recent_activity?.treatment_plans ?? [];
+  const plan = plans.length ? plans.reduce((a, b) => (a.id < b.id ? a : b)) : undefined;
+
+  return {
+    ...base,
+    notification: notification
+      ? {
+          reason: notification.reason,
+          facility_name: notification.facility_name ?? "",
+          ntp_facility_code: notification.ntp_facility_code ?? "",
+          province_huc: notification.province_huc ?? "",
+          region: notification.region ?? "",
+        }
+      : base.notification,
+    laboratory_tests: (p.laboratory_tests ?? []).map((t) => ({
+      id: t.id,
+      test_type: t.test_type,
+      test_name: t.test_name ?? "",
+      test_date: toDateInput(t.test_date),
+      result: t.result ?? "",
+      status: t.status,
+      remarks: t.remarks ?? "",
+    })),
+    diagnosis: diagnosis
+      ? {
+          diagnosis_type: diagnosis.diagnosis_type,
+          diagnosis_date: toDateInput(diagnosis.diagnosis_date),
+          notification_date: toDateInput(diagnosis.notification_date),
+          case_number: diagnosis.case_number ?? "",
+          attending_physician: diagnosis.attending_physician ?? "",
+          referral_name: diagnosis.referral_name ?? "",
+          referral_address: diagnosis.referral_address ?? "",
+          referral_facility_code: diagnosis.referral_facility_code ?? "",
+          referral_province_huc: diagnosis.referral_province_huc ?? "",
+          referral_region: diagnosis.referral_region ?? "",
+        }
+      : base.diagnosis,
+    classification: classification
+      ? {
+          bacteriological_status: classification.bacteriological_status ?? base.classification.bacteriological_status,
+          anatomical_site: classification.anatomical_site ?? base.classification.anatomical_site,
+          extrapulmonary_site: classification.extrapulmonary_site ?? "",
+          drug_resistance_status: classification.drug_resistance_status ?? base.classification.drug_resistance_status,
+          registration_group: classification.registration_group ?? base.classification.registration_group,
+        }
+      : base.classification,
+    treatment: plan
+      ? { start_date: toDateInput(plan.start_date), regimen_type: plan.regimen_type ?? "", notes: plan.notes ?? "" }
+      : base.treatment,
+    close_contacts: (p.close_contacts ?? []).map((c) => ({
+      id: c.id,
+      full_name: c.full_name,
+      age: c.age != null ? String(c.age) : "",
+      sex: c.sex === "male" || c.sex === "female" ? c.sex : "",
+      relationship: c.relationship ?? "",
+      screening_date: toDateInput(c.screening_date),
+      followup_date: toDateInput(c.followup_date),
+      remarks: c.remarks ?? "",
+    })),
+  };
+}
+
 const EMPTY_LAB_TEST: LaboratoryTestEntry = {
   test_type: "xpert",
   test_name: "",
@@ -251,16 +349,28 @@ export interface PatientRegistrationWizardProps {
     patientId: number;
     payload: Partial<PatientRegistrationPayload>;
   } | null;
+  /**
+   * Registered patient whose official record is being corrected (id + the
+   * record as saved, from `registrationFromPatient`).
+   */
+  correction?: {
+    patientId: number;
+    payload: PatientRegistrationPayload;
+  } | null;
   onSaved: (message: string) => void;
 }
 
-export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: PatientRegistrationWizardProps) {
+export function PatientRegistrationWizard({ open, onClose, draft, correction, onSaved }: PatientRegistrationWizardProps) {
   const [form, setForm] = useState<PatientRegistrationPayload>(
-    () => ({ ...emptyRegistrationForm(), ...(draft?.payload ?? {}) })
+    () => ({ ...emptyRegistrationForm(), ...(correction?.payload ?? draft?.payload ?? {}) })
   );
+  const isCorrection = !!correction;
+  const steps = isCorrection ? CORRECTION_STEPS : STEPS;
+  const [reason, setReason] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
   /** Furthest step opened so far: every badge up to it can be clicked. */
-  const [maxReached, setMaxReached] = useState(0);
+  // A record being corrected is already complete, so every step is open.
+  const [maxReached, setMaxReached] = useState(() => (correction ? CORRECTION_STEPS.length - 1 : 0));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState<string[]>([]);
@@ -272,7 +382,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
   );
 
   const isResume = !!draft;
-  const currentStep = STEPS[stepIndex];
+  const currentStep = steps[stepIndex];
 
   const update = <K extends keyof PatientRegistrationPayload>(
     field: K,
@@ -325,7 +435,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
     const miss = validateStep(currentStep.id);
     setMissing(miss);
     if (miss.length === 0) {
-      const next = Math.min(stepIndex + 1, STEPS.length - 1);
+      const next = Math.min(stepIndex + 1, steps.length - 1);
       setStepIndex(next);
       setMaxReached((m) => Math.max(m, next));
     }
@@ -349,7 +459,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
       return;
     }
     for (let i = stepIndex; i < target; i++) {
-      const miss = validateStep(STEPS[i].id);
+      const miss = validateStep(steps[i].id);
       if (miss.length > 0) {
         setStepIndex(i);
         setMissing(miss);
@@ -372,8 +482,43 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
     return parts.join(" ") || form.name || "—";
   }, [form.first_name, form.middle_name, form.last_name, form.name_extension, form.name]);
 
+  // ── Submit a correction of a registered patient's record ──
+  const handleCorrect = async () => {
+    if (!correction) return;
+    if (reason.trim().length < MIN_REASON_LENGTH) {
+      setError("Please give a reason for the correction — it is kept in the audit trail.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await correctPatientRegistration(correction.patientId, {
+        notification: form.notification,
+        laboratory_tests: form.laboratory_tests,
+        diagnosis: form.diagnosis,
+        classification: form.classification,
+        treatment: form.treatment,
+        close_contacts: form.close_contacts,
+        reason: reason.trim(),
+      });
+      onSaved(res.data?.changed_sections?.length ? "Registration record updated." : "No changes were made to the registration record.");
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.errors) {
+        const details = Object.entries(err.errors)
+          .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
+          .join("\n");
+        setError(`Some fields need fixing:\n${details}`);
+      } else {
+        setError(err instanceof Error ? err.message : "Saving the correction failed");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // ── Submit (final registration) ──
   const handleRegister = async () => {
+    if (isCorrection) return handleCorrect();
     setError("");
     setSubmitting(true);
     try {
@@ -418,7 +563,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
 
       {/* ── Step indicator ── */}
       <div className="flex items-center gap-1 overflow-x-auto pb-3 shrink-0">
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const Icon = s.icon;
           const active = i === stepIndex;
           const reachable = !active && i <= maxReached;
@@ -1074,22 +1219,43 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
             {/* ══════════ STEP 8: REVIEW ══════════ */}
             {currentStep.id === "review" && (
               <>
-                <SectionHeader icon={ClipboardCheck} title="Review Patient Information" />
+                <SectionHeader
+                  icon={ClipboardCheck}
+                  title={isCorrection ? "Review the Corrected Record" : "Review Patient Information"}
+                />
                 <div className="space-y-4">
-                  <ReviewGroup title="Patient Information">
-                    <ReviewRow label="Name" value={displayName} />
-                    <ReviewRow label="Date of Birth" value={form.date_of_birth || "—"} />
-                    <ReviewRow label="Sex" value={form.gender || "—"} />
-                    <ReviewRow label="Civil Status" value={form.civil_status || "—"} />
-                    <ReviewRow label="Weight (kg)" value={form.weight_kg ? `${form.weight_kg} kg` : "—"} />
-                    <ReviewRow label="Nationality" value={form.nationality || "—"} />
-                    <ReviewRow label="Address" value={form.address || "—"} />
-                    <ReviewRow label="PhilHealth" value={form.philhealth_number || "—"} />
-                  </ReviewGroup>
-                  <ReviewGroup title="Account">
-                    <ReviewRow label="Email" value={form.email || "—"} />
-                    <ReviewRow label="Contact Number" value={form.contact_number || form.phone || "—"} />
-                  </ReviewGroup>
+                  {isCorrection ? (
+                    <Field
+                      label="Reason for correction"
+                      required
+                      hint="Kept in the audit trail with the before and after of every changed field."
+                    >
+                      <textarea
+                        className="flex min-h-[72px] w-full rounded-[10px] border border-border-default bg-bg-card px-4 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary-400/25 focus:border-primary-500"
+                        placeholder="e.g., Diagnosis date was entered as January instead of February."
+                        maxLength={500}
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                      />
+                    </Field>
+                  ) : (
+                    <>
+                      <ReviewGroup title="Patient Information">
+                        <ReviewRow label="Name" value={displayName} />
+                        <ReviewRow label="Date of Birth" value={form.date_of_birth || "—"} />
+                        <ReviewRow label="Sex" value={form.gender || "—"} />
+                        <ReviewRow label="Civil Status" value={form.civil_status || "—"} />
+                        <ReviewRow label="Weight (kg)" value={form.weight_kg ? `${form.weight_kg} kg` : "—"} />
+                        <ReviewRow label="Nationality" value={form.nationality || "—"} />
+                        <ReviewRow label="Address" value={form.address || "—"} />
+                        <ReviewRow label="PhilHealth" value={form.philhealth_number || "—"} />
+                      </ReviewGroup>
+                      <ReviewGroup title="Account">
+                        <ReviewRow label="Email" value={form.email || "—"} />
+                        <ReviewRow label="Contact Number" value={form.contact_number || form.phone || "—"} />
+                      </ReviewGroup>
+                    </>
+                  )}
                   <ReviewGroup title="Facility / Notification">
                     <ReviewRow label="Reason" value={form.notification.reason} />
                     <ReviewRow label="Facility" value={form.notification.facility_name || "—"} />
@@ -1154,7 +1320,7 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
             <ChevronLeft className="h-4 w-4" />
             Back
           </Button>
-          {stepIndex < STEPS.length - 1 ? (
+          {stepIndex < steps.length - 1 ? (
             <Button onClick={goNext} disabled={submitting}>
               Next
               <ChevronRight className="h-4 w-4" />
@@ -1164,8 +1330,10 @@ export function PatientRegistrationWizard({ open, onClose, draft, onSaved }: Pat
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {isResume ? "Completing..." : "Registering..."}
+                  {isCorrection ? "Saving..." : isResume ? "Completing..." : "Registering..."}
                 </>
+              ) : isCorrection ? (
+                "Save Corrections"
               ) : isResume ? (
                 "Complete Registration"
               ) : (

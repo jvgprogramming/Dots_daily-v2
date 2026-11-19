@@ -75,31 +75,52 @@ class MobileActivationTest extends TestCase
             ->assertOk();
     }
 
-    public function test_a_wrong_code_is_refused_and_attempts_are_limited(): void
+    public function test_wrong_codes_do_not_use_up_the_code(): void
     {
         $user = User::factory()->unverified()->create();
         $code = $this->requestCode($user);
         $wrong = $code === '000000' ? '111111' : '000000';
 
-        for ($i = 0; $i < EmailOtp::MAX_ATTEMPTS; $i++) {
+        for ($i = 0; $i < 6; $i++) {
             $this->postJson('/api/v1/mobile/otp/verify', ['email' => $user->email, 'code' => $wrong])
                 ->assertStatus(422);
         }
 
-        // Even the right code no longer works once the attempts are used up.
+        // The right code still works: only time expires it.
         $this->postJson('/api/v1/mobile/otp/verify', ['email' => $user->email, 'code' => $code])
-            ->assertStatus(422);
+            ->assertOk();
     }
 
-    public function test_an_expired_code_is_refused(): void
+    public function test_a_code_expires_after_five_minutes(): void
     {
+        $this->assertSame(5, EmailOtp::CODE_TTL_MINUTES);
         $user = User::factory()->unverified()->create();
         $code = $this->requestCode($user);
 
-        $this->travel(EmailOtp::CODE_TTL_MINUTES + 1)->minutes();
-
+        $this->travel(4)->minutes();
+        $this->travel(59)->seconds();
         $this->postJson('/api/v1/mobile/otp/verify', ['email' => $user->email, 'code' => $code])
+            ->assertOk();
+
+        $this->travel(2)->seconds();
+        $this->postJson('/api/v1/mobile/otp/verify', ['email' => $user->email, 'code' => $code])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This code has expired. Tap "Resend code" to get another.');
+    }
+
+    public function test_resend_works_after_the_cooldown_even_after_a_wrong_code(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $first = $this->requestCode($user);
+
+        // A wrong guess just before the cooldown ends used to restart it.
+        $this->travel(EmailOtp::RESEND_COOLDOWN_SECONDS - 5)->seconds();
+        $this->postJson('/api/v1/mobile/otp/verify', ['email' => $user->email, 'code' => $first === '000000' ? '111111' : '000000'])
             ->assertStatus(422);
+
+        $this->travel(5)->seconds();
+        $this->postJson('/api/v1/mobile/otp/request', ['email' => $user->email])->assertOk();
+        Notification::assertSentToTimes($user, PatientOtpNotification::class, 2);
     }
 
     public function test_a_new_code_cannot_be_requested_straight_away(): void

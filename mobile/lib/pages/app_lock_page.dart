@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../services/device_lock_service.dart';
 
 /// Full-screen gate shown when the app was reached over the lock screen.
