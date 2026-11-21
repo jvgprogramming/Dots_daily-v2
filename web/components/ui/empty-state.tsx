@@ -28,8 +28,11 @@ export function EmptyState({
         className
       )}
     >
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-[10px] bg-primary-100/60 text-primary-800">
-        {icon || <Inbox className="h-5 w-5" />}
+      {/* Icon tile sitting in two soft rings */}
+      <div className="mb-5 rounded-full bg-primary-50/70 p-2.5 ring-1 ring-primary-100/70">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200/70 text-primary-800 shadow-xs">
+          {icon || <Inbox className="h-5 w-5" />}
+        </div>
       </div>
       <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-text-primary">
         {title}

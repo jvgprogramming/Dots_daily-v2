@@ -7,6 +7,7 @@ import { api, ApiError } from "@/lib/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { PageLoader } from "@/components/ui/page-loader";
 import { Loader2, ArrowLeft } from "lucide-react";
 
 /** Pull the field-level validation text out of a failed API call. */
@@ -165,17 +166,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="auth-canvas flex min-h-screen items-center justify-center">
-          <div className="flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary-400 [animation-delay:-0.3s]" />
-            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary-500 [animation-delay:-0.15s]" />
-            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary-600" />
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoader />}>
       <ResetPasswordForm />
     </Suspense>
   );

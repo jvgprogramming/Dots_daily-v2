@@ -205,8 +205,191 @@ body {
     color: var(--color-text-primary);
   }
 
+  /* Deep-green dim with a light blur so the open dialog stays the focus. */
+  .modal-backdrop {
+    background-color: rgb(3 43 28 / 0.36);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
   html.dark .modal-backdrop {
     background-color: rgb(0 0 0 / 0.68);
+  }
+}
+
+/* ── Portal (after sign-in) ─────────────────────────────────────────── */
+@layer components {
+  /* Same soft green wash as the sign-in screen, pinned to the viewport so
+     it doesn't scroll away with long tables. */
+  .dash-canvas {
+    background-color: var(--color-bg-main);
+    background-image:
+      radial-gradient(55% 40% at 100% 0%, rgb(24 134 91 / 0.07), transparent 70%),
+      radial-gradient(45% 35% at 0% 100%, rgb(11 90 60 / 0.06), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  /* Green welcome banner on the dashboard — the sign-in brand panel's look. */
+  .dash-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    background-color: #0b5a3c;
+    background-image:
+      radial-gradient(90% 120% at 0% 0%, rgb(255 255 255 / 0.1), transparent 55%),
+      radial-gradient(60% 90% at 100% 100%, rgb(111 181 146 / 0.28), transparent 60%);
+    box-shadow: var(--shadow-elevated);
+    color: #ffffff;
+  }
+  html.dark .dash-hero {
+    background-color: #0d3b29;
+  }
+  .dash-hero__seal {
+    position: absolute;
+    top: 50%;
+    right: -60px;
+    z-index: -1;
+    width: 340px;
+    height: 340px;
+    transform: translateY(-50%);
+    background: url("/imports/tb-dots-seal.png") center / contain no-repeat;
+    filter: blur(2px);
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+    pointer-events: none;
+    animation: auth-seal-drift 26s ease-in-out infinite alternate;
+  }
+
+  /* Sidebar brand card above logout */
+  .side-brand-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 14px;
+    background-color: #0b5a3c;
+    background-image: radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 0.12), transparent 60%);
+    color: #ffffff;
+  }
+  html.dark .side-brand-card {
+    background-color: #0d3b29;
+  }
+  .side-brand-card::after {
+    content: "";
+    position: absolute;
+    right: -38px;
+    bottom: -46px;
+    z-index: -1;
+    width: 140px;
+    height: 140px;
+    background: url("/imports/tb-dots-seal.png") center / contain no-repeat;
+    mix-blend-mode: multiply;
+    opacity: 0.45;
+  }
+
+  /* Cards rise in when a page mounts; siblings in the same grid/row follow
+     one another. `backwards` only holds the start frame during the delay and
+     releases the card afterwards, so hover transforms still apply. */
+  .card-enter,
+  .stat-card {
+    animation: card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  :is(.card-enter, .stat-card):nth-child(2) { animation-delay: 60ms; }
+  :is(.card-enter, .stat-card):nth-child(3) { animation-delay: 120ms; }
+  :is(.card-enter, .stat-card):nth-child(4) { animation-delay: 180ms; }
+  :is(.card-enter, .stat-card):nth-child(5) { animation-delay: 240ms; }
+  :is(.card-enter, .stat-card):nth-child(n + 6) { animation-delay: 300ms; }
+
+  /* Hover: lift the shadow and tint the edge green. No transform here — on a
+     big card it would trap any fixed-position modal rendered inside it. */
+  .card-enter {
+    transition:
+      box-shadow 0.25s ease,
+      border-color 0.25s ease;
+  }
+  .card-enter:hover {
+    border-color: var(--color-primary-200);
+    box-shadow: var(--shadow-card-hover);
+  }
+  html.dark .card-enter:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  @keyframes card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Shimmering loading placeholder (replaces the flat pulse) */
+  .skeleton {
+    background-color: var(--color-bg-subtle);
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.65) 50%,
+      transparent 80%
+    );
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+  html.dark .skeleton {
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.05) 50%,
+      transparent 80%
+    );
+  }
+  @keyframes skeleton-shimmer {
+    from {
+      background-position: 160% 0;
+    }
+    to {
+      background-position: -60% 0;
+    }
+  }
+
+  /* Shared data table: rows ease in, hovered row gets a green edge */
+  .data-table tbody tr {
+    animation: row-in 0.35s ease-out both;
+  }
+  .data-table tbody tr:nth-child(2) { animation-delay: 30ms; }
+  .data-table tbody tr:nth-child(3) { animation-delay: 60ms; }
+  .data-table tbody tr:nth-child(4) { animation-delay: 90ms; }
+  .data-table tbody tr:nth-child(5) { animation-delay: 120ms; }
+  .data-table tbody tr:nth-child(6) { animation-delay: 150ms; }
+  .data-table tbody tr:nth-child(7) { animation-delay: 180ms; }
+  .data-table tbody tr:nth-child(8) { animation-delay: 210ms; }
+  .data-table tbody tr:nth-child(n + 9) { animation-delay: 240ms; }
+  .data-table tbody tr:hover td:first-child {
+    box-shadow: inset 3px 0 0 var(--color-primary-500);
+  }
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton,
+    .dash-hero__seal,
+    .data-table tbody tr,
+    .card-enter,
+    .stat-card {
+      animation: none;
+    }
   }
 }
 
@@ -216,6 +399,9 @@ body {
    across a row instead of stepping down when a label wraps. */
 @layer components {
   .stat-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -224,6 +410,36 @@ body {
     border-radius: var(--radius-lg);
     border-width: 1px;
     border-style: solid;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+  /* Faint green glow in the corner behind the icon tile */
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    z-index: -1;
+    width: 160px;
+    height: 160px;
+    border-radius: 9999px;
+    background: radial-gradient(closest-side, rgb(24 134 91 / 0.09), transparent);
+    transition: transform 0.35s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-primary-200);
+    box-shadow: var(--shadow-card-hover);
+  }
+  .stat-card:hover::before {
+    transform: scale(1.25);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stat-card:hover {
+      transform: none;
+    }
   }
 
   .stat-card__head {
@@ -277,8 +493,13 @@ body {
     height: 34px;
     border-radius: 10px;
     background-color: var(--color-primary-50);
+    background-image: linear-gradient(145deg, var(--color-primary-50), var(--color-primary-100));
     color: var(--color-primary-700);
     box-shadow: inset 0 0 0 1px var(--color-primary-100);
+    transition: transform 0.25s ease;
+  }
+  .stat-card:hover .stat-indicator {
+    transform: rotate(-6deg) scale(1.06);
   }
 
   .stat-indicator > svg {
@@ -392,17 +613,203 @@ body {
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
-/* ── Auth: plain clinical canvas, one solid panel ── */
+/* ── Auth: one floating card over a softly drifting green backdrop ── */
 @layer components {
-  .auth-canvas {
-    background-color: var(--color-bg-card);
+  .auth-stage {
+    background-color: var(--color-bg-main);
+    background-image:
+      radial-gradient(60% 50% at 10% 0%, rgb(24 134 91 / 0.1), transparent 70%),
+      radial-gradient(50% 45% at 100% 100%, rgb(11 90 60 / 0.12), transparent 70%);
   }
 
-  .auth-panel {
+  /* Blurred colour blobs behind the card; they drift slowly so the page
+     feels alive without competing with the form. */
+  .auth-orb {
+    position: absolute;
+    z-index: -1;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.5;
+    pointer-events: none;
+    animation: auth-drift 20s ease-in-out infinite alternate;
+  }
+  .auth-orb--a {
+    top: -140px;
+    left: -120px;
+    width: 440px;
+    height: 440px;
+    background-color: var(--color-primary-300);
+  }
+  .auth-orb--b {
+    right: -100px;
+    bottom: -160px;
+    width: 400px;
+    height: 400px;
+    background-color: var(--color-primary-400);
+    animation-duration: 24s;
+    animation-delay: -8s;
+  }
+  .auth-orb--c {
+    top: 35%;
+    left: 50%;
+    width: 260px;
+    height: 260px;
+    background-color: var(--color-primary-200);
+    opacity: 0.35;
+    animation-duration: 28s;
+    animation-delay: -14s;
+  }
+  html.dark .auth-orb {
+    opacity: 0.18;
+  }
+
+  .auth-card {
     background-color: var(--color-bg-card);
     border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-elevated);
+    border-radius: 22px;
+    box-shadow: var(--shadow-modal);
+  }
+  @media (min-width: 1024px) {
+    .auth-card {
+      min-height: 640px;
+      border-radius: 30px;
+    }
+  }
+
+  /* Frosted chip floating over the brand panel */
+  .auth-glass {
+    background-color: rgb(255 255 255 / 0.14);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.22),
+      0 12px 28px -12px rgb(0 0 0 / 0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .auth-float {
+    animation: auth-float 4.5s ease-in-out infinite;
+  }
+  .auth-bob {
+    animation: auth-float 3.6s ease-in-out infinite;
+  }
+
+  /* Small "online" dot on the Staff portal pill */
+  .auth-live-dot {
+    position: relative;
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background-color: var(--color-primary-500);
+  }
+  .auth-live-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--color-primary-500);
+    animation: auth-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Green glow under the submit button that grows on hover */
+  .auth-submit {
+    box-shadow: 0 8px 20px -10px rgb(11 90 60 / 0.6);
+    transition:
+      background-color 0.15s ease,
+      box-shadow 0.25s ease;
+  }
+  .auth-submit:not(:disabled):hover {
+    box-shadow: 0 14px 28px -12px rgb(11 90 60 / 0.7);
+  }
+
+  /* Indeterminate load bar: a green segment sweeping across a pale track */
+  .load-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: var(--color-primary-100);
+  }
+  .load-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    border-radius: inherit;
+    background-image: linear-gradient(90deg, var(--color-primary-400), var(--color-brand-action));
+    animation: load-slide 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  }
+
+  @keyframes load-slide {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+  @keyframes load-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes auth-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(40px, 30px, 0) scale(1.08);
+    }
+    100% {
+      transform: translate3d(-30px, 50px, 0) scale(0.95);
+    }
+  }
+  @keyframes auth-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+  @keyframes auth-ping {
+    75%,
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+  @keyframes auth-seal-drift {
+    from {
+      transform: scale(1) rotate(0deg);
+    }
+    to {
+      transform: scale(1.08) rotate(-3deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-orb,
+    .auth-float,
+    .auth-bob,
+    .auth-brand-seal,
+    .auth-live-dot::after,
+    .auth-dose--today::after {
+      animation: none;
+    }
+    /* No sweeping: the full bar gently fades in and out instead. */
+    .load-bar {
+      width: 100%;
+      animation: load-pulse 2s ease-in-out infinite;
+    }
   }
 
   /* Brand side of the sign-in screens: deep forest green, a faint light
@@ -427,6 +834,7 @@ body {
     filter: blur(4px) saturate(1.1);
     mix-blend-mode: multiply;
     opacity: 0.55;
+    animation: auth-seal-drift 26s ease-in-out infinite alternate;
   }
   html.dark .auth-brand-seal {
     opacity: 0.45;
@@ -450,8 +858,18 @@ body {
     box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.45);
   }
   .auth-dose--today {
+    position: relative;
     background-color: #a2cfb6;
     box-shadow: 0 0 0 3px #0b5a3c, 0 0 0 4.5px rgb(255 255 255 / 0.85);
+  }
+  /* Pulsing halo so today's dose reads as "due now" */
+  .auth-dose--today::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: inherit;
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.7);
+    animation: auth-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
   .auth-dose--ahead {
     background-color: rgb(255 255 255 / 0.12);

@@ -65,13 +65,14 @@ export function Modal({
           />
 
           {/* Panel */}
+          {/* Panel pops in with a small spring, same feel as the sign-in card */}
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
+            initial={{ opacity: 0, scale: 0.95, y: 14 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8, transition: { duration: 0.15 } }}
+            transition={{ type: "spring", stiffness: 320, damping: 26 }}
             className={cn(
-              "relative w-full rounded-[16px] border border-border-light bg-bg-card shadow-modal",
+              "relative w-full rounded-[20px] border border-border-light bg-bg-card shadow-modal",
               sizeClasses[size],
               className
             )}
@@ -79,7 +80,8 @@ export function Modal({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-[6px] text-text-tertiary transition-colors hover:bg-bg-subtle hover:text-text-primary"
+              aria-label="Close"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[8px] text-text-tertiary transition-[color,background-color,transform] duration-200 hover:rotate-90 hover:bg-bg-subtle hover:text-text-primary"
             >
               <X className="h-3.5 w-3.5" />
             </button>

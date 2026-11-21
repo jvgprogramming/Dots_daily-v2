@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  motion,
+  animate,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type Variants,
+} from "framer-motion";
+import { useAuth } from "@/lib/store/auth";
 import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import {
   Card,
@@ -24,6 +33,7 @@ import {
   ArrowUpRight,
   HeartPulse,
   RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 import {
   BarChart,
@@ -93,6 +103,50 @@ const PHASE_FILL: Record<string, string> = {
   Interrupted: "var(--color-danger)",
 };
 
+const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+/* KPI cards pop in one after another. */
+const kpiGrid: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.15 } },
+};
+const kpiItem: Variants = {
+  hidden: { opacity: 0, y: 16, scale: 0.97 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: EASE_OUT } },
+};
+
+/**
+ * Counts a number up from its previous value. It writes through a motion
+ * value straight to the DOM, so the background poll doesn't re-render the page
+ * on every animation frame.
+ */
+function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const reduceMotion = useReducedMotion();
+  const decimals = Number.isInteger(value) ? 0 : 1;
+  const current = useMotionValue(0);
+  const text = useTransform(current, (v) =>
+    `${v.toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}${suffix}`
+  );
+
+  useEffect(() => {
+    if (reduceMotion) {
+      current.set(value);
+      return;
+    }
+    const controls = animate(current, value, { duration: 0.9, ease: EASE_OUT });
+    return () => controls.stop();
+  }, [current, value, reduceMotion]);
+
+  return <motion.span>{text}</motion.span>;
+}
+
+/** Time-of-day greeting for the welcome banner. */
+const greetingFor = (hour: number) =>
+  hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
 /** Two-letter initials for the patient list tile. */
 const initials = (name: string) =>
   name
@@ -103,6 +157,7 @@ const initials = (name: string) =>
     .join("") || "?";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [data, setData] = useState<DashboardStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -146,7 +201,17 @@ export default function DashboardPage() {
   const overview = data?.overview;
 
   const pct = (v: number | null | undefined) => Math.max(0, Math.min(100, v ?? 0));
-  const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v}%`);
+  const fmtPct = (v: number | null | undefined) =>
+    v === null || v === undefined ? "—" : <CountUp value={v} suffix="%" />;
+
+  const now = new Date();
+  const firstName = user?.name?.trim().split(/\s+/)[0] ?? "";
+  const todayLabel = now.toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
   const noTreatments = treatmentDistribution.every((t) => t.count === 0);
 
@@ -158,26 +223,47 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page Header ── */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-lede">
-            Overview of the tuberculosis treatment monitoring system.
-          </p>
+      {/* ── Welcome banner ── */}
+      <motion.section
+        initial={{ opacity: 0, y: 16, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.55, ease: EASE_OUT }}
+        className="dash-hero px-6 py-6 sm:px-8 sm:py-7"
+      >
+        <div aria-hidden="true" className="dash-hero__seal" />
+        <div className="flex flex-wrap items-center justify-between gap-5">
+          <div className="min-w-0">
+            <p
+              suppressHydrationWarning
+              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-white/85 ring-1 ring-inset ring-white/15"
+            >
+              <CalendarDays className="h-3.5 w-3.5" strokeWidth={2} />
+              Dashboard · {todayLabel}
+            </p>
+            <h1
+              suppressHydrationWarning
+              className="mt-3 text-[26px] font-bold leading-tight tracking-[-0.025em] sm:text-[30px]"
+            >
+              {greetingFor(now.getHours())}
+              {firstName ? `, ${firstName}` : ""}
+            </h1>
+            <p className="mt-1.5 max-w-[56ch] text-[14px] leading-relaxed text-white/75">
+              Overview of the tuberculosis treatment monitoring system.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            // Fixed colours: the primary scale flips to pale tints in dark
+            // mode, which would vanish on this white button.
+            className="border-transparent bg-white text-[#0b4934] hover:border-transparent hover:bg-[#e3f0e8]"
+          >
+            <RefreshCw className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-        >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-          />
-          Refresh
-        </Button>
-      </div>
+      </motion.section>
 
       {error && (
         <Alert variant="danger" title="Could not load dashboard">
@@ -186,7 +272,12 @@ export default function DashboardPage() {
       )}
 
       {/* ── KPI Row ── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
+      <motion.div
+        variants={kpiGrid}
+        initial="hidden"
+        animate={loading ? "hidden" : "show"}
+        className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5"
+      >
         {loading &&
           Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="stat-card">
@@ -200,14 +291,19 @@ export default function DashboardPage() {
           stats.map((stat, i) => {
             const Icon = STAT_ICONS[i] ?? Activity;
             return (
-              <div key={stat.title} className="stat-card">
+              // The wrapper animates in; the card inside keeps its CSS hover
+              // lift (an inline framer transform on the card would override it).
+              <motion.div key={stat.title} variants={kpiItem} className="min-w-0">
+              <div className="stat-card">
                 <div className="stat-card__head">
                   <p className="stat-card__label">{stat.title}</p>
                   <span className="stat-indicator" data-live="true">
                     <Icon strokeWidth={1.9} />
                   </span>
                 </div>
-                <p className="stat-card__value">{stat.value}</p>
+                <p className="stat-card__value">
+                  {typeof stat.value === "number" ? <CountUp value={stat.value} /> : stat.value}
+                </p>
                 <div className="mt-3 flex items-center gap-1">
                   <span
                     className={`inline-flex items-center gap-0.5 text-[12px] font-semibold ${trendColors[stat.trend]}`}
@@ -222,9 +318,10 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
+              </motion.div>
             );
           })}
-      </div>
+      </motion.div>
 
       {/* ── Charts Row: adherence is the lead panel ── */}
       <div className="grid gap-4 sm:gap-5 lg:grid-cols-5">
@@ -397,6 +494,16 @@ export default function DashboardPage() {
                     barCategoryGap="30%"
                     margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
                   >
+                    <defs>
+                      <linearGradient id="barNewGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-primary-700)" />
+                        <stop offset="100%" stopColor="var(--color-primary-900)" />
+                      </linearGradient>
+                      <linearGradient id="barFollowGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-primary-200)" />
+                        <stop offset="100%" stopColor="var(--color-primary-300)" />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid stroke="var(--color-border-light)" vertical={false} />
                     <XAxis
                       dataKey="day"
@@ -419,15 +526,15 @@ export default function DashboardPage() {
                     <Bar
                       dataKey="new"
                       name="New Patients"
-                      fill="var(--color-primary-900)"
-                      radius={[5, 5, 0, 0]}
+                      fill="url(#barNewGradient)"
+                      radius={[6, 6, 0, 0]}
                       maxBarSize={20}
                     />
                     <Bar
                       dataKey="followups"
                       name="Follow-ups"
-                      fill="var(--color-primary-300)"
-                      radius={[5, 5, 0, 0]}
+                      fill="url(#barFollowGradient)"
+                      radius={[6, 6, 0, 0]}
                       maxBarSize={20}
                     />
                   </BarChart>
@@ -457,12 +564,15 @@ export default function DashboardPage() {
               </div>
             ) : (
               <ul>
-                {recentPatients.map((patient) => (
-                  <li
+                {recentPatients.map((patient, i) => (
+                  <motion.li
                     key={patient.id}
-                    className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-bg-subtle sm:px-6"
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.35, delay: 0.1 + i * 0.05, ease: EASE_OUT }}
+                    className="group flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-primary-50/60 sm:px-6"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[12px] font-semibold text-primary-800">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200 text-[12px] font-semibold text-primary-800 ring-2 ring-bg-card transition-transform duration-200 group-hover:scale-105">
                       {initials(patient.name)}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -479,7 +589,7 @@ export default function DashboardPage() {
                     >
                       {patient.status === "draft" ? "Draft" : (patient.health_id_number ?? `#${patient.id}`)}
                     </Badge>
-                  </li>
+                  </motion.li>
                 ))}
               </ul>
             )}

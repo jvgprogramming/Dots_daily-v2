@@ -13,7 +13,9 @@ import {
   LogOut,
   AlertCircle,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/store/auth";
@@ -87,7 +89,7 @@ export function Sidebar() {
       <aside className="fixed left-0 top-0 z-40 flex h-screen w-16 flex-col border-r border-border-light bg-bg-sidebar md:w-64">
         {/* Logo */}
         <div className="flex h-[68px] items-center justify-center gap-3 md:justify-start md:px-5">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[11px] bg-brand-action shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[11px] bg-white shadow-sm ring-1 ring-border-light">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/imports/image-2.png"
@@ -124,7 +126,9 @@ export function Sidebar() {
               <ul className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = pathname === item.href;
+                  // Sub-pages (e.g. /patients/12) keep their parent highlighted.
+                  const isActive =
+                    pathname === item.href || pathname.startsWith(`${item.href}/`);
 
                   return (
                     <li key={item.href}>
@@ -132,22 +136,32 @@ export function Sidebar() {
                         href={item.href}
                         title={item.label}
                         aria-label={item.label}
+                        aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "group flex items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] transition-colors duration-150 md:justify-start md:px-3",
+                          "group relative flex items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] transition-colors duration-150 md:justify-start md:px-3",
                           isActive
-                            ? "bg-brand-action font-semibold text-white shadow-sm"
+                            ? "font-semibold text-white"
                             : "font-medium text-text-body hover:bg-primary-50 hover:text-text-primary"
                         )}
                       >
+                        {/* One shared layoutId: framer slides this pill from
+                            the old item to the new one on navigation. */}
+                        {isActive && (
+                          <motion.span
+                            layoutId="sidebar-active"
+                            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                            className="absolute inset-0 rounded-[10px] bg-brand-action shadow-[0_6px_16px_-8px_rgb(11_90_60/0.7)]"
+                          />
+                        )}
                         <Icon
                           className={cn(
-                            "h-[17px] w-[17px] shrink-0 stroke-[1.9]",
+                            "relative h-[17px] w-[17px] shrink-0 stroke-[1.9] transition-transform duration-200",
                             isActive
                               ? "text-white"
-                              : "text-text-tertiary group-hover:text-primary-700"
+                              : "text-text-tertiary group-hover:scale-110 group-hover:text-primary-700"
                           )}
                         />
-                        <span className="hidden md:inline">{item.label}</span>
+                        <span className="relative hidden md:inline">{item.label}</span>
                       </Link>
                     </li>
                   );
@@ -157,15 +171,29 @@ export function Sidebar() {
           ))}
         </nav>
 
+        {/* Hospital card (expanded sidebar only) */}
+        <div className="hidden px-3 pb-3 md:block">
+          <div className="side-brand-card px-4 py-3.5">
+            <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-white/70">
+              <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} />
+              Authorized staff
+            </p>
+            <p className="mt-1.5 text-[13px] font-semibold leading-snug">
+              Capiz Emmanuel Hospital
+            </p>
+            <p className="mt-0.5 text-[11.5px] text-white/65">TB DOTS Center</p>
+          </div>
+        </div>
+
         {/* Logout */}
         <div className="border-t border-border-light p-3">
           <button
             onClick={() => setShowLogoutModal(true)}
             title="Logout"
             aria-label="Logout"
-            className="flex w-full items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] font-medium text-text-secondary transition-colors duration-150 hover:bg-danger-bg hover:text-danger-text md:justify-start md:px-3"
+            className="group flex w-full items-center justify-center gap-3 rounded-[10px] px-0 py-2.5 text-[13.5px] font-medium text-text-secondary transition-colors duration-150 hover:bg-danger-bg hover:text-danger-text md:justify-start md:px-3"
           >
-            <LogOut className="h-[17px] w-[17px] stroke-[1.9]" />
+            <LogOut className="h-[17px] w-[17px] stroke-[1.9] transition-transform duration-200 group-hover:translate-x-0.5" />
             <span className="hidden md:inline">Logout</span>
           </button>
         </div>

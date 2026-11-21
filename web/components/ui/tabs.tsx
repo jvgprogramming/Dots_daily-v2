@@ -1,12 +1,15 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useState, createContext, useContext, ReactNode } from "react";
+import { useState, useId, createContext, useContext, ReactNode } from "react";
+import { motion } from "framer-motion";
 
 // ── Context ──
 interface TabsContextType {
   activeTab: string;
   setActiveTab: (value: string) => void;
+  /** Unique per Tabs group so each group's sliding pill animates on its own. */
+  pillId: string;
 }
 
 const TabsContext = createContext<TabsContextType | undefined>(undefined);
@@ -30,6 +33,7 @@ interface TabsProps {
 function Tabs({ defaultValue, value, children, className, onValueChange }: TabsProps) {
   const [internalTab, setInternalTab] = useState(defaultValue);
   const activeTab = value ?? internalTab;
+  const pillId = useId();
 
   const handleSetActiveTab = (next: string) => {
     setInternalTab(next);
@@ -37,7 +41,7 @@ function Tabs({ defaultValue, value, children, className, onValueChange }: TabsP
   };
 
   return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab: handleSetActiveTab }}>
+    <TabsContext.Provider value={{ activeTab, setActiveTab: handleSetActiveTab, pillId }}>
       <div className={cn("space-y-4", className)}>{children}</div>
     </TabsContext.Provider>
   );
@@ -65,21 +69,28 @@ interface TabsTriggerProps {
 }
 
 function TabsTrigger({ value, children, className }: TabsTriggerProps) {
-  const { activeTab, setActiveTab } = useTabs();
+  const { activeTab, setActiveTab, pillId } = useTabs();
   const isActive = activeTab === value;
 
   return (
     <button
       onClick={() => setActiveTab(value)}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-[9px] px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
+        "relative inline-flex items-center justify-center whitespace-nowrap rounded-[9px] px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
         isActive
-          ? "bg-brand-action text-white shadow-xs"
+          ? "text-white"
           : "text-text-secondary hover:bg-bg-subtle hover:text-text-primary",
         className
       )}
     >
-      {children}
+      {isActive && (
+        <motion.span
+          layoutId={pillId}
+          transition={{ type: "spring", stiffness: 400, damping: 34 }}
+          className="absolute inset-0 rounded-[9px] bg-brand-action shadow-xs"
+        />
+      )}
+      <span className="relative inline-flex items-center gap-1.5">{children}</span>
     </button>
   );
 }
@@ -95,7 +106,16 @@ function TabsContent({ value, children, className }: TabsContentProps) {
   const { activeTab } = useTabs();
   if (activeTab !== value) return null;
 
-  return <div className={cn("pt-2", className)}>{children}</div>;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className={cn("pt-2", className)}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };

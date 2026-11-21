@@ -36,14 +36,14 @@ export function Table<T>({
 
   return (
     <div className={cn("w-full overflow-auto", className)}>
-      <table className="w-full border-collapse">
+      <table className="data-table w-full border-collapse">
         <thead>
           <tr className="border-b border-border-light bg-bg-subtle">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={cn(
-                  "px-4 py-3 text-left text-[12px] font-semibold text-text-secondary",
+                  "px-4 py-3 text-left text-[11.5px] font-semibold uppercase tracking-[0.04em] text-text-tertiary",
                   col.className
                 )}
               >
@@ -59,7 +59,7 @@ export function Table<T>({
               onClick={() => onRowClick?.(item)}
               className={cn(
                 "border-b border-border-light/70 transition-colors last:border-b-0",
-                "hover:bg-bg-subtle/70",
+                "hover:bg-primary-50/60",
                 onRowClick && "cursor-pointer"
               )}
             >

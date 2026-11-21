@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { ChevronDown, Moon, Sun } from "lucide-react";
+import { CalendarDays, ChevronDown, Moon, Sun } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Avatar } from "@/components/ui/avatar";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { NotificationBell } from "@/components/layout/notification-bell";
@@ -45,6 +46,13 @@ export function Header() {
     getServerThemeSnapshot
   );
 
+  const todayLabel = new Date().toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
   const toggleTheme = () => {
     const nextIsDark = !document.documentElement.classList.contains("dark");
     document.documentElement.classList.toggle("dark", nextIsDark);
@@ -61,9 +69,18 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-[68px] items-center gap-3 border-b border-border-light bg-bg-card/95 px-4 backdrop-blur-sm sm:gap-4 sm:px-8 lg:px-10">
+    <header className="sticky top-0 z-30 flex h-[68px] items-center gap-3 border-b border-border-light/80 bg-bg-card/80 px-4 backdrop-blur-md sm:gap-4 sm:px-8 lg:px-10">
       {/* Search (admins only) */}
       {canSearch && <GlobalSearch />}
+
+      {/* Today's date — handy context on a daily-dose tool */}
+      <span
+        suppressHydrationWarning
+        className="hidden items-center gap-2 rounded-full border border-border-light bg-bg-card px-3 py-1.5 text-[12px] font-medium text-text-secondary xl:inline-flex"
+      >
+        <CalendarDays className="h-3.5 w-3.5 text-primary-600" strokeWidth={2} />
+        {todayLabel}
+      </span>
 
       {/* Right section */}
       <div className="ml-auto flex items-center gap-1">
@@ -73,8 +90,12 @@ export function Header() {
         <div className="mx-2 h-5 w-px bg-border-light" />
 
         {/* User */}
-        <button className="flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors duration-150 hover:bg-bg-subtle">
-          <Avatar size="default" fallback={user?.name ?? "?"} className="bg-brand-action text-white" />
+        <button className="flex items-center gap-2.5 rounded-[12px] border border-transparent px-2 py-1.5 transition-colors duration-150 hover:border-border-light hover:bg-bg-subtle">
+          <span className="relative">
+            <Avatar size="default" fallback={user?.name ?? "?"} className="bg-brand-action text-white ring-2 ring-primary-100" />
+            {/* Online dot */}
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary-500 ring-2 ring-bg-card" />
+          </span>
           <div className="hidden text-left sm:block">
             <p className="text-[13px] font-semibold leading-tight text-text-primary">
               {user?.name ?? "—"}
@@ -92,13 +113,25 @@ export function Header() {
           aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
           aria-pressed={isDark}
           title={`Switch to ${isDark ? "light" : "dark"} mode`}
-          className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border-light text-text-secondary transition-colors hover:bg-bg-subtle hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[10px] border border-border-light text-text-secondary transition-colors hover:bg-bg-subtle hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
         >
-          {isDark ? (
-            <Sun className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Moon className="h-4 w-4" aria-hidden="true" />
-          )}
+          {/* Sun and moon swap with a quick spin. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={isDark ? "sun" : "moon"}
+              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1 }}
+              exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+              transition={{ duration: 0.2 }}
+              className="flex"
+            >
+              {isDark ? (
+                <Sun className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Moon className="h-4 w-4" aria-hidden="true" />
+              )}
+            </motion.span>
+          </AnimatePresence>
         </button>
       </div>
     </header>
