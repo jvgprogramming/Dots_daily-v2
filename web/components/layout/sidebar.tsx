@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  AlertCircle,
   Loader2,
   ShieldCheck,
 } from "lucide-react";
@@ -20,7 +19,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/store/auth";
 import { Modal } from "@/components/ui/modal";
-import { canAccessPath } from "@/lib/access";
+import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { canAccessPath, roleLabel } from "@/lib/access";
 
 const navGroups = [
   {
@@ -203,43 +204,84 @@ export function Sidebar() {
       <Modal
         open={showLogoutModal}
         onClose={() => !loggingOut && setShowLogoutModal(false)}
-        title="Sign out"
-        description="Are you sure you want to sign out of your account?"
         size="sm"
       >
-        <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-[10px] border border-border-light bg-bg-subtle p-3.5">
-            <AlertCircle className="mt-px h-4 w-4 shrink-0 text-text-tertiary" />
-            <div>
-              <p className="text-[12.5px] leading-relaxed text-text-secondary">
-                You will be redirected to the sign-in page and will need to
-                enter your credentials again to access the dashboard.
+        <div className="flex flex-col items-center pt-2 text-center">
+          {/* Green badge pops in after the panel, icon nudges toward the door */}
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 320, damping: 16, delay: 0.08 }}
+            className="relative"
+          >
+            <span aria-hidden="true" className="signout-ring" />
+            <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary-50 ring-1 ring-primary-100">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-action text-white shadow-[0_8px_18px_-8px_rgb(11_90_60/0.8)]">
+                <motion.span
+                  animate={{ x: [0, 3, 0] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                  className="flex"
+                >
+                  <LogOut className="h-5 w-5" strokeWidth={2} />
+                </motion.span>
+              </span>
+            </span>
+          </motion.div>
+
+          <h2 className="mt-5 text-[18px] font-bold tracking-[-0.02em] text-text-primary">
+            Sign out of DOTS Daily?
+          </h2>
+          <p className="mt-1.5 max-w-[30ch] text-[13px] leading-relaxed text-text-secondary">
+            You&apos;ll return to the sign-in page and need your credentials to come back.
+          </p>
+
+          {/* Who is being signed out */}
+          <div className="mt-5 flex w-full items-center gap-3 rounded-[12px] border border-border-light bg-bg-subtle px-3.5 py-3 text-left">
+            <Avatar
+              size="default"
+              fallback={user?.name ?? "?"}
+              className="bg-brand-action text-white ring-2 ring-primary-100"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold leading-tight text-text-primary">
+                {user?.name ?? "—"}
+              </p>
+              <p className="mt-1 truncate text-[11.5px] leading-tight text-text-secondary">
+                {roleLabel(user?.role)} · {user?.email ?? ""}
               </p>
             </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50 px-2 py-1 text-[10.5px] font-semibold text-primary-700 ring-1 ring-primary-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary-500" />
+              Active
+            </span>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <button
+          <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-text-tertiary">
+            <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} />
+            Always sign out on shared computers.
+          </p>
+
+          <div className="mt-6 grid w-full grid-cols-2 gap-2.5">
+            <Button
+              variant="outline"
               onClick={() => setShowLogoutModal(false)}
               disabled={loggingOut}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] border border-border-default bg-bg-card px-4 text-[13px] font-medium text-text-primary transition-colors hover:bg-bg-subtle disabled:opacity-50"
             >
-              Cancel
-            </button>
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] bg-danger px-4 text-[13px] font-medium text-white transition-colors hover:bg-danger/90 disabled:opacity-50"
-            >
+              Stay signed in
+            </Button>
+            <Button onClick={handleLogout} disabled={loggingOut}>
               {loggingOut ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing out...
+                  <Loader2 className="animate-spin" />
+                  Signing out…
                 </>
               ) : (
-                "Sign Out"
+                <>
+                  <LogOut />
+                  Sign out
+                </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

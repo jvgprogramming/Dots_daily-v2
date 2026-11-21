@@ -326,6 +326,31 @@ body {
     }
   }
 
+  /* Soft ripple behind the sign-out badge */
+  .signout-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background-color: var(--color-primary-200);
+    animation: signout-ripple 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  @keyframes signout-ripple {
+    from {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    to {
+      transform: scale(1.55);
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .signout-ring {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
   /* Shimmering loading placeholder (replaces the flat pulse) */
   .skeleton {
     background-color: var(--color-bg-subtle);
@@ -838,6 +863,24 @@ body {
   }
   html.dark .auth-brand-seal {
     opacity: 0.45;
+  }
+
+  /* Diagonal light streak that sweeps across the brand panel mid-slide.
+     Hidden at rest; framer moves and fades it during the swap. */
+  .auth-slide-sheen {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 45%;
+    pointer-events: none;
+    opacity: 0;
+    background-image: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgb(255 255 255 / 0.16) 50%,
+      transparent 100%
+    );
   }
 
   /* Decorative dose calendar on the brand panel */

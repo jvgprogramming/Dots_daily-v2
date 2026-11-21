@@ -1,6 +1,8 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { motion, useAnimate, useReducedMotion, type Variants } from "framer-motion";
+import { SWAP_DURATION, SWAP_EASE } from "@/components/auth/swap-motion";
 import { Users, ClipboardList, Activity, BarChart3, ShieldCheck, TrendingUp } from "lucide-react";
 
 /* What the portal covers — mirrors the sidebar modules. */
@@ -97,8 +99,52 @@ function DoseCalendar() {
   );
 }
 
+/**
+ * Plays the "in motion" effects while the panel slides to the other side:
+ * the content lags behind and blurs slightly (inertia), and a light sheen
+ * sweeps across in the direction of travel. Runs only when `swapped` flips,
+ * never on first render.
+ */
+function useSwapMotion(swapped: boolean) {
+  const [scope, animate] = useAnimate();
+  const reduceMotion = useReducedMotion();
+  const previous = useRef(swapped);
+
+  useEffect(() => {
+    if (previous.current === swapped) return;
+    previous.current = swapped;
+    if (reduceMotion) return;
+
+    // +1 = panel travelling right (to the recovery layout), -1 = back left.
+    const dir = swapped ? 1 : -1;
+    const timing = { duration: SWAP_DURATION, ease: SWAP_EASE };
+
+    animate(
+      ".auth-slide-content",
+      {
+        x: [0, -44 * dir, 0],
+        filter: ["blur(0px)", "blur(2.5px)", "blur(0px)"],
+        opacity: [1, 0.7, 1],
+      },
+      timing
+    );
+    animate(
+      ".auth-slide-sheen",
+      {
+        x: dir > 0 ? ["-120%", "260%"] : ["260%", "-120%"],
+        opacity: [0, 1, 0],
+      },
+      timing
+    );
+  }, [swapped, reduceMotion, animate]);
+
+  return scope;
+}
+
 /** Brand side of the sign-in card. Full panel on desktop, a short band on mobile. */
-export function AuthBrandPanel() {
+export function AuthBrandPanel({ swapped = false }: { swapped?: boolean }) {
+  const scope = useSwapMotion(swapped);
+
   return (
     <>
       {/* Mobile / tablet band */}
@@ -118,14 +164,20 @@ export function AuthBrandPanel() {
 
       {/* Desktop panel */}
       <motion.aside
+        ref={scope}
         variants={stack}
         initial="hidden"
         animate="show"
-        className="auth-brand relative isolate hidden flex-col justify-between gap-8 overflow-hidden rounded-[22px] px-10 py-9 text-white lg:flex xl:px-12"
+        className="auth-brand relative isolate hidden flex-1 flex-col overflow-hidden rounded-[22px] px-10 py-9 text-white lg:flex xl:px-12"
       >
         {/* Blurred TB DOTS Center seal behind the panel content */}
         <div aria-hidden="true" className="auth-brand-seal" />
+        {/* Light streak that crosses the panel while it slides */}
+        <span aria-hidden="true" className="auth-slide-sheen" />
 
+        {/* Plain div (not motion) so the entry stagger above still reaches
+            the items inside; the swap effects animate it imperatively. */}
+        <div className="auth-slide-content flex flex-1 flex-col justify-between gap-8">
         <motion.div variants={rise} className="flex items-center gap-3">
           <div className="auth-float">
             <Logo size="lg" />
@@ -170,6 +222,7 @@ export function AuthBrandPanel() {
           <ShieldCheck className="h-4 w-4" strokeWidth={1.9} />
           For authorized DOTS Center staff only.
         </motion.p>
+        </div>
       </motion.aside>
     </>
   );
